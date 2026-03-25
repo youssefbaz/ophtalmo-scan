@@ -230,6 +230,21 @@ def get_patient(pid):
         return jsonify({"error": "Accès refusé"}), 403
     if u['role'] == 'assistant':
         return jsonify(anonymize_patient(p))
+    if u['role'] == 'patient':
+        # Patient sees their own data but not clinical notes and raw tension
+        patient_view = {k: v for k, v in p.items()}
+        patient_view['historique'] = [
+            {
+                "date": h["date"],
+                "motif": h["motif"],
+                "traitement": h["traitement"],
+                "acuite_od": h.get("acuite_od",""),
+                "acuite_og": h.get("acuite_og",""),
+                # Hidden from patient: diagnostic détaillé, tension, notes médecin
+            }
+            for h in p["historique"]
+        ]
+        return jsonify(patient_view)
     return jsonify(p)
 
 @app.route('/api/patients', methods=['POST'])
@@ -390,7 +405,43 @@ def upload_document(pid):
 
     return jsonify({"ok": True, "id": doc_id})
 
-@app.route('/api/patients/<pid>/documents', methods=['GET'])
+@app.route('/api/patients/<pid>/chirurgie', methods=['POST'])
+def set_chirurgie(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin': return jsonify({"error": "Accès refusé"}), 403
+    p = PATIENTS.get(pid)
+    if not p: return jsonify({"error": "Non trouvé"}), 404
+    data = request.json
+    p['date_chirurgie'] = data.get('date_chirurgie', '')
+    p['type_chirurgie'] = data.get('type_chirurgie', '')
+    add_notif("chirurgie", f"✂️ Date chirurgie définie pour {p['prenom']} {p['nom']}: {p['date_chirurgie']}", "medecin", pid)
+    return jsonify({"ok": True})
+
+@app.route('/api/patients/<pid>/export', methods=['GET'])
+def export_patient(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin': return jsonify({"error": "Accès refusé"}), 403
+    p = PATIENTS.get(pid)
+    if not p: return jsonify({"error": "Non trouvé"}), 404
+    # Anonymized export — no name, phone, email
+    anon = {
+        "code": hashlib.md5(p["id"].encode()).hexdigest()[:8].upper(),
+        "sexe": p["sexe"],
+        "age": datetime.datetime.now().year - int(p["ddn"][:4]),
+        "antecedents": p["antecedents"],
+        "allergies": p["allergies"],
+        "date_chirurgie": p.get("date_chirurgie", ""),
+        "type_chirurgie": p.get("type_chirurgie", ""),
+        "historique": [
+            {k: v for k, v in h.items() if k not in ('medecin',)}
+            for h in p["historique"]
+        ],
+        "nb_rdv": len(p["rdv"]),
+        "export_date": datetime.datetime.now().strftime("%Y-%m-%d")
+    }
+    return jsonify(anon)
+
+
 def get_documents(pid):
     u = current_user()
     if not u: return jsonify([]), 401
