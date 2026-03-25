@@ -731,15 +731,18 @@ async function renderDashboardMedecin(c) {
   ]);
   const urgents = rdvs.filter(r => r.urgent && r.statut === 'en_attente');
   const today = new Date().toISOString().slice(0,10);
-  const upcoming = rdvs.filter(r => r.date >= today).slice(0,5);
-  
+  const todayRdvs = rdvs.filter(r => r.date === today).sort((a,b) => a.heure.localeCompare(b.heure));
+  const upcoming = rdvs.filter(r => r.date > today).slice(0,5);
+  const now = new Date().toTimeString().slice(0,5);
+
   c.innerHTML = `
     <div class="grid-4" style="margin-bottom:20px">
       <div class="stat-card teal"><div class="stat-label">Patients</div><div class="stat-value">${patients.length}</div><div class="stat-sub">Total enregistrés</div></div>
-      <div class="stat-card amber"><div class="stat-label">Prochains RDV</div><div class="stat-value">${upcoming.length}</div><div class="stat-sub">À venir</div></div>
+      <div class="stat-card amber"><div class="stat-label">Aujourd'hui</div><div class="stat-value">${todayRdvs.length}</div><div class="stat-sub">RDV du jour</div></div>
       <div class="stat-card red"><div class="stat-label">RDV Urgents</div><div class="stat-value">${urgents.length}</div><div class="stat-sub">En attente validation</div></div>
       <div class="stat-card blue"><div class="stat-label">Questions</div><div class="stat-value">${notifs.filter(n=>n.type==='question').length}</div><div class="stat-sub">En attente réponse</div></div>
     </div>
+
     ${urgents.length ? `
     <div style="margin-bottom:20px">
       <div class="section-title">🚨 RDV Urgents — Validation requise</div>
@@ -758,6 +761,35 @@ async function renderDashboardMedecin(c) {
         </div>
       `).join('')}
     </div>` : ''}
+
+    <div style="margin-bottom:24px">
+      <div class="section-title">📅 Planning du jour — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+      ${todayRdvs.length ? `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${todayRdvs.map(r => {
+            const isPast = r.heure < now;
+            const isCurrent = r.heure <= now && now <= r.heure.replace(/(\d+):(\d+)/, (_, h, m) => `${String(+h + 1).padStart(2,'0')}:${m}`);
+            return `
+            <div class="rdv-card" style="cursor:pointer;${isCurrent ? 'border-color:var(--teal);box-shadow:0 0 0 2px rgba(14,165,160,0.2)' : isPast ? 'opacity:0.5' : ''}" onclick="loadPatient('${r.patient_id}')">
+              <div class="rdv-date-block ${r.urgent?'urgent':''}">
+                <div class="rdv-day ${r.urgent?'urgent':''}" style="font-size:18px">${r.heure}</div>
+              </div>
+              <div class="rdv-info">
+                <div class="rdv-type">${r.urgent?'🚨 ':''} ${r.patient_prenom} ${r.patient_nom}</div>
+                <div class="rdv-meta">${r.type} · ${r.medecin}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
+                ${isCurrent ? '<span style="font-size:10px;color:var(--teal2)">● En cours</span>' : ''}
+                ${isPast && !isCurrent ? '<span style="font-size:10px;color:var(--text3)">Passé</span>' : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>` : 
+        '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">Aucun rendez-vous aujourd\'hui</div>'
+      }
+    </div>
+
     <div class="grid-2">
       <div>
         <div class="section-title">Prochains rendez-vous</div>
@@ -829,9 +861,13 @@ async function renderDashboardPatient(c) {
   const pid = USER.patient_id;
   const [patient, rdvs] = await Promise.all([api(`/api/patients/${pid}`), api('/api/rdv')]);
   const today = new Date().toISOString().slice(0,10);
-  const prochains = rdvs.filter(r => r.date >= today);
+  const prochains = rdvs.filter(r => r.date >= today).sort((a,b) => a.date.localeCompare(b.date) || a.heure.localeCompare(b.heure));
+  const nextRdv = prochains[0] || null;
   const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
-  
+
+  // Days until next RDV
+  const daysUntil = nextRdv ? Math.round((new Date(nextRdv.date) - new Date(today)) / 86400000) : null;
+
   c.innerHTML = `
     <div class="welcome-banner">
       <div class="welcome-avatar">👤</div>
@@ -844,16 +880,41 @@ async function renderDashboardPatient(c) {
         <button class="btn btn-primary btn-sm" onclick="showView('mes-rdv')">📅 Prendre RDV</button>
       </div>
     </div>
+
+    ${nextRdv ? `
+    <div style="margin-bottom:20px;background:linear-gradient(135deg,#102840,var(--bg2));border:1px solid var(--teal);border-radius:18px;padding:20px 24px;display:flex;align-items:center;gap:20px">
+      <div style="background:var(--teal);border-radius:14px;padding:14px 18px;text-align:center;min-width:70px">
+        <div style="font-family:'Playfair Display',serif;font-size:28px;color:white;line-height:1">${new Date(nextRdv.date).getDate()}</div>
+        <div style="font-size:11px;text-transform:uppercase;color:rgba(255,255,255,0.8);letter-spacing:1px">${new Date(nextRdv.date).toLocaleString('fr-FR',{month:'short'})}</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal2);margin-bottom:4px">Prochain rendez-vous</div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;color:var(--text)">${nextRdv.type}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px">⏰ ${nextRdv.heure} · ${nextRdv.medecin}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-family:'Playfair Display',serif;font-size:32px;color:var(--teal2)">${daysUntil === 0 ? "Auj." : daysUntil + 'j'}</div>
+        <div style="font-size:11px;color:var(--text3)">${daysUntil === 0 ? "Aujourd'hui !" : 'restants'}</div>
+        <span class="badge ${nextRdv.statut==='confirmé'?'badge-teal':'badge-amber'}" style="margin-top:6px">${nextRdv.statut}</span>
+      </div>
+    </div>` : `
+    <div style="margin-bottom:20px;background:var(--card);border:1px dashed var(--border);border-radius:18px;padding:24px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">📅</div>
+      <div style="color:var(--text2);font-size:14px;margin-bottom:12px">Aucun rendez-vous programmé</div>
+      <button class="btn btn-primary btn-sm" onclick="showView('mes-rdv')">Prendre un rendez-vous</button>
+    </div>`}
+
     <div class="grid-3" style="margin-bottom:20px">
-      <div class="stat-card teal"><div class="stat-label">Prochains RDV</div><div class="stat-value">${prochains.length}</div></div>
+      <div class="stat-card teal"><div class="stat-label">RDV à venir</div><div class="stat-value">${prochains.length}</div></div>
       <div class="stat-card blue"><div class="stat-label">Consultations</div><div class="stat-value">${patient.historique.length}</div></div>
       <div class="stat-card amber"><div class="stat-label">Documents</div><div class="stat-value">${(patient.documents||[]).length}</div></div>
     </div>
+
     <div class="grid-2">
       <div>
-        <div class="section-title">Prochains rendez-vous</div>
-        ${prochains.slice(0,3).map(r=>`
-          <div class="rdv-card">
+        <div class="section-title">Tous mes rendez-vous</div>
+        ${prochains.slice(0,4).map((r,i) => `
+          <div class="rdv-card" style="${i===0?'border-color:var(--teal)':''}">
             <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
             <div class="rdv-info"><div class="rdv-type">${r.type}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
             <span class="badge ${r.statut==='confirmé'?'badge-teal':'badge-amber'}">${r.statut}</span>
@@ -867,7 +928,7 @@ async function renderDashboardPatient(c) {
           <div class="tl-item" style="margin-bottom:10px">
             <div class="tl-date">${fmtDate(h.date)}</div>
             <div class="tl-title">${h.motif}</div>
-            <div class="tl-field-value" style="font-size:12px;color:var(--text2)">${h.diagnostic}</div>
+            <div class="tl-field-value" style="font-size:12px;color:var(--text2)">${h.traitement || ''}</div>
           </div>
         `).join('')}
       </div>
