@@ -7,7 +7,9 @@ LLM: Groq API (llama-3.1-8b-instant) — gratuit, rapide, sans abonnement
 
 import json, base64, os, re, csv, io, datetime, uuid, hashlib
 from flask import Flask, request, jsonify, session, render_template_string, redirect
-import urllib.request, urllib.error
+import requests as http_requests
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = 'ophthalmo_v2_secret_2025'
@@ -112,44 +114,30 @@ def anonymize_patient(p):
 # ─── LLM API (GROQ) ───────────────────────────────────────────────────────────
 
 def call_llm(prompt, system, image_b64=None, max_tokens=800):
-    """
-    Appel Groq API — format compatible OpenAI.
-    Note: Groq ne supporte pas les images. Si image_b64 fourni,
-    on indique au médecin d'analyser manuellement.
-    """
     if not GROQ_API_KEY:
         return "⚠️ Clé GROQ_API_KEY manquante. Configurez la variable d'environnement."
 
-    # Groq ne supporte pas les images — on le signale proprement
     if image_b64:
         return ("⚠️ L'analyse automatique d'images n'est pas disponible dans cette version. "
                 "Veuillez analyser l'image manuellement et saisir vos observations dans les notes.")
 
-    payload = json.dumps({
-        "model": GROQ_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.3
-    }).encode('utf-8')
-
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}"
-        },
-        method="POST"
-    )
     try:
-        with urllib.request.urlopen(req, timeout=40) as r:
-            return json.loads(r.read())['choices'][0]['message']['content']
-    except urllib.error.HTTPError as e:
-        body = e.read().decode('utf-8', errors='ignore')
-        return f"Erreur Groq ({e.code}): {body[:200]}"
+        r = http_requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.3
+            },
+            timeout=40
+        )
+        r.raise_for_status()
+        return r.json()['choices'][0]['message']['content']
     except Exception as e:
         return f"Erreur IA: {str(e)}"
 
@@ -513,7 +501,14 @@ def add_question(pid):
         "reponse": "", "reponse_ia": "", "reponse_validee": False
     }
 
-    context = f"Patient: {p['prenom']} {p['nom']}, {datetime.datetime.now().year - int(p['ddn'][:4])} ans. Antécédents: {', '.join(p['antecedents'])}"
+    derniere = p['historique'][-1] if p['historique'] else None
+    context = f"""Patient: {p['prenom']} {p['nom']}, {datetime.datetime.now().year - int(p['ddn'][:4])} ans, {p['sexe']}.
+Antécédents: {', '.join(p['antecedents'])}.
+Allergies: {', '.join(p['allergies']) if p['allergies'] else 'Aucune'}.
+Traitements en cours: {derniere['traitement'] if derniere else 'Non renseigné'}.
+Dernière consultation ({derniere['date'] if derniere else 'N/A'}): {derniere['diagnostic'] if derniere else 'N/A'}.
+Acuité OD: {derniere.get('acuite_od','N/A') if derniere else 'N/A'} | OG: {derniere.get('acuite_og','N/A') if derniere else 'N/A'}.
+Tonus OD: {derniere.get('tension_od','N/A') if derniere else 'N/A'} | OG: {derniere.get('tension_og','N/A') if derniere else 'N/A'}."""
     q['reponse_ia'] = call_llm(
         f"Question du patient: {question_text}\nContexte: {context}",
         SYSTEM_RESPONSE_DRAFT, max_tokens=400
