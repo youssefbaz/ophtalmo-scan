@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OphtalmoScan v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Tajawal:wght@300;400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06111a;
+  --bg2: #091520;
+  --bg3: #0c1e2d;
+  --card: #0f2336;
+  --border: #153045;
+  --teal: #0ea5a0;
+  --teal2: #14c4be;
+  --teal-dim: rgba(14,165,160,0.12);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.12);
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+  --blue: #3b82f6;
+  --text: #dff0f5;
+  --text2: #7fa8be;
+  --text3: #3d6a82;
+  --radius: 14px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: 'Tajawal', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ── LAYOUT ── */
+.app { display: flex; height: 100vh; }
+.sidebar {
+  width: 250px; min-width: 250px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  height: 100vh; overflow: hidden;
+}
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 58px; min-height: 58px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 16px;
+  flex-shrink: 0;
+}
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ── LOGIN ── */
+#loginScreen {
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at 30% 40%, #0a2535 0%, var(--bg) 70%);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+
+.login-box {
+  width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 48px 40px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+}
+
+.login-logo { text-align: center; margin-bottom: 36px; }
+.login-logo-icon {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, var(--teal), #0c7a76);
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; margin: 0 auto 16px;
+  box-shadow: 0 8px 24px rgba(14,165,160,0.3);
+}
+.login-title { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--text); }
+.login-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+.role-tabs { display: flex; gap: 6px; margin-bottom: 24px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 12px; }
+.role-tab {
+  flex: 1; padding: 8px; border-radius: 9px; border: none;
+  background: transparent; color: var(--text2);
+  font-family: 'Tajawal', sans-serif; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.role-tab.active { background: var(--teal); color: white; }
+.role-tab .role-emoji { display: block; font-size: 18px; margin-bottom: 2px; }
+
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input {
+  width: 100%; padding: 11px 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text);
+  font-family: 'Tajawal', sans-serif; font-size: 14px;
+  outline: none; transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--teal); }
+.form-input::placeholder { color: var(--text3); }
+
+.demo-creds {
+  background: var(--teal-dim);
+  border: 1px solid rgba(14,165,160,0.2);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 20px;
+  font-size: 12px; color: var(--text2); line-height: 1.8;
+}
+.demo-creds strong { color: var(--teal2); }
+
+/* ── SIDEBAR ELEMENTS ── */
+.sidebar-logo {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-logo-name { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--teal2); }
+.sidebar-logo-role {
+  font-size: 11px; color: var(--text3);
+  font-family: 'Space Mono', monospace;
+  text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;
+}
+
+.nav-section { padding: 12px 10px 4px; flex-shrink: 0; }
+.nav-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); padding: 0 10px; margin-bottom: 4px; }
+
+.nav-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 10px; border: none;
+  background: transparent; color: var(--text2);
+  font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; text-align: left; margin-bottom: 2px;
+  position: relative;
+}
+.nav-btn:hover { background: var(--teal-dim); color: var(--text); }
+.nav-btn.active { background: var(--teal-dim); color: var(--teal2); border-left: 2px solid var(--teal); padding-left: 10px; }
+.nav-btn .nb { font-size: 11px; padding: 1px 7px; border-radius: 20px; background: var(--red); color: white; margin-left: auto; }
+.nav-btn .nb.amber { background: var(--amber); }
+
+.sidebar-patient-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.sidebar-patient-search { padding: 10px 10px 6px; flex-shrink: 0; }
+.sidebar-patient-search input {
+  width: 100%; padding: 7px 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  font-family: 'Tajawal', sans-serif; font-size: 13px; outline: none;
+}
+.sidebar-patient-search input:focus { border-color: var(--teal); }
+.sidebar-patient-search input::placeholder { color: var(--text3); }
+
+.patient-list-scroll { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
+
+.patient-mini {
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  transition: all 0.15s; border: 1px solid transparent; margin-bottom: 3px;
+}
+.patient-mini:hover { background: var(--teal-dim); border-color: var(--border); }
+.patient-mini.active { background: var(--teal-dim); border-color: var(--teal); }
+.patient-mini .pm-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.patient-mini .pm-id { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; }
+.patient-mini .pm-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--red-dim); color: #fca5a5; margin-top: 3px; }
+
+/* ── TOPBAR ── */
+.topbar-title { font-family: 'Playfair Display', serif; font-size: 18px; flex: 1; }
+.topbar-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  cursor: pointer;
+}
+.topbar-user-name { font-size: 13px; font-weight: 600; }
+.topbar-user-role { font-size: 11px; color: var(--text2); }
+.role-dot { width: 8px; height: 8px; border-radius: 50%; }
+.role-dot.medecin { background: var(--teal2); }
+.role-dot.assistant { background: var(--amber); }
+.role-dot.patient { background: var(--blue); }
+
+.notif-btn {
+  position: relative; width: 38px; height: 38px;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.notif-btn:hover { background: var(--teal-dim); color: var(--teal2); }
+.notif-count {
+  position: absolute; top: -4px; right: -4px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--red); font-size: 9px; color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+}
+
+/* ── VIEWS ── */
+.view { display: none; }
+.view.active { display: block; }
+
+/* ── CARDS & GRIDS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.card-sm { padding: 14px 16px; }
+
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 20px;
+  position: relative; overflow: hidden;
+}
+.stat-card::after {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+}
+.stat-card.teal::after { background: var(--teal); }
+.stat-card.amber::after { background: var(--amber); }
+.stat-card.red::after { background: var(--red); }
+.stat-card.blue::after { background: var(--blue); }
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); }
+.stat-value { font-family: 'Playfair Display', serif; font-size: 32px; color: var(--text); margin: 4px 0 0; }
+.stat-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+.section-title {
+  font-family: 'Playfair Display', serif; font-size: 17px; color: var(--text);
+  margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── PATIENT HEADER ── */
+.patient-header {
+  background: linear-gradient(135deg, #102840 0%, var(--bg2) 100%);
+  border: 1px solid var(--border); border-radius: 18px;
+  padding: 22px 24px; margin-bottom: 20px;
+  display: flex; align-items: flex-start; gap: 20px;
+}
+.patient-avatar {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: linear-gradient(135deg, #0c7a76, var(--teal2));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif; font-size: 20px; color: white;
+  flex-shrink: 0;
+}
+.patient-fullname { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); }
+.patient-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.patient-meta-item { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* ── BADGES ── */
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-teal { background: var(--teal-dim); color: var(--teal2); border: 1px solid rgba(14,165,160,0.25); }
+.badge-red { background: var(--red-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+.badge-amber { background: var(--amber-dim); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+.badge-blue { background: rgba(59,130,246,0.1); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
+.badge-green { background: var(--green-dim); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+
+/* ── TABS ── */
+.tabs { display: flex; gap: 3px; margin-bottom: 18px; background: rgba(255,255,255,0.03); padding: 3px; border-radius: 12px; width: fit-content; border: 1px solid var(--border); }
+.tab-btn { padding: 7px 16px; border-radius: 10px; border: none; background: transparent; color: var(--text2); font-family: 'Tajawal', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: var(--teal); color: white; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── TIMELINE ── */
+.timeline { position: relative; padding-left: 26px; }
+.timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.tl-item { position: relative; margin-bottom: 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color 0.15s; }
+.tl-item:hover { border-color: var(--teal); }
+.tl-item::before { content: ''; position: absolute; left: -21px; top: 18px; width: 9px; height: 9px; border-radius: 50%; background: var(--teal); border: 2px solid var(--bg); }
+.tl-date { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--teal2); margin-bottom: 5px; }
+.tl-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.tl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.tl-field { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 7px 10px; }
+.tl-field-label { font-size: 10px; text-transform: uppercase; color: var(--text3); }
+.tl-field-value { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.tl-note { margin-top: 8px; font-size: 12px; color: var(--text2); background: rgba(255,255,255,0.03); border-radius: 8px; padding: 7px 10px; border-left: 3px solid var(--teal); }
+
+/* ── RDV ── */
+.rdv-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px;
+  display: flex; align-items: center; gap: 16px;
+  transition: border-color 0.15s; margin-bottom: 10px;
+}
+.rdv-card:hover { border-color: var(--teal); }
+.rdv-card.urgent { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.04); }
+.rdv-date-block { text-align: center; min-width: 50px; background: var(--teal-dim); border-radius: 10px; padding: 7px; border: 1px solid rgba(14,165,160,0.2); }
+.rdv-date-block.urgent { background: var(--red-dim); border-color: rgba(239,68,68,0.3); }
+.rdv-day { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--teal2); line-height: 1; }
+.rdv-day.urgent { color: #fca5a5; }
+.rdv-month { font-size: 10px; text-transform: uppercase; color: var(--text2); letter-spacing: 1px; }
+.rdv-info { flex: 1; }
+.rdv-type { font-size: 14px; font-weight: 600; color: var(--text); }
+.rdv-meta { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+/* ── BUTTONS ── */
+.btn { padding: 9px 18px; border-radius: 10px; border: none; font-family: 'Tajawal', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 7px; }
+.btn-primary { background: var(--teal); color: white; }
+.btn-primary:hover { background: var(--teal2); }
+.btn-amber { background: var(--amber); color: #1a0f00; }
+.btn-amber:hover { opacity: 0.85; }
+.btn-red { background: var(--red); color: white; }
+.btn-red:hover { opacity: 0.85; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+.btn-ghost:hover { border-color: var(--teal); color: var(--text); }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── FORMS ── */
+.input {
+  width: 100%; padding: 9px 13px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text);
+  font-family: 'Tajawal', sans-serif; font-size: 13px; outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--teal); }
+.input::placeholder { color: var(--text3); }
+select.input { cursor: pointer; }
+textarea.input { resize: vertical; min-height: 80px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.form-full { margin-bottom: 12px; }
+label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); display: block; margin-bottom: 5px; }
+
+/* ── AI CHAT ── */
+.ai-panel { display: flex; flex-direction: column; height: calc(100vh - 106px); }
+.ai-header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, rgba(14,165,160,0.1) 0%, transparent 100%); border-radius: 14px 14px 0 0; flex-shrink: 0; }
+.ai-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal2); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.ai-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 80%; animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.msg-user { align-self: flex-end; }
+.msg-ai { align-self: flex-start; }
+.msg-bubble { padding: 11px 15px; border-radius: 13px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+.msg-user .msg-bubble { background: var(--teal); color: white; border-radius: 13px 13px 4px 13px; }
+.msg-ai .msg-bubble { background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid var(--border); border-radius: 13px 13px 13px 4px; }
+.msg-sender { font-size: 10px; color: var(--text3); margin-bottom: 3px; font-family: 'Space Mono', monospace; }
+.msg-user .msg-sender { text-align: right; }
+.ai-input-area { padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+.ai-input-area textarea { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 9px 13px; color: var(--text); font-family: 'Tajawal', sans-serif; font-size: 13px; resize: none; outline: none; min-height: 40px; max-height: 100px; }
+.ai-input-area textarea:focus { border-color: var(--teal); }
+.send-btn { width: 40px; height: 40px; border-radius: 10px; border: none; background: var(--teal); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+.send-btn:hover { background: var(--teal2); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.quick-qs { padding: 0 12px 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+.quick-q { padding: 4px 11px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 11px; cursor: pointer; transition: all 0.15s; font-family: 'Tajawal', sans-serif; }
+.quick-q:hover { border-color: var(--teal); color: var(--teal2); }
+
+/* ── QUESTION CARDS ── */
+.question-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.question-card.pending { border-color: rgba(245,158,11,0.3); }
+.question-card.answered { border-color: rgba(34,197,94,0.3); }
+.q-text { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+.q-date { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; }
+.ai-draft { background: var(--teal-dim); border: 1px solid rgba(14,165,160,0.2); border-radius: 10px; padding: 12px; margin-top: 12px; }
+.ai-draft-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--teal2); margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.ai-draft-text { font-size: 13px; color: var(--text2); line-height: 1.6; }
+.answer-area { margin-top: 12px; }
+
+/* ── IMPORT ── */
+.import-zone {
+  border: 2px dashed var(--border); border-radius: 14px;
+  padding: 36px; text-align: center; cursor: pointer;
+  transition: all 0.2s; background: rgba(255,255,255,0.01);
+}
+.import-zone:hover { border-color: var(--teal); background: var(--teal-dim); }
+.import-zone.drag { border-color: var(--teal); background: var(--teal-dim); }
+.import-icon { font-size: 36px; margin-bottom: 10px; }
+.import-text { font-size: 14px; color: var(--text2); }
+.import-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+/* ── DOCUMENT CARDS ── */
+.doc-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: all 0.2s; }
+.doc-card:hover { border-color: var(--teal); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+.doc-preview { height: 140px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.doc-preview img { width: 100%; height: 100%; object-fit: cover; }
+.doc-info { padding: 12px; }
+.doc-type { font-size: 13px; font-weight: 600; color: var(--teal2); }
+.doc-date { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; margin-top: 2px; }
+.doc-uploader { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+/* ── MODAL ── */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); z-index: 500; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 28px; width: 90vw; max-width: 680px; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-title { font-family: 'Playfair Display', serif; font-size: 19px; }
+.modal-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 17px; }
+
+/* ── NOTIF PANEL ── */
+.notif-panel { display: none; position: fixed; top: 66px; right: 16px; width: 340px; background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; z-index: 200; box-shadow: var(--shadow); max-height: 480px; overflow-y: auto; }
+.notif-panel.open { display: block; }
+.notif-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+.notif-item:hover { background: var(--teal-dim); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item.unread { border-left: 3px solid var(--teal); }
+.notif-msg { font-size: 13px; color: var(--text); }
+.notif-time { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; margin-top: 3px; }
+
+/* ── LOADING ── */
+.loading-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--teal2); margin: 0 2px; animation: bounce 1.2s infinite; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+
+/* ── PATIENT ROLE SPECIFIC ── */
+.patient-portal .stat-card { cursor: default; }
+.welcome-banner { background: linear-gradient(135deg, #0e3045 0%, var(--bg2) 100%); border: 1px solid var(--border); border-radius: 18px; padding: 24px 28px; margin-bottom: 22px; display: flex; align-items: center; gap: 20px; }
+.welcome-avatar { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, var(--blue), #1d4ed8); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.welcome-name { font-family: 'Playfair Display', serif; font-size: 20px; }
+.welcome-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+
+/* ── ARABIC SUPPORT ── */
+.ar { font-family: 'Tajawal', sans-serif; }
+
+/* ── ANON CARD (assistant) ── */
+.anon-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+.anon-id { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--teal2); background: var(--teal-dim); padding: 6px 12px; border-radius: 8px; }
+.anon-info { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">👁</div>
+      <div class="login-title">OphtalmoScan</div>
+      <div class="login-sub">Système de gestion ophtalmologique</div>
+    </div>
+    <div class="role-tabs">
+      <button class="role-tab active" onclick="setLoginRole('medecin',this)">
+        <span class="role-emoji">🩺</span>Médecin
+      </button>
+      <button class="role-tab" onclick="setLoginRole('assistant',this)">
+        <span class="role-emoji">👩‍💼</span>Assistant
+      </button>
+      <button class="role-tab" onclick="setLoginRole('patient',this)">
+        <span class="role-emoji">🧑</span>Patient
+      </button>
+    </div>
+    <div class="demo-creds" id="demoCreds">
+      <strong>🩺 Médecin:</strong> dr.martin / medecin123
+    </div>
+    <div class="form-group">
+      <label class="form-label">Identifiant</label>
+      <input class="form-input" id="loginUser" placeholder="Votre identifiant" value="dr.martin">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mot de passe</label>
+      <input class="form-input" type="password" id="loginPass" placeholder="Mot de passe" value="medecin123" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div id="loginError" style="color:#fca5a5;font-size:13px;margin-bottom:12px;display:none"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">
+      Connexion →
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="mainApp" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-name">👁 OphtalmoScan</div>
+      <div class="sidebar-logo-role" id="sidebarRole">—</div>
+    </div>
+    <div id="sidebarNav"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Tableau de bord</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="notif-btn" onclick="toggleNotifs()" id="notifBtn">
+          <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <span class="notif-count" id="notifCount" style="display:none">0</span>
+        </button>
+        <div class="topbar-user" onclick="doLogout()">
+          <div class="role-dot" id="roleDot"></div>
+          <div>
+            <div class="topbar-user-name" id="topbarUser">—</div>
+            <div class="topbar-user-role" id="topbarRole">—</div>
+          </div>
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color:var(--text3)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="content" id="mainContent"></div>
+  </main>
+</div>
+
+<!-- NOTIFICATION PANEL -->
+<div class="notif-panel" id="notifPanel">
+  <div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px">Notifications</div>
+  <div id="notifList"></div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modalRdv">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalRdvTitle">Nouveau rendez-vous</div>
+      <button class="modal-close" onclick="closeModal('modalRdv')">×</button>
+    </div>
+    <div id="modalRdvContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalAddPatient">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Ajouter un patient</div>
+      <button class="modal-close" onclick="closeModal('modalAddPatient')">×</button>
+    </div>
+    <div id="modalAddPatientContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalImport">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <div class="modal-title">Importer des patients</div>
+      <button class="modal-close" onclick="closeModal('modalImport')">×</button>
+    </div>
+    <div id="modalImportContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalImage">
+  <div class="modal" style="max-width:820px">
+    <div class="modal-header">
+      <div class="modal-title" id="modalImageTitle">Examen</div>
+      <button class="modal-close" onclick="closeModal('modalImage')">×</button>
+    </div>
+    <div id="modalImageContent"></div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let USER = null;
+let currentPatientId = null;
+let currentView = null;
+let aiContext = '';
+let notifOpen = false;
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+const DEMO = {
+  medecin: {user:'dr.martin', pass:'medecin123', hint:'🩺 Médecin: dr.martin / medecin123'},
+  assistant: {user:'assist.sara', pass:'assist123', hint:'👩‍💼 Assistant: assist.sara / assist123'},
+  patient: {user:'patient.marie', pass:'patient123', hint:'🧑 Patient 1: patient.marie / patient123<br>🧑 Patient 2: patient.jp / patient123'}
+};
+
+function setLoginRole(role, btn) {
+  document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('demoCreds').innerHTML = DEMO[role].hint;
+  document.getElementById('loginUser').value = DEMO[role].user;
+  document.getElementById('loginPass').value = DEMO[role].pass;
+}
+
+async function doLogin() {
+  const u = document.getElementById('loginUser').value;
+  const p = document.getElementById('loginPass').value;
+  const res = await api('/login','POST',{username:u,password:p});
+  if (res.ok) {
+    USER = res;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    initApp();
+  } else {
+    document.getElementById('loginError').textContent = res.error || 'Erreur';
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+async function doLogout() {
+  await api('/logout','POST');
+  USER = null; currentPatientId = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display = 'none';
+}
+
+// ─── APP INIT ─────────────────────────────────────────────────────────────────
+function initApp() {
+  const roleLabels = {medecin:'Médecin Ophtalmologiste',assistant:'Secrétaire Médicale',patient:'Espace Patient'};
+  document.getElementById('topbarUser').textContent = USER.prenom + ' ' + USER.nom;
+  document.getElementById('topbarRole').textContent = roleLabels[USER.role];
+  document.getElementById('roleDot').className = 'role-dot ' + USER.role;
+  document.getElementById('sidebarRole').textContent = roleLabels[USER.role];
+  
+  buildSidebar();
+  loadNotifications();
+  
+  if (USER.role === 'medecin') showView('dashboard-medecin');
+  else if (USER.role === 'assistant') showView('dashboard-assistant');
+  else { showView('dashboard-patient'); }
+  
+  setInterval(loadNotifications, 30000);
+}
+
+function buildSidebar() {
+  let html = '';
+  if (USER.role === 'medecin') {
+    html = `
+      <div class="nav-section">
+        <div class="nav-section-label">Navigation</div>
+        <button class="nav-btn" onclick="showView('dashboard-medecin')">📊 Tableau de bord</button>
+        <button class="nav-btn" onclick="showView('agenda')">📅 Agenda & RDV</button>
+        <button class="nav-btn" onclick="showView('questions-medecin')">💬 Questions patients</button>
+        <button class="nav-btn" onclick="showView('ai-assistant')">🤖 Assistant IA</button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:10px">
+          Patients
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-ghost" style="padding:3px 8px;font-size:11px" onclick="openAddPatient()">+ Ajouter</button>
+            <button class="btn btn-sm btn-ghost" style="padding:3px 8px;font-size:11px" onclick="openImport()">↑ Importer</button>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-patient-section">
+        <div class="sidebar-patient-search">
+          <input type="text" placeholder="Rechercher un patient..." oninput="searchPatients(this.value)">
+        </div>
+        <div class="patient-list-scroll" id="patientListSidebar"></div>
+      </div>`;
+  } else if (USER.role === 'assistant') {
+    html = `
+      <div class="nav-section">
+        <div class="nav-section-label">Navigation</div>
+        <button class="nav-btn" onclick="showView('dashboard-assistant')">📊 Tableau de bord</button>
+        <button class="nav-btn" onclick="showView('agenda')">📅 Agenda & RDV</button>
+        <button class="nav-btn" onclick="showView('liste-patients-anon')">👥 Liste patients</button>
+      </div>`;
+  } else {
+    html = `
+      <div class="nav-section">
+        <div class="nav-section-label">Mon espace</div>
+        <button class="nav-btn" onclick="showView('dashboard-patient')">🏠 Accueil</button>
+        <button class="nav-btn" onclick="showView('mes-rdv')">📅 Mes rendez-vous</button>
+        <button class="nav-btn" onclick="showView('mes-documents')">📎 Mes documents</button>
+        <button class="nav-btn" onclick="showView('mes-questions')">💬 Questions au médecin</button>
+      </div>`;
+  }
+  document.getElementById('sidebarNav').innerHTML = html;
+  if (USER.role === 'medecin') loadPatientsSidebar();
+}
+
+// ─── VIEWS ROUTER ─────────────────────────────────────────────────────────────
+function showView(viewId, title) {
+  currentView = viewId;
+  const titles = {
+    'dashboard-medecin':'Tableau de bord','dashboard-assistant':'Tableau de bord',
+    'dashboard-patient':'Mon espace santé','agenda':'Agenda & Rendez-vous',
+    'questions-medecin':'Questions des patients','ai-assistant':'Assistant IA Ophtalmologie',
+    'patient-profile':'Dossier patient','liste-patients-anon':'Liste des patients',
+    'mes-rdv':'Mes rendez-vous','mes-documents':'Mes documents','mes-questions':'Questions au médecin'
+  };
+  document.getElementById('topbarTitle').textContent = title || titles[viewId] || viewId;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  
+  // Render view
+  const c = document.getElementById('mainContent');
+  if (viewId === 'dashboard-medecin') renderDashboardMedecin(c);
+  else if (viewId === 'dashboard-assistant') renderDashboardAssistant(c);
+  else if (viewId === 'dashboard-patient') renderDashboardPatient(c);
+  else if (viewId === 'agenda') renderAgenda(c);
+  else if (viewId === 'questions-medecin') renderQuestionsMedecin(c);
+  else if (viewId === 'ai-assistant') renderAiAssistant(c);
+  else if (viewId === 'patient-profile') renderPatientProfile(c, currentPatientId);
+  else if (viewId === 'liste-patients-anon') renderListePatientsAnon(c);
+  else if (viewId === 'mes-rdv') renderMesRdv(c);
+  else if (viewId === 'mes-documents') renderMesDocuments(c);
+  else if (viewId === 'mes-questions') renderMesQuestions(c);
+}
+
+// ─── DASHBOARD MÉDECIN ────────────────────────────────────────────────────────
+async function renderDashboardMedecin(c) {
+  const [patients, rdvs, notifs] = await Promise.all([
+    api('/api/patients'), api('/api/rdv'), api('/api/notifications')
+  ]);
+  const urgents = rdvs.filter(r => r.urgent && r.statut === 'en_attente');
+  const today = new Date().toISOString().slice(0,10);
+  const upcoming = rdvs.filter(r => r.date >= today).slice(0,5);
+  
+  c.innerHTML = `
+    <div class="grid-4" style="margin-bottom:20px">
+      <div class="stat-card teal"><div class="stat-label">Patients</div><div class="stat-value">${patients.length}</div><div class="stat-sub">Total enregistrés</div></div>
+      <div class="stat-card amber"><div class="stat-label">Prochains RDV</div><div class="stat-value">${upcoming.length}</div><div class="stat-sub">À venir</div></div>
+      <div class="stat-card red"><div class="stat-label">RDV Urgents</div><div class="stat-value">${urgents.length}</div><div class="stat-sub">En attente validation</div></div>
+      <div class="stat-card blue"><div class="stat-label">Questions</div><div class="stat-value">${notifs.filter(n=>n.type==='question').length}</div><div class="stat-sub">En attente réponse</div></div>
+    </div>
+    ${urgents.length ? `
+    <div style="margin-bottom:20px">
+      <div class="section-title">🚨 RDV Urgents — Validation requise</div>
+      ${urgents.map(r => `
+        <div class="rdv-card urgent">
+          <div class="rdv-date-block urgent"><div class="rdv-day urgent">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+          <div class="rdv-info">
+            <div class="rdv-type">🚨 ${r.patient_prenom} ${r.patient_nom}</div>
+            <div class="rdv-meta">${r.type} · ${r.heure} · <span style="color:#fca5a5">Urgent</span></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
+            <button class="btn btn-ghost btn-sm" onclick="validerRdv('${r.id}','annulé')">✗ Refuser</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+    <div class="grid-2">
+      <div>
+        <div class="section-title">Prochains rendez-vous</div>
+        ${upcoming.map(r => `
+          <div class="rdv-card" style="cursor:pointer" onclick="loadPatient('${r.patient_id}')">
+            <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+            <div class="rdv-info">
+              <div class="rdv-type">${r.patient_prenom} ${r.patient_nom}</div>
+              <div class="rdv-meta">${r.type} · ${r.heure}</div>
+            </div>
+            <span class="badge ${r.statut==='confirmé'?'badge-teal':'badge-amber'}">${r.statut}</span>
+          </div>
+        `).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Aucun RDV à venir</div>'}
+      </div>
+      <div>
+        <div class="section-title">Activité récente</div>
+        ${notifs.slice(0,6).map(n => `
+          <div class="notif-item ${n.lu?'':'unread'}" style="border-radius:10px;margin-bottom:6px;border:1px solid var(--border)" onclick="markNotifLu('${n.id}')">
+            <div class="notif-msg">${n.message}</div>
+            <div class="notif-time">${n.date}</div>
+          </div>
+        `).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Aucune activité</div>'}
+      </div>
+    </div>`;
+}
+
+// ─── DASHBOARD ASSISTANT ──────────────────────────────────────────────────────
+async function renderDashboardAssistant(c) {
+  const [rdvs, notifs] = await Promise.all([api('/api/rdv'), api('/api/notifications')]);
+  const today = new Date().toISOString().slice(0,10);
+  const upcoming = rdvs.filter(r => r.date >= today);
+  const pending = rdvs.filter(r => r.statut === 'en_attente');
+  
+  c.innerHTML = `
+    <div class="grid-3" style="margin-bottom:20px">
+      <div class="stat-card teal"><div class="stat-label">RDV à venir</div><div class="stat-value">${upcoming.length}</div></div>
+      <div class="stat-card amber"><div class="stat-label">En attente validation</div><div class="stat-value">${pending.length}</div></div>
+      <div class="stat-card blue"><div class="stat-label">Aujourd'hui</div><div class="stat-value">${rdvs.filter(r=>r.date===today).length}</div></div>
+    </div>
+    ${pending.length ? `
+    <div style="margin-bottom:20px">
+      <div class="section-title">RDV en attente de confirmation</div>
+      ${pending.map(r => `
+        <div class="rdv-card ${r.urgent?'urgent':''}">
+          <div class="rdv-date-block ${r.urgent?'urgent':''}"><div class="rdv-day ${r.urgent?'urgent':''}">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+          <div class="rdv-info">
+            <div class="rdv-type">${r.urgent?'🚨 ':''} ${r.patient_prenom} ${r.patient_nom}</div>
+            <div class="rdv-meta">${r.type} · ${r.heure}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
+            <button class="btn btn-ghost btn-sm" onclick="validerRdv('${r.id}','annulé')">✗</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+    <div class="section-title">Agenda du jour</div>
+    ${rdvs.filter(r=>r.date===today).map(r=>`
+      <div class="rdv-card">
+        <div class="rdv-date-block"><div class="rdv-day">${r.heure.split(':')[0]}h</div><div class="rdv-month">${r.heure.split(':')[1]}</div></div>
+        <div class="rdv-info"><div class="rdv-type">${r.patient_prenom} ${r.patient_nom}</div><div class="rdv-meta">${r.type} · ${r.medecin}</div></div>
+        <span class="badge badge-teal">${r.statut}</span>
+      </div>
+    `).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Aucun RDV aujourd\'hui</div>'}`;
+}
+
+// ─── DASHBOARD PATIENT ────────────────────────────────────────────────────────
+async function renderDashboardPatient(c) {
+  const pid = USER.patient_id;
+  const [patient, rdvs] = await Promise.all([api(`/api/patients/${pid}`), api('/api/rdv')]);
+  const today = new Date().toISOString().slice(0,10);
+  const prochains = rdvs.filter(r => r.date >= today);
+  const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
+  
+  c.innerHTML = `
+    <div class="welcome-banner">
+      <div class="welcome-avatar">👤</div>
+      <div>
+        <div class="welcome-name">Bonjour, ${patient.prenom} ${patient.nom}</div>
+        <div class="welcome-sub">${age} ans · ${patient.antecedents.join(' · ')}</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:10px">
+        <button class="btn btn-red btn-sm" onclick="openRdvUrgent()">🚨 RDV Urgent</button>
+        <button class="btn btn-primary btn-sm" onclick="showView('mes-rdv')">📅 Prendre RDV</button>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-bottom:20px">
+      <div class="stat-card teal"><div class="stat-label">Prochains RDV</div><div class="stat-value">${prochains.length}</div></div>
+      <div class="stat-card blue"><div class="stat-label">Consultations</div><div class="stat-value">${patient.historique.length}</div></div>
+      <div class="stat-card amber"><div class="stat-label">Documents</div><div class="stat-value">${(patient.documents||[]).length}</div></div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="section-title">Prochains rendez-vous</div>
+        ${prochains.slice(0,3).map(r=>`
+          <div class="rdv-card">
+            <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+            <div class="rdv-info"><div class="rdv-type">${r.type}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
+            <span class="badge ${r.statut==='confirmé'?'badge-teal':'badge-amber'}">${r.statut}</span>
+          </div>
+        `).join('') || '<div style="color:var(--text3);font-size:13px;padding:16px;text-align:center">Aucun RDV programmé</div>'}
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="showView('mes-rdv')">Voir tous →</button>
+      </div>
+      <div>
+        <div class="section-title">Dernières consultations</div>
+        ${patient.historique.slice(0,3).map(h=>`
+          <div class="tl-item" style="margin-bottom:10px">
+            <div class="tl-date">${fmtDate(h.date)}</div>
+            <div class="tl-title">${h.motif}</div>
+            <div class="tl-field-value" style="font-size:12px;color:var(--text2)">${h.diagnostic}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+// ─── PATIENT PROFILE (MÉDECIN) ────────────────────────────────────────────────
+async function renderPatientProfile(c, pid) {
+  const patient = await api(`/api/patients/${pid}`);
+  const docs = await api(`/api/patients/${pid}/documents`);
+  const questions = await api(`/api/patients/${pid}/questions`);
+  const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
+  
+  c.innerHTML = `
+    <div class="patient-header">
+      <div class="patient-avatar">${patient.prenom[0]}${patient.nom[0]}</div>
+      <div style="flex:1">
+        <div class="patient-fullname">${patient.prenom} ${patient.nom}</div>
+        <div class="patient-meta">
+          <span class="patient-meta-item">🎂 ${age} ans (${fmtDate(patient.ddn)})</span>
+          <span class="patient-meta-item">⚧ ${patient.sexe==='F'?'Féminin':'Masculin'}</span>
+          <span class="patient-meta-item">📱 ${patient.telephone}</span>
+          <span class="patient-meta-item">✉ ${patient.email}</span>
+        </div>
+        <div class="badges" style="margin-top:8px">
+          ${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')}
+          ${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ RDV</button>
+        <button class="btn btn-ghost btn-sm" onclick="startAiContext('${pid}')">🤖 IA</button>
+      </div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('hist','${pid}',this)">📋 Historique</button>
+      <button class="tab-btn" onclick="switchTab('img','${pid}',this)">🔬 Imagerie</button>
+      <button class="tab-btn" onclick="switchTab('docs','${pid}',this)">📎 Documents patient</button>
+      <button class="tab-btn" onclick="switchTab('rdvp','${pid}',this)">📅 RDV</button>
+      <button class="tab-btn" onclick="switchTab('qst','${pid}',this)">💬 Questions${questions.length?` (${questions.filter(q=>q.statut==='en_attente').length})`:''}</button>
+    </div>
+    
+    <div class="tab-content active" id="tab-hist">
+      <div class="timeline">
+        ${patient.historique.map(h=>`
+          <div class="tl-item">
+            <div class="tl-date">${fmtDateLong(h.date)} — ${h.medecin}</div>
+            <div class="tl-title">${h.motif}</div>
+            <div class="tl-grid">
+              <div class="tl-field"><div class="tl-field-label">Diagnostic</div><div class="tl-field-value">${h.diagnostic}</div></div>
+              <div class="tl-field"><div class="tl-field-label">Traitement</div><div class="tl-field-value">${h.traitement}</div></div>
+              ${h.tension_od?`<div class="tl-field"><div class="tl-field-label">Tonus</div><div class="tl-field-value">OD: ${h.tension_od} | OG: ${h.tension_og}</div></div>`:''}
+              ${h.acuite_od?`<div class="tl-field"><div class="tl-field-label">Acuité</div><div class="tl-field-value">OD: ${h.acuite_od} | OG: ${h.acuite_og}</div></div>`:''}
+            </div>
+            ${h.notes?`<div class="tl-note">📝 ${h.notes}</div>`:''}
+          </div>
+        `).join('') || '<div style="color:var(--text3);text-align:center;padding:30px">Aucun historique</div>'}
+      </div>
+    </div>
+    
+    <div class="tab-content" id="tab-img">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+        ${patient.imagerie.map(img=>`
+          <div class="doc-card" onclick="openImageViewer('${img.id}','${escJ(img.type)}','${escJ(img.notes)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
+            <div class="doc-preview">
+              <div style="color:var(--text3);font-size:32px;text-align:center">🔬</div>
+            </div>
+            <div class="doc-info">
+              <div class="doc-type">${img.type}</div>
+              <div class="doc-date">${fmtDate(img.date)}</div>
+              <div class="doc-uploader" style="margin-top:4px;font-size:11px;color:var(--text2)">${img.notes}</div>
+              <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="event.stopPropagation();analyzeImageAI('${img.id}','${escJ(img.type)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">🤖 Analyser IA</button>
+            </div>
+          </div>
+        `).join('') || '<div style="color:var(--text3);text-align:center;padding:30px">Aucune imagerie</div>'}
+      </div>
+    </div>
+    
+    <div class="tab-content" id="tab-docs">
+      <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;color:var(--text2)">Documents uploadés par le patient (radios, scanners...)</div>
+      </div>
+      <div id="docs-grid-${pid}">
+        ${renderDocsGrid(docs, pid)}
+      </div>
+    </div>
+    
+    <div class="tab-content" id="tab-rdvp">
+      <div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ Nouveau RDV</button></div>
+      ${patient.rdv.sort((a,b)=>a.date.localeCompare(b.date)).map(r=>`
+        <div class="rdv-card ${r.urgent?'urgent':''}">
+          <div class="rdv-date-block ${r.urgent?'urgent':''}"><div class="rdv-day ${r.urgent?'urgent':''}">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+          <div class="rdv-info">
+            <div class="rdv-type">${r.urgent?'🚨 ':''} ${r.type}</div>
+            <div class="rdv-meta">⏰ ${r.heure} · ${r.medecin} · ${new Date(r.date).getFullYear()}</div>
+            ${r.notes?`<div style="font-size:11px;color:var(--text3);margin-top:2px">📝 ${r.notes}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+            <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
+            ${r.statut==='en_attente'?`<button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">Confirmer</button>`:''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    
+    <div class="tab-content" id="tab-qst">
+      ${renderQuestionsPanel(questions, pid)}
+    </div>`;
+}
+
+function renderDocsGrid(docs, pid) {
+  if (!docs.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucun document uploadé par le patient</div>';
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+    ${docs.map(d=>`
+      <div class="doc-card">
+        <div class="doc-preview"><div style="font-size:40px;text-align:center">📎</div></div>
+        <div class="doc-info">
+          <div class="doc-type">${d.type}</div>
+          <div class="doc-date">${fmtDate(d.date)}</div>
+          <div class="doc-uploader">Uploadé par: ${d.uploaded_by}</div>
+          ${d.analyse_ia?`<div style="margin-top:6px;font-size:11px;color:var(--teal2)">✓ Analysé par IA</div>`:''}
+          <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="analyzeDocAI('${pid}','${d.id}','${d.type}')">🤖 Analyser</button>
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+function renderQuestionsPanel(questions, pid) {
+  if (!questions.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucune question</div>';
+  return questions.map(q=>`
+    <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}" id="qcard-${q.id}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="q-text">❓ ${q.question}</div>
+        <span class="badge ${q.statut==='en_attente'?'badge-amber':'badge-green'}">${q.statut}</span>
+      </div>
+      <div class="q-date">${q.date}</div>
+      ${q.reponse_ia?`
+        <div class="ai-draft">
+          <div class="ai-draft-label">🤖 Réponse suggérée par l'IA</div>
+          <div class="ai-draft-text">${q.reponse_ia}</div>
+        </div>` : ''}
+      ${q.statut==='en_attente'?`
+        <div class="answer-area">
+          <label class="lbl">Votre réponse (modifiez si nécessaire)</label>
+          <textarea class="input" id="rep-${q.id}" rows="3">${q.reponse_ia||''}</textarea>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="sendReponse('${pid}','${q.id}')">✓ Envoyer réponse</button>
+            <button class="btn btn-ghost btn-sm" onclick="sendReponseIA('${pid}','${q.id}')">✓ Valider réponse IA</button>
+          </div>
+        </div>` :
+        q.reponse?`<div style="margin-top:10px;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text2)">✅ Répondu: ${q.reponse}</div>`:''}
+    </div>
+  `).join('');
+}
+
+// ─── AGENDA ───────────────────────────────────────────────────────────────────
+async function renderAgenda(c) {
+  const rdvs = await api('/api/rdv');
+  const today = new Date().toISOString().slice(0,10);
+  const grouped = {};
+  rdvs.forEach(r => { if (!grouped[r.date]) grouped[r.date] = []; grouped[r.date].push(r); });
+  const sorted = Object.keys(grouped).sort();
+  
+  c.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:13px;color:var(--text2)">${rdvs.length} rendez-vous total</div>
+      ${USER.role==='medecin'?`<button class="btn btn-primary btn-sm" onclick="openAddRdv(null)">+ Nouveau RDV</button>`:''}
+    </div>
+    ${sorted.map(date=>`
+      <div style="margin-bottom:20px">
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--teal2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-left:4px">
+          ${date===today?'AUJOURD\'HUI — ':''}${fmtDateLong(date)}
+        </div>
+        ${grouped[date].map(r=>`
+          <div class="rdv-card ${r.urgent?'urgent':''}" ${USER.role==='medecin'?`style="cursor:pointer" onclick="loadPatient('${r.patient_id}')"`:''}
+>
+            <div class="rdv-date-block ${r.urgent?'urgent':''}">
+              <div class="rdv-day ${r.urgent?'urgent':''}">${r.heure.split(':')[0]}</div>
+              <div class="rdv-month">h${r.heure.split(':')[1]}</div>
+            </div>
+            <div class="rdv-info">
+              <div class="rdv-type">${r.urgent?'🚨 ':''} ${USER.role!=='patient'?r.patient_prenom+' '+r.patient_nom+' — ':''}${r.type}</div>
+              <div class="rdv-meta">${r.medecin}${r.notes?' · '+r.notes:''}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+              <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
+              ${r.statut==='en_attente'&&USER.role!=='patient'?`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();validerRdv('${r.id}','confirmé')">✓</button>`:''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucun rendez-vous</div>'}`;
+}
+
+// ─── QUESTIONS MÉDECIN ────────────────────────────────────────────────────────
+async function renderQuestionsMedecin(c) {
+  const questions_all = [];
+  for (const pid of Object.keys(await api('/api/patients').then(ps => Object.fromEntries(ps.map(p=>[p.id,p]))))) {
+    const qs = await api(`/api/patients/${pid}/questions`);
+    qs.forEach(q => questions_all.push({...q, patient_id: pid}));
+  }
+  const pending = questions_all.filter(q => q.statut === 'en_attente');
+  
+  c.innerHTML = `
+    <div style="margin-bottom:14px">
+      <span class="badge badge-amber">${pending.length} en attente</span>
+      <span class="badge badge-green" style="margin-left:6px">${questions_all.length - pending.length} répondues</span>
+    </div>
+    ${questions_all.length === 0 ? '<div style="color:var(--text3);text-align:center;padding:40px">Aucune question</div>' :
+      questions_all.sort((a,b)=>a.statut==='en_attente'?-1:1).map(q=>`
+        <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Patient ID: ${q.patient_id}</div>
+          <div class="q-text">❓ ${q.question}</div>
+          <div class="q-date">${q.date}</div>
+          ${q.reponse_ia?`<div class="ai-draft"><div class="ai-draft-label">🤖 Suggestion IA</div><div class="ai-draft-text">${q.reponse_ia}</div></div>`:''}
+          ${q.statut==='en_attente'?`
+            <div class="answer-area">
+              <textarea class="input" id="rep-${q.id}" rows="3">${q.reponse_ia||''}</textarea>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <button class="btn btn-primary btn-sm" onclick="sendReponse('${q.patient_id}','${q.id}')">✓ Envoyer</button>
+                <button class="btn btn-ghost btn-sm" onclick="sendReponseIA('${q.patient_id}','${q.id}')">✓ Valider IA</button>
+              </div>
+            </div>` :
+            `<div style="margin-top:8px;background:var(--green-dim);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)">✅ ${q.reponse}</div>`}
+        </div>
+      `).join('')}`;
+}
+
+// ─── LISTE PATIENTS ANONYMISÉE (ASSISTANT) ────────────────────────────────────
+async function renderListePatientsAnon(c) {
+  const patients = await api('/api/patients');
+  c.innerHTML = `
+    <div style="margin-bottom:14px;font-size:13px;color:var(--text2)">Vue anonymisée — ${patients.length} patients</div>
+    ${patients.map(p=>`
+      <div class="anon-card">
+        <div class="anon-id">${p.code}</div>
+        <div class="anon-info">
+          <div style="font-size:13px;color:var(--text)">${p.sexe==='F'?'♀':'♂'} ${p.age} ans</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+            ${p.antecedents.map(a=>`<span class="badge badge-teal" style="font-size:10px">${a}</span>`).join('')}
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text3);text-align:right">
+          <div>${p.nb_rdv} RDV</div>
+          <div>${p.nb_imagerie} images</div>
+        </div>
+      </div>
+    `).join('')}`;
+}
+
+// ─── MES RDV (PATIENT) ────────────────────────────────────────────────────────
+async function renderMesRdv(c) {
+  const rdvs = await api('/api/rdv');
+  const today = new Date().toISOString().slice(0,10);
+  const prochains = rdvs.filter(r=>r.date>=today);
+  const passes = rdvs.filter(r=>r.date<today);
+  
+  c.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:20px">
+      <button class="btn btn-primary btn-sm" onclick="openAddRdvPatient()">📅 Demander un RDV</button>
+      <button class="btn btn-red btn-sm" onclick="openRdvUrgent()">🚨 RDV Urgent</button>
+    </div>
+    <div class="section-title">Prochains rendez-vous</div>
+    ${prochains.map(r=>`
+      <div class="rdv-card">
+        <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+        <div class="rdv-info"><div class="rdv-type">${r.type}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
+        <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
+      </div>
+    `).join('') || '<div style="color:var(--text3);text-align:center;padding:20px">Aucun RDV à venir</div>'}
+    ${passes.length?`
+    <div class="section-title" style="margin-top:20px">Historique des RDV</div>
+    ${passes.map(r=>`
+      <div class="rdv-card" style="opacity:0.65">
+        <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
+        <div class="rdv-info"><div class="rdv-type">${r.type}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
+        <span class="badge badge-teal">passé</span>
+      </div>
+    `).join('')}`:''}`;
+}
+
+// ─── MES DOCUMENTS (PATIENT) ──────────────────────────────────────────────────
+async function renderMesDocuments(c) {
+  const pid = USER.patient_id;
+  const docs = await api(`/api/patients/${pid}/documents`);
+  
+  c.innerHTML = `
+    <div style="margin-bottom:18px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Uploadez vos radios, scanners et examens pour que votre médecin puisse les consulter.</div>
+      <div class="import-zone" id="docUploadZone" onclick="document.getElementById('docFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDocDrop(event)">
+        <div class="import-icon">📎</div>
+        <div class="import-text">Cliquez ou glissez votre document ici</div>
+        <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF</div>
+      </div>
+      <input type="file" id="docFileInput" accept="image/*" style="display:none" onchange="uploadPatientDoc(this)">
+    </div>
+    <div class="section-title">Mes documents (${docs.length})</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px" id="patientDocsGrid">
+      ${docs.length?docs.map(d=>`
+        <div class="doc-card">
+          <div class="doc-preview"><div style="font-size:40px;text-align:center">📎</div></div>
+          <div class="doc-info">
+            <div class="doc-type">${d.type}</div>
+            <div class="doc-date">${fmtDate(d.date)}</div>
+            ${d.analyse_ia?`<div style="font-size:11px;color:var(--teal2);margin-top:4px">✓ Vu par le médecin</div>`:'<div style="font-size:11px;color:var(--amber);margin-top:4px">⏳ En attente de consultation</div>'}
+          </div>
+        </div>
+      `).join(''):'<div style="color:var(--text3);text-align:center;padding:20px;grid-column:1/-1">Aucun document</div>'}
+    </div>`;
+}
+
+// ─── MES QUESTIONS (PATIENT) ──────────────────────────────────────────────────
+async function renderMesQuestions(c) {
+  const pid = USER.patient_id;
+  const questions = await api(`/api/patients/${pid}/questions`);
+  
+  c.innerHTML = `
+    <div style="margin-bottom:18px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Posez une question à votre médecin. Vous recevrez une réponse dès que possible.</div>
+      <div class="card">
+        <label class="lbl">Votre question</label>
+        <textarea class="input" id="newQuestion" placeholder="Ex: Est-ce que je dois continuer mes gouttes les jours suivants l'opération ?" rows="3"></textarea>
+        <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="submitQuestion()">Envoyer ma question →</button>
+      </div>
+    </div>
+    <div class="section-title">Mes questions</div>
+    <div id="questionsListPatient">
+      ${questions.length?questions.map(q=>`
+        <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}">
+          <div class="q-text">❓ ${q.question}</div>
+          <div class="q-date">${q.date}</div>
+          ${q.statut==='répondu'?
+            `<div style="margin-top:10px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:12px;font-size:13px;color:var(--text)">
+              <div style="font-size:10px;color:var(--teal2);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px">✅ Réponse du médecin</div>
+              ${q.reponse}
+             </div>`:
+            `<div style="margin-top:8px"><span class="badge badge-amber">⏳ En attente de réponse</span></div>`}
+        </div>
+      `).join(''):'<div style="color:var(--text3);text-align:center;padding:20px">Aucune question pour le moment</div>'}
+    </div>`;
+}
+
+// ─── AI ASSISTANT ─────────────────────────────────────────────────────────────
+function renderAiAssistant(c) {
+  c.innerHTML = `
+    <div class="ai-panel card" style="padding:0">
+      <div class="ai-header">
+        <div class="ai-dot"></div>
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:16px">Assistant IA Ophtalmologie</div>
+          <div style="font-size:12px;color:var(--text2)">Spécialisé en pathologies et imagerie oculaires</div>
+        </div>
+        ${currentPatientId?`<span class="badge badge-teal" style="margin-left:auto">Contexte: Patient chargé</span>`:''}
+      </div>
+      <div class="ai-messages" id="aiMessages">
+        <div class="msg msg-ai">
+          <div class="msg-sender">🤖 IA OPHTHALMO</div>
+          <div class="msg-bubble">Bonjour Docteur. Je suis votre assistant spécialisé ophtalmologie.\n\nJe peux vous aider à:\n• Analyser des images OCT, fond d'œil, topographies\n• Répondre aux questions cliniques ophtalmologiques\n• Proposer des diagnostics différentiels\n• Donner des recommandations thérapeutiques\n\nPosez votre question ou chargez le contexte d'un patient.</div>
+        </div>
+      </div>
+      <div class="quick-qs">
+        <button class="quick-q" onclick="sendQuickQ('Critères retraitement anti-VEGF DMLA exsudative ?')">DMLA anti-VEGF</button>
+        <button class="quick-q" onclick="sendQuickQ('Interpréter rapport C/D 0.7 glaucome ?')">Rapport C/D</button>
+        <button class="quick-q" onclick="sendQuickQ('Kératocône grade II : cross-linking indiqué ?')">Kératocône</button>
+        <button class="quick-q" onclick="sendQuickQ('Rétinopathie diabétique stades et traitement ?')">Rétinopathie DT</button>
+        <button class="quick-q" onclick="sendQuickQ('Expliquer cataracte au patient simplement')">Expliquer cataracte</button>
+      </div>
+      <div class="ai-input-area">
+        <textarea id="aiInput" placeholder="Question ophtalmologique..." rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg()}"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        <button class="send-btn" id="sendAiBtn" onclick="sendAiMsg()">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+    </div>`;
+}
+
+// ─── AI FUNCTIONS ─────────────────────────────────────────────────────────────
+function sendQuickQ(q) { document.getElementById('aiInput').value=q; sendAiMsg(); }
+
+async function sendAiMsg() {
+  const inp = document.getElementById('aiInput');
+  const q = inp.value.trim(); if(!q) return;
+  inp.value=''; inp.style.height='auto';
+  addMsg('user',q);
+  const btn = document.getElementById('sendAiBtn'); btn.disabled=true;
+  const lid='l'+Date.now();
+  document.getElementById('aiMessages').innerHTML+=`<div class="msg msg-ai" id="${lid}"><div class="msg-sender">🤖</div><div class="msg-bubble"><span class="loading-dots"><span></span><span></span><span></span></span></div></div>`;
+  scrollAi();
+  const res = await api('/api/ai/question','POST',{question:q,context:aiContext});
+  document.getElementById(lid)?.remove();
+  addMsg('ai', res.answer||res.error||'Erreur');
+  btn.disabled=false;
+}
+
+function addMsg(role,text) {
+  const d=document.getElementById('aiMessages');
+  d.innerHTML+=`<div class="msg msg-${role==='user'?'user':'ai'}"><div class="msg-sender">${role==='user'?'👨‍⚕️ MÉDECIN':'🤖 IA OPHTHALMO'}</div><div class="msg-bubble">${escH(text)}</div></div>`;
+  scrollAi();
+}
+function scrollAi(){const d=document.getElementById('aiMessages');if(d)d.scrollTop=d.scrollHeight;}
+
+async function startAiContext(pid) {
+  const p = await api(`/api/patients/${pid}`);
+  aiContext = `Patient: ${p.prenom} ${p.nom}, ${new Date().getFullYear()-new Date(p.ddn).getFullYear()} ans. Antécédents: ${p.antecedents.join(', ')}. Dernier traitement: ${p.historique[0]?.traitement||'NC'}`;
+  showView('ai-assistant');
+  setTimeout(()=>addMsg('ai',`Contexte chargé pour ${p.prenom} ${p.nom}.\nAntécédents: ${p.antecedents.join(', ')}\nDernier traitement: ${p.historique[0]?.traitement||'NC'}\n\nQuelle est votre question ?`),100);
+}
+
+async function analyzeImageAI(imgId, type, patientName, antecedents) {
+  // Show AI analysis in a simple way
+  const el = event.target;
+  el.textContent = '⏳ Analyse...'; el.disabled=true;
+  const context = `Patient: ${patientName}. Antécédents: ${antecedents}`;
+  const res = await api('/api/ai/analyze-image','POST',{image:null,type,context});
+  alert('Analyse IA:\n\n'+(res.analysis||res.error));
+  el.textContent='🤖 Analyser IA'; el.disabled=false;
+}
+
+async function analyzeDocAI(pid, docId, type) {
+  const el = event.target; el.textContent='⏳...'; el.disabled=true;
+  const res = await api(`/api/patients/${pid}/documents/${docId}/analyze`,'POST',{});
+  if(res.ok) {
+    alert('Analyse IA:\n\n'+res.analysis);
+    showView('patient-profile');
+  }
+  el.textContent='🤖 Analyser'; el.disabled=false;
+}
+
+function openImageViewer(imgId, type, notes, patientName, antecedents) {
+  document.getElementById('modalImageTitle').textContent = type;
+  document.getElementById('modalImageContent').innerHTML = `
+    <div style="background:#000;border-radius:12px;min-height:200px;display:flex;align-items:center;justify-content:center;font-size:60px;margin-bottom:16px">🔬</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">${notes}</div>
+    <div class="ai-analysis-box" style="background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:12px;padding:16px;display:none" id="aiAnalysisBox">
+      <div style="font-size:11px;color:var(--teal2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">🤖 Analyse IA</div>
+      <div id="aiAnalysisText" style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 Analyser avec IA</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalImage')">Fermer</button>
+    </div>`;
+  openModal('modalImage');
+}
+
+async function runImageAnalysis(type, patientName, antecedents) {
+  const btn=document.getElementById('analyzeImgBtn');
+  btn.disabled=true; btn.innerHTML='<span class="loading-dots"><span></span><span></span><span></span></span>';
+  const res = await api('/api/ai/analyze-image','POST',{image:null,type,context:`Patient: ${patientName}. Antécédents: ${antecedents}`});
+  document.getElementById('aiAnalysisBox').style.display='block';
+  document.getElementById('aiAnalysisText').textContent = res.analysis||res.error;
+  btn.disabled=false; btn.innerHTML='🔄 Ré-analyser';
+}
+
+// ─── RDV MODALS ───────────────────────────────────────────────────────────────
+function openAddRdv(pid) {
+  document.getElementById('modalRdvTitle').textContent = 'Nouveau rendez-vous';
+  document.getElementById('modalRdvContent').innerHTML = `
+    <div class="form-row">
+      <div><label class="lbl">Patient</label>
+        <input class="input" id="rdvPid" value="${pid||''}" placeholder="ID patient (ex: P001)">
+      </div>
+      <div><label class="lbl">Type</label>
+        <input class="input" id="rdvType" placeholder="Ex: Suivi glaucome" value="Consultation">
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Date</label><input type="date" class="input" id="rdvDate"></div>
+      <div><label class="lbl">Heure</label><input type="time" class="input" id="rdvHeure" value="09:00"></div>
+    </div>
+    <div class="form-full"><label class="lbl">Médecin</label><input class="input" id="rdvMedecin" value="Dr. Martin"></div>
+    <div class="form-full"><label class="lbl">Notes</label><textarea class="input" id="rdvNotes" rows="2" placeholder="Instructions particulières..."></textarea></div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="submitRdv(false)">Créer le RDV</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalRdv')">Annuler</button>
+    </div>`;
+  openModal('modalRdv');
+}
+
+function openAddRdvPatient() {
+  document.getElementById('modalRdvTitle').textContent = 'Demander un rendez-vous';
+  document.getElementById('modalRdvContent').innerHTML = `
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Votre demande sera envoyée au médecin pour validation.</div>
+    <div class="form-full"><label class="lbl">Motif de consultation</label>
+      <input class="input" id="rdvType" placeholder="Ex: Baisse de vision, contrôle, irritation...">
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Date souhaitée</label><input type="date" class="input" id="rdvDate"></div>
+      <div><label class="lbl">Heure souhaitée</label><input type="time" class="input" id="rdvHeure" value="09:00"></div>
+    </div>
+    <div class="form-full"><label class="lbl">Message (optionnel)</label><textarea class="input" id="rdvNotes" rows="2" placeholder="Décrivez brièvement votre problème..."></textarea></div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="submitRdv(false)">Envoyer la demande</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalRdv')">Annuler</button>
+    </div>`;
+  openModal('modalRdv');
+}
+
+function openRdvUrgent() {
+  document.getElementById('modalRdvTitle').textContent = '🚨 Demande de RDV Urgent';
+  document.getElementById('modalRdvContent').innerHTML = `
+    <div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#fca5a5">
+      ⚠️ Cette demande sera marquée urgente et notifiée immédiatement au médecin.
+    </div>
+    <div class="form-full"><label class="lbl">Motif urgent</label>
+      <input class="input" id="rdvType" placeholder="Ex: Douleur oculaire intense, baisse vision soudaine...">
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Date</label><input type="date" class="input" id="rdvDate"></div>
+      <div><label class="lbl">Heure</label><input type="time" class="input" id="rdvHeure" value="08:00"></div>
+    </div>
+    <div class="form-full"><label class="lbl">Description</label><textarea class="input" id="rdvNotes" rows="3" placeholder="Décrivez vos symptômes en détail..."></textarea></div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-red" onclick="submitRdv(true)">🚨 Envoyer RDV Urgent</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalRdv')">Annuler</button>
+    </div>`;
+  openModal('modalRdv');
+}
+
+async function submitRdv(urgent) {
+  const pid = USER.role==='patient' ? USER.patient_id : document.getElementById('rdvPid')?.value;
+  const payload = {
+    patient_id: pid, type: document.getElementById('rdvType').value,
+    date: document.getElementById('rdvDate').value, heure: document.getElementById('rdvHeure').value,
+    medecin: document.getElementById('rdvMedecin')?.value || 'Dr. Martin',
+    notes: document.getElementById('rdvNotes').value, urgent
+  };
+  const res = await api('/api/rdv','POST',payload);
+  if(res.ok) { closeModal('modalRdv'); showView(currentView); loadNotifications(); }
+}
+
+// ─── PATIENT MODAL ────────────────────────────────────────────────────────────
+function openAddPatient() {
+  document.getElementById('modalAddPatientContent').innerHTML = `
+    <div class="form-row">
+      <div><label class="lbl">Nom</label><input class="input" id="pNom" placeholder="Nom de famille"></div>
+      <div><label class="lbl">Prénom</label><input class="input" id="pPrenom" placeholder="Prénom"></div>
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Date de naissance</label><input type="date" class="input" id="pDdn"></div>
+      <div><label class="lbl">Sexe</label>
+        <select class="input" id="pSexe"><option value="F">Féminin</option><option value="M">Masculin</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Téléphone</label><input class="input" id="pTel" placeholder="06 xx xx xx xx"></div>
+      <div><label class="lbl">Email</label><input class="input" id="pEmail" placeholder="email@example.com"></div>
+    </div>
+    <div class="form-full"><label class="lbl">Antécédents (séparés par virgule)</label>
+      <input class="input" id="pAnt" placeholder="Ex: Glaucome, Diabète...">
+    </div>
+    <div class="form-full"><label class="lbl">Allergies (séparés par virgule)</label>
+      <input class="input" id="pAllerg" placeholder="Ex: Pénicilline...">
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="submitAddPatient()">Ajouter le patient</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalAddPatient')">Annuler</button>
+    </div>`;
+  openModal('modalAddPatient');
+}
+
+async function submitAddPatient() {
+  const payload = {
+    nom: document.getElementById('pNom').value, prenom: document.getElementById('pPrenom').value,
+    ddn: document.getElementById('pDdn').value, sexe: document.getElementById('pSexe').value,
+    telephone: document.getElementById('pTel').value, email: document.getElementById('pEmail').value,
+    antecedents: document.getElementById('pAnt').value.split(',').map(s=>s.trim()).filter(Boolean),
+    allergies: document.getElementById('pAllerg').value.split(',').map(s=>s.trim()).filter(Boolean)
+  };
+  const res = await api('/api/patients','POST',payload);
+  if(res.ok) { closeModal('modalAddPatient'); loadPatientsSidebar(); }
+}
+
+// ─── IMPORT MODAL ─────────────────────────────────────────────────────────────
+function openImport() {
+  document.getElementById('modalImportContent').innerHTML = `
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchImportTab('csv',this)">📊 CSV / Excel</button>
+      <button class="tab-btn" onclick="switchImportTab('image',this)">📷 Photo / Scan</button>
+    </div>
+    <div class="tab-content active" id="itab-csv">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Collez le contenu de votre fichier CSV ou copiez-collez depuis Excel. L'IA normalisera automatiquement les colonnes.</div>
+      <textarea class="input" id="csvContent" rows="8" placeholder="nom,prenom,ddn,telephone&#10;Dupont,Marie,1975-03-15,06...&#10;..."></textarea>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="submitImportCsv()">🤖 Importer avec IA</button>
+        <label class="btn btn-ghost" style="cursor:pointer">📁 Charger fichier<input type="file" accept=".csv,.txt,.xlsx" style="display:none" onchange="loadCsvFile(this)"></label>
+      </div>
+    </div>
+    <div class="tab-content" id="itab-image">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Photographiez une fiche patient, une liste papier ou un document scanné. L'IA extraira automatiquement les informations.</div>
+      <div class="import-zone" id="importImgZone" onclick="document.getElementById('importImgInput').click()">
+        <div class="import-icon">📷</div>
+        <div class="import-text">Cliquez ou glissez l'image</div>
+        <div class="import-sub">Photo de fiche, liste papier, document scanné</div>
+      </div>
+      <input type="file" id="importImgInput" accept="image/*" style="display:none" onchange="previewAndImportImage(this)">
+      <div id="importImagePreview" style="margin-top:12px"></div>
+    </div>
+    <div id="importResult" style="margin-top:14px"></div>`;
+  openModal('modalImport');
+}
+
+function switchImportTab(tab, btn) {
+  document.querySelectorAll('#modalImportContent .tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#modalImportContent .tab-content').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('itab-'+tab).classList.add('active');
+}
+
+function loadCsvFile(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('csvContent').value = e.target.result; };
+  reader.readAsText(file);
+}
+
+async function submitImportCsv() {
+  const content = document.getElementById('csvContent').value.trim();
+  if(!content) return;
+  const res_el = document.getElementById('importResult');
+  res_el.innerHTML = '<div style="color:var(--teal2)"><span class="loading-dots"><span></span><span></span><span></span></span> Import en cours par IA...</div>';
+  const res = await api('/api/import/csv','POST',{content});
+  if(res.ok) {
+    res_el.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px">✅ ${res.count} patient(s) importé(s):<br>${res.added.map(p=>`<strong>${p.prenom} ${p.nom}</strong> (${p.id})`).join(', ')}</div>`;
+    loadPatientsSidebar();
+  } else {
+    res_el.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">❌ Erreur: ${res.error}<br><small>${res.raw||''}</small></div>`;
+  }
+}
+
+function previewAndImportImage(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const b64 = e.target.result.split(',')[1];
+    document.getElementById('importImagePreview').innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:200px;border-radius:10px;margin-bottom:10px"><br><button class="btn btn-primary btn-sm" onclick="submitImportImage('${b64}')">🤖 Extraire les données</button>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitImportImage(b64) {
+  const res_el = document.getElementById('importResult');
+  res_el.innerHTML = '<div style="color:var(--teal2)"><span class="loading-dots"><span></span><span></span><span></span></span> Extraction IA en cours...</div>';
+  const res = await api('/api/import/image','POST',{image:b64});
+  if(res.ok) {
+    res_el.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px">✅ ${res.added.length} patient(s) extrait(s):<br>${res.added.map(p=>`<strong>${p.prenom} ${p.nom}</strong> (${p.id})`).join(', ')}</div>`;
+    loadPatientsSidebar();
+  } else {
+    res_el.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">❌ ${res.error}</div>`;
+  }
+}
+
+// ─── PATIENT DOCUMENT UPLOAD ──────────────────────────────────────────────────
+function handleDocDrop(e) {
+  e.preventDefault();
+  document.getElementById('docUploadZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0]; if(!file) return;
+  uploadFile(file);
+}
+
+async function uploadPatientDoc(input) {
+  const file = input.files[0]; if(!file) return;
+  uploadFile(file);
+}
+
+async function uploadFile(file) {
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const b64 = e.target.result.split(',')[1];
+    // Ask for type
+    const type = prompt('Type de document?', 'Radio / Scanner');
+    if(!type) return;
+    const pid = USER.patient_id;
+    const res = await api(`/api/patients/${pid}/upload`,'POST',{image:b64,type,description:file.name});
+    if(res.ok) { showView('mes-documents'); }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── QUESTIONS ────────────────────────────────────────────────────────────────
+async function submitQuestion() {
+  const text = document.getElementById('newQuestion').value.trim();
+  if(!text) return;
+  const pid = USER.patient_id;
+  const res = await api(`/api/patients/${pid}/questions`,'POST',{question:text});
+  if(res.ok) { showView('mes-questions'); }
+}
+
+async function sendReponse(pid, qid) {
+  const rep = document.getElementById('rep-'+qid)?.value;
+  const res = await api(`/api/patients/${pid}/questions/${qid}/repondre`,'POST',{reponse:rep});
+  if(res.ok) { showView(currentView); }
+}
+
+async function sendReponseIA(pid, qid) {
+  const el = document.getElementById('rep-'+qid);
+  const rep = el ? el.value : '';
+  const res = await api(`/api/patients/${pid}/questions/${qid}/repondre`,'POST',{reponse:rep});
+  if(res.ok) { showView(currentView); }
+}
+
+// ─── PATIENTS SIDEBAR ─────────────────────────────────────────────────────────
+async function loadPatientsSidebar(q='') {
+  const patients = await api('/api/patients'+(q?`?q=${encodeURIComponent(q)}`:''));
+  const el = document.getElementById('patientListSidebar');
+  if(!el) return;
+  el.innerHTML = patients.map(p=>`
+    <div class="patient-mini ${currentPatientId===p.id?'active':''}" onclick="loadPatient('${p.id}')">
+      <div class="pm-name">${p.prenom} ${p.nom}</div>
+      <div class="pm-id">${p.id}</div>
+      ${(p.nb_rdv_urgent||0)>0?`<span class="pm-badge">🚨 ${p.nb_rdv_urgent} urgent</span>`:''}
+    </div>
+  `).join('');
+}
+
+function searchPatients(q) { clearTimeout(window._st); window._st=setTimeout(()=>loadPatientsSidebar(q),200); }
+
+async function loadPatient(pid) {
+  currentPatientId = pid;
+  const p = await api(`/api/patients/${pid}`);
+  showView('patient-profile', `${p.prenom} ${p.nom}`);
+  loadPatientsSidebar();
+}
+
+// ─── RDV ACTIONS ─────────────────────────────────────────────────────────────
+async function validerRdv(rdvId, statut) {
+  await api(`/api/rdv/${rdvId}/valider`,'POST',{statut});
+  showView(currentView);
+  loadNotifications();
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+async function loadNotifications() {
+  const notifs = await api('/api/notifications');
+  const unread = notifs.filter(n=>!n.lu).length;
+  const cnt = document.getElementById('notifCount');
+  if(unread > 0) { cnt.style.display='flex'; cnt.textContent=unread; }
+  else { cnt.style.display='none'; }
+  
+  document.getElementById('notifList').innerHTML = notifs.length ?
+    notifs.map(n=>`
+      <div class="notif-item ${n.lu?'':'unread'}" onclick="handleNotifClick('${n.id}','${n.type}','${n.patient_id||''}')">
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-time">${n.date}</div>
+      </div>`).join('') :
+    '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Aucune notification</div>';
+}
+
+function toggleNotifs() { notifOpen=!notifOpen; document.getElementById('notifPanel').classList.toggle('open',notifOpen); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.notif-panel')&&!e.target.closest('.notif-btn')){ notifOpen=false; document.getElementById('notifPanel').classList.remove('open'); }});
+
+async function handleNotifClick(nid, type, pid) {
+  await api(`/api/notifications/${nid}/lu`,'POST');
+  toggleNotifs();
+  if(pid && USER.role==='medecin') loadPatient(pid);
+  loadNotifications();
+}
+
+async function markNotifLu(nid) { await api(`/api/notifications/${nid}/lu`,'POST'); loadNotifications(); }
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(tab, pid, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+// ─── API HELPER ───────────────────────────────────────────────────────────────
+async function api(url, method='GET', body=null) {
+  const opts = { method, headers:{'Content-Type':'application/json'}, credentials:'include' };
+  if(body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(url, opts);
+    return await r.json();
+  } catch(e) { return {error:e.message}; }
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function fmtDate(d) { return new Date(d).toLocaleDateString('fr-FR'); }
+function fmtDateLong(d) { return new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}).toUpperCase(); }
+function escH(t) { const d=document.createElement('div'); d.textContent=t; return d.innerHTML.replace(/\n/g,'<br>'); }
+function escJ(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,' '); }
+</script>
+</body>
+</html>
