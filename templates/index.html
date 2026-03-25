@@ -613,8 +613,7 @@ async function doLogin() {
   const p = document.getElementById('loginPass').value;
   const res = await api('/login','POST',{username:u,password:p});
   if (res.ok) {
-    const me = await api('/me');
-    USER = {...res, ...me};
+    USER = res;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     initApp();
@@ -1057,17 +1056,41 @@ function renderDocsGrid(docs, pid) {
   return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
     ${docs.map(d=>`
       <div class="doc-card">
-        <div class="doc-preview"><div style="font-size:40px;text-align:center">📎</div></div>
+        <div class="doc-preview" style="cursor:pointer" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">
+          <div style="font-size:40px;text-align:center">📎</div>
+          <div style="font-size:11px;color:var(--teal2);text-align:center;margin-top:4px">Cliquer pour voir</div>
+        </div>
         <div class="doc-info">
           <div class="doc-type">${d.type}</div>
           <div class="doc-date">${fmtDate(d.date)}</div>
           <div class="doc-uploader">Uploadé par: ${d.uploaded_by}</div>
           ${d.analyse_ia?`<div style="margin-top:6px;font-size:11px;color:var(--teal2)">✓ Analysé par IA</div>`:''}
-          <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="analyzeDocAI('${pid}','${d.id}','${d.type}')">🤖 Analyser</button>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">👁 Voir</button>
+            <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="analyzeDocAI('${pid}','${d.id}','${d.type}')">🤖 IA</button>
+          </div>
         </div>
       </div>
     `).join('')}
   </div>`;
+}
+
+async function viewDocImage(pid, docId, type) {
+  const doc = await api(`/api/patients/${pid}/documents/${docId}`);
+  if (!doc || doc.error) { alert('Document introuvable'); return; }
+
+  document.getElementById('modalImageTitle').textContent = type || 'Document patient';
+  document.getElementById('modalImageContent').innerHTML = doc.image_b64 ? `
+    <div style="text-align:center;padding:10px">
+      <img src="data:image/jpeg;base64,${doc.image_b64}" style="max-width:100%;max-height:65vh;border-radius:10px;object-fit:contain">
+      <div style="margin-top:12px;font-size:12px;color:var(--text3)">Uploadé le ${fmtDate(doc.date)} par ${doc.uploaded_by}</div>
+      ${doc.analyse_ia ? `<div style="margin-top:10px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:12px;text-align:left;font-size:13px;color:var(--text2)">${doc.analyse_ia}</div>` : ''}
+    </div>` : `
+    <div style="text-align:center;padding:40px;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:12px">📎</div>
+      <div>Aucune image disponible pour ce document</div>
+    </div>`;
+  openModal('modalImage');
 }
 
 function renderQuestionsPanel(questions, pid) {
