@@ -143,16 +143,10 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
 
 # ─── PROMPTS SYSTÈME ──────────────────────────────────────────────────────────
 
-SYSTEM_OPHTHALMO = """Tu es un assistant IA expert en ophtalmologie clinique s'adressant exclusivement à des médecins ophtalmologistes confirmés.
-Ne fais jamais de pédagogie basique. L'utilisateur est médecin — il connaît l'anatomie, la physiopathologie et les examens de base.
-Réponds de façon directe, concise et clinique :
-- Donne directement le diagnostic différentiel probable avec le plus probable en premier
-- Propose le bilan ciblé (pas d'examens évidents)
-- Recommande le traitement avec dosages précis
-- Cite les guidelines HAS/AAO uniquement si elles changent la prise en charge
-- Maximum 5-6 lignes sauf cas complexe
-- Jamais de liste "symptômes à évaluer" ou "antécédents à considérer"
-- Toujours en français"""
+SYSTEM_OPHTHALMO = """Tu es un assistant IA expert en ophtalmologie clinique, conçu pour aider les médecins ophtalmologistes francophones.
+Tu maîtrises: glaucome, DMLA, cataracte, kératocône, rétinopathie diabétique, uvéites, chirurgie réfractive, OCT, angiographie, topographie cornéenne.
+Réponds toujours en français, de façon précise et structurée. Cite les guidelines HAS/AAO quand pertinent.
+Sois concis, cliniquement rigoureux, et adapte tes réponses au contexte du patient fourni."""
 
 SYSTEM_IMPORT = """Tu es un assistant d'extraction de données médicales. 
 À partir du texte fourni (issu d'un CSV, PDF ou formulaire), extrais les informations des patients et retourne UNIQUEMENT un JSON valide.
@@ -161,11 +155,9 @@ Format attendu (tableau de patients):
 Si une info est manquante, utilise une chaîne vide "". Ne retourne rien d'autre que le JSON."""
 
 SYSTEM_RESPONSE_DRAFT = """Tu es un assistant médical en ophtalmologie. Un patient a posé une question à son médecin.
-Génère une réponse courte, rassurante et claire que le médecin pourra valider.
-- Maximum 3 phrases simples, compréhensibles par un non-médecin
-- Pas de listes, pas de titres en gras
-- Termine toujours par recommander de contacter le cabinet si les symptômes persistent
-- Toujours en français"""
+Génère une réponse professionnelle, rassurante et claire que le médecin pourra valider ou modifier.
+La réponse doit être compréhensible pour un patient non-médecin. Reste concis (3-5 phrases max).
+Réponds toujours en français."""
 
 # ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
 
@@ -361,6 +353,8 @@ def valider_rdv(rdv_id):
             if r['id'] == rdv_id:
                 r['statut'] = data.get('statut', 'confirmé')
                 r['notes'] = data.get('notes', r.get('notes',''))
+                if data.get('date'): r['date'] = data.get('date')
+                if data.get('heure'): r['heure'] = data.get('heure')
                 add_notif("rdv_validé", f"RDV confirmé pour {p['prenom']} {p['nom']} le {r['date']}", u['role'], p['id'])
                 return jsonify({"ok": True})
     return jsonify({"error": "RDV non trouvé"}), 404

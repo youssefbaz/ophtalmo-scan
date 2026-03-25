@@ -613,9 +613,7 @@ async function doLogin() {
   const p = document.getElementById('loginPass').value;
   const res = await api('/login','POST',{username:u,password:p});
   if (res.ok) {
-    // Fetch full user info including patient_id
-    const me = await api('/me');
-    USER = {...res, ...me};
+    USER = res;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     initApp();
@@ -753,6 +751,7 @@ async function renderDashboardMedecin(c) {
             <div class="rdv-meta">${r.type} · ${r.heure} · <span style="color:#fca5a5">Urgent</span></div>
           </div>
           <div style="display:flex;gap:8px">
+            <button class="btn btn-amber btn-sm" onclick="modifierRdv('${r.id}','${r.date}','${r.heure}')">✏ Modifier</button>
             <button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
             <button class="btn btn-ghost btn-sm" onclick="validerRdv('${r.id}','annulé')">✗ Refuser</button>
           </div>
@@ -1699,6 +1698,16 @@ async function loadPatient(pid) {
 }
 
 // ─── RDV ACTIONS ─────────────────────────────────────────────────────────────
+async function modifierRdv(rdvId, dateActuelle, heureActuelle) {
+  const date = prompt('Nouvelle date (YYYY-MM-DD) :', dateActuelle);
+  if (!date) return;
+  const heure = prompt('Nouvelle heure (HH:MM) :', heureActuelle);
+  if (!heure) return;
+  await api(`/api/rdv/${rdvId}/valider`, 'POST', {statut: 'confirmé', date, heure});
+  showView(currentView);
+  loadNotifications();
+}
+
 async function validerRdv(rdvId, statut) {
   await api(`/api/rdv/${rdvId}/valider`,'POST',{statut});
   showView(currentView);
