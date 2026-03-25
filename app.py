@@ -432,6 +432,7 @@ def export_patient(pid):
     return jsonify(anon)
 
 
+@app.route('/api/patients/<pid>/documents', methods=['GET'])
 def get_documents(pid):
     u = current_user()
     if not u: return jsonify([]), 401
