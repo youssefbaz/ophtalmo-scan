@@ -613,7 +613,8 @@ async function doLogin() {
   const p = document.getElementById('loginPass').value;
   const res = await api('/login','POST',{username:u,password:p});
   if (res.ok) {
-    USER = res;
+    const me = await api('/me');
+    USER = {...res, ...me};
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     initApp();
