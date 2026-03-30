@@ -2,7 +2,7 @@
 """
 OphtalmoScan v2 — Multi-Role Ophthalmology Management Platform
 Roles: Médecin | Assistant | Patient
-LLM: Groq API (llama-3.1-8b-instant) — gratuit, rapide, sans abonnement
+LLM: Groq API (llama-3.3-70b-versatile) primary, Google Gemini (gemini-1.5-flash) fallback
 """
 
 import json, base64, os, re, csv, io, datetime, uuid, hashlib
@@ -17,13 +17,14 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ─── CONFIGURATION LLM ────────────────────────────────────────────────────────
-# Mettre la clé Groq dans la variable d'environnement GROQ_API_KEY
-# Lancer avec: set GROQ_API_KEY=gsk_... && python app.py  (Windows)
-#              export GROQ_API_KEY=gsk_... && python app.py (Mac/Linux)
-# Créer un compte gratuit sur: https://console.groq.com
+# Primary  : Groq  → GROQ_API_KEY   (https://console.groq.com)
+# Fallback : Gemini → GEMINI_API_KEY (https://aistudio.google.com/app/apikey)
+# Lancer avec: set GROQ_API_KEY=gsk_... && set GEMINI_API_KEY=AIza... && python app.py
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = "llama-3.3-70b-versatile"  # Meilleur modèle Groq gratuit
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL     = "llama-3.3-70b-versatile"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL   = "gemini-1.5-flash"
 
 # ─── IN-MEMORY DATABASE ───────────────────────────────────────────────────────
 
@@ -111,35 +112,69 @@ def anonymize_patient(p):
         "nb_rdv": len(p["rdv"]), "nb_imagerie": len(p["imagerie"])
     }
 
-# ─── LLM API (GROQ) ───────────────────────────────────────────────────────────
+# ─── LLM API (GROQ primary / GEMINI fallback) ─────────────────────────────────
+
+def _call_groq(prompt, system, max_tokens):
+    """Appelle Groq. Lève une exception en cas d'échec."""
+    r = http_requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+        json={
+            "model": GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt}
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.3
+        },
+        timeout=40
+    )
+    r.raise_for_status()
+    return r.json()['choices'][0]['message']['content']
+
+
+def _call_gemini(prompt, system, max_tokens):
+    """Appelle Gemini (free tier). Lève une exception en cas d'échec."""
+    full_prompt = f"{system}\n\n{prompt}"
+    r = http_requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        params={"key": GEMINI_API_KEY},
+        json={
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.3}
+        },
+        timeout=40
+    )
+    r.raise_for_status()
+    return r.json()['candidates'][0]['content']['parts'][0]['text']
+
 
 def call_llm(prompt, system, image_b64=None, max_tokens=800):
-    if not GROQ_API_KEY:
-        return "⚠️ Clé GROQ_API_KEY manquante. Configurez la variable d'environnement."
-
     if image_b64:
         return ("⚠️ L'analyse automatique d'images n'est pas disponible dans cette version. "
                 "Veuillez analyser l'image manuellement et saisir vos observations dans les notes.")
 
-    try:
-        r = http_requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": max_tokens,
-                "temperature": 0.3
-            },
-            timeout=40
-        )
-        r.raise_for_status()
-        return r.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Erreur IA: {str(e)}"
+    # 1) Essai Groq
+    if GROQ_API_KEY:
+        try:
+            result = _call_groq(prompt, system, max_tokens)
+            print("[LLM] Réponse via Groq")
+            return result
+        except Exception as e:
+            print(f"[LLM] Groq échoué ({e}), bascule sur Gemini…")
+
+    # 2) Fallback Gemini
+    if GEMINI_API_KEY:
+        try:
+            result = _call_gemini(prompt, system, max_tokens)
+            print("[LLM] Réponse via Gemini (fallback)")
+            return result
+        except Exception as e:
+            print(f"[LLM] Gemini échoué ({e})")
+            return f"⚠️ Les deux APIs IA sont indisponibles. Dernière erreur : {e}"
+
+    return "⚠️ Aucune clé API configurée (GROQ_API_KEY ou GEMINI_API_KEY)."
 
 # ─── PROMPTS SYSTÈME ──────────────────────────────────────────────────────────
 
