@@ -42,6 +42,15 @@ def _build_patient(db, pid, strip_images=True):
         q['reponse_validee'] = bool(q['reponse_validee'])
     p['questions'] = questions
 
+    ordonnances = [dict(r) for r in
+        db.execute("SELECT * FROM ordonnances WHERE patient_id=? ORDER BY date DESC", (pid,))]
+    for o in ordonnances:
+        try:
+            o['contenu'] = json.loads(o['contenu'] or '{}')
+        except Exception:
+            o['contenu'] = {}
+    p['ordonnances'] = ordonnances
+
     return p
 
 
@@ -58,8 +67,11 @@ def _anonymize(p):
 
 
 def _next_patient_id(db):
-    row = db.execute("SELECT COUNT(*) FROM patients").fetchone()
-    return "P" + str(1000 + row[0]).zfill(3)
+    row = db.execute(
+        "SELECT MAX(CAST(SUBSTR(id,2) AS INTEGER)) FROM patients WHERE id GLOB 'P[0-9]*'"
+    ).fetchone()
+    n = (row[0] or 0) + 1
+    return f"P{n:03d}"
 
 
 # ─── ROUTES ───────────────────────────────────────────────────────────────────
@@ -77,12 +89,12 @@ def get_patients():
         row = db.execute("SELECT id, nom, prenom FROM patients WHERE id=?", (pid,)).fetchone()
         return jsonify([dict(row)] if row else [])
 
-    if u['role'] == 'assistant':
-        pids = [r['id'] for r in db.execute("SELECT id FROM patients").fetchall()]
-        return jsonify([_anonymize(_build_patient(db, pid)) for pid in pids])
-
-    # médecin — full list with optional search
-    rows = db.execute("SELECT * FROM patients").fetchall()
+    # médecin — ses propres patients avec recherche optionnelle
+    all_patients = request.args.get('all', '0') == '1'
+    if all_patients:
+        rows = db.execute("SELECT * FROM patients").fetchall()
+    else:
+        rows = db.execute("SELECT * FROM patients WHERE medecin_id=?", (u['id'],)).fetchall()
     result = []
     for row in rows:
         p = dict(row)
@@ -96,7 +108,8 @@ def get_patients():
         result.append({
             "id": p['id'], "nom": p['nom'], "prenom": p['prenom'],
             "ddn": p['ddn'], "antecedents": p['antecedents'][:2],
-            "nb_rdv_urgent": nb_urgent
+            "nb_rdv_urgent": nb_urgent,
+            "medecin_id": p.get('medecin_id', '')
         })
     return jsonify(result)
 
@@ -112,9 +125,6 @@ def get_patient(pid):
     p = _build_patient(db, pid)
     if not p:
         return jsonify({"error": "Non trouvé"}), 404
-
-    if u['role'] == 'assistant':
-        return jsonify(_anonymize(p))
 
     if u['role'] == 'patient':
         patient_view = dict(p)
@@ -141,19 +151,56 @@ def add_patient():
     data = request.json or {}
     db = get_db()
     pid = _next_patient_id(db)
+    medecin_id = data.get("medecin_id") or u['id']
     db.execute(
-        "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
         (pid,
          data.get("nom",""), data.get("prenom",""), data.get("ddn",""), data.get("sexe",""),
          data.get("telephone",""), data.get("email",""),
-         json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])))
+         json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])),
+         medecin_id)
     )
     db.commit()
     add_notif(db, "patient_added",
               f"Nouveau patient ajouté : {data.get('prenom','')} {data.get('nom','')}",
               "medecin", pid)
     return jsonify({"ok": True, "id": pid}), 201
+
+
+@bp.route('/api/patients/<pid>', methods=['PUT'])
+def update_patient(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    db = get_db()
+    if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
+        return jsonify({"error": "Non trouvé"}), 404
+    db.execute(
+        "UPDATE patients SET nom=?, prenom=?, ddn=?, sexe=?, telephone=?, email=?, "
+        "antecedents=?, allergies=? WHERE id=?",
+        (data.get("nom",""), data.get("prenom",""), data.get("ddn",""), data.get("sexe",""),
+         data.get("telephone",""), data.get("email",""),
+         json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])), pid)
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/patients/<pid>/assigner', methods=['POST'])
+def assigner_medecin(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    new_medecin_id = data.get('medecin_id', '').strip()
+    if not new_medecin_id:
+        return jsonify({"error": "medecin_id requis"}), 400
+    db = get_db()
+    db.execute("UPDATE patients SET medecin_id=? WHERE id=?", (new_medecin_id, pid))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 @bp.route('/api/patients/<pid>/chirurgie', methods=['POST'])
@@ -239,6 +286,75 @@ def import_csv():
         return jsonify({"ok": True, "added": added, "count": len(added)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Impossible de parser: {e}", "raw": result_str[:500]})
+
+
+@bp.route('/api/patients/<pid>/historique', methods=['POST'])
+def add_historique(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    db = get_db()
+    if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
+        return jsonify({"error": "Patient non trouvé"}), 404
+    hid = "H" + str(uuid.uuid4())[:6].upper()
+    db.execute(
+        "INSERT INTO historique (id,patient_id,date,motif,diagnostic,traitement,"
+        "tension_od,tension_og,acuite_od,acuite_og,"
+        "refraction_od_sph,refraction_od_cyl,refraction_od_axe,"
+        "refraction_og_sph,refraction_og_cyl,refraction_og_axe,"
+        "segment_ant,notes,medecin) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (hid, pid,
+         data.get('date', datetime.date.today().isoformat()),
+         data.get('motif',''), data.get('diagnostic',''), data.get('traitement',''),
+         data.get('tension_od',''), data.get('tension_og',''),
+         data.get('acuite_od',''), data.get('acuite_og',''),
+         data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
+         data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
+         data.get('segment_ant',''), data.get('notes',''),
+         u['nom'])
+    )
+    db.commit()
+    return jsonify({"ok": True, "id": hid}), 201
+
+
+@bp.route('/api/patients/<pid>/historique/<hid>', methods=['PUT'])
+def update_historique(pid, hid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    db = get_db()
+    if not db.execute("SELECT id FROM historique WHERE id=? AND patient_id=?", (hid, pid)).fetchone():
+        return jsonify({"error": "Consultation non trouvée"}), 404
+    db.execute(
+        "UPDATE historique SET date=?,motif=?,diagnostic=?,traitement=?,"
+        "tension_od=?,tension_og=?,acuite_od=?,acuite_og=?,"
+        "refraction_od_sph=?,refraction_od_cyl=?,refraction_od_axe=?,"
+        "refraction_og_sph=?,refraction_og_cyl=?,refraction_og_axe=?,"
+        "segment_ant=?,notes=? WHERE id=? AND patient_id=?",
+        (data.get('date',''), data.get('motif',''), data.get('diagnostic',''), data.get('traitement',''),
+         data.get('tension_od',''), data.get('tension_og',''),
+         data.get('acuite_od',''), data.get('acuite_og',''),
+         data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
+         data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
+         data.get('segment_ant',''), data.get('notes',''),
+         hid, pid)
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/patients/<pid>/historique/<hid>', methods=['DELETE'])
+def delete_historique(pid, hid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    db.execute("DELETE FROM historique WHERE id=? AND patient_id=?", (hid, pid))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 @bp.route('/api/import/image', methods=['POST'])

@@ -55,11 +55,34 @@ def add_notif(db, type_, message, from_role, patient_id=None, data=None):
 
 # ─── INIT ─────────────────────────────────────────────────────────────────────
 
+def _migrate(db):
+    """Add columns/tables introduced after initial schema."""
+    new_cols = [
+        ("historique", "refraction_od_sph",  "TEXT DEFAULT ''"),
+        ("historique", "refraction_od_cyl",  "TEXT DEFAULT ''"),
+        ("historique", "refraction_od_axe",  "TEXT DEFAULT ''"),
+        ("historique", "refraction_og_sph",  "TEXT DEFAULT ''"),
+        ("historique", "refraction_og_cyl",  "TEXT DEFAULT ''"),
+        ("historique", "refraction_og_axe",  "TEXT DEFAULT ''"),
+        ("historique", "segment_ant",         "TEXT DEFAULT ''"),
+        ("patients",   "medecin_id",          "TEXT DEFAULT ''"),
+    ]
+    for table, col, typedef in new_cols:
+        try:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass
+    # Assign existing patients without a doctor to U001 (dr.martin)
+    db.execute("UPDATE patients SET medecin_id='U001' WHERE medecin_id='' OR medecin_id IS NULL")
+    db.commit()
+
+
 def init_db(app):
     with app.app_context():
         db = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
         _create_tables(db)
+        _migrate(db)
         _seed_data(db)
         db.close()
 
@@ -70,7 +93,7 @@ def _create_tables(db):
         id           TEXT PRIMARY KEY,
         username     TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role         TEXT NOT NULL CHECK(role IN ('medecin','assistant','patient')),
+        role         TEXT NOT NULL CHECK(role IN ('medecin','patient')),
         nom          TEXT NOT NULL,
         prenom       TEXT DEFAULT '',
         patient_id   TEXT,
@@ -89,22 +112,41 @@ def _create_tables(db):
         allergies       TEXT DEFAULT '[]',
         date_chirurgie  TEXT DEFAULT '',
         type_chirurgie  TEXT DEFAULT '',
+        medecin_id      TEXT DEFAULT '',
         created_at      TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS historique (
+        id                  TEXT PRIMARY KEY,
+        patient_id          TEXT NOT NULL,
+        date                TEXT DEFAULT '',
+        motif               TEXT DEFAULT '',
+        diagnostic          TEXT DEFAULT '',
+        traitement          TEXT DEFAULT '',
+        tension_od          TEXT DEFAULT '',
+        tension_og          TEXT DEFAULT '',
+        acuite_od           TEXT DEFAULT '',
+        acuite_og           TEXT DEFAULT '',
+        refraction_od_sph   TEXT DEFAULT '',
+        refraction_od_cyl   TEXT DEFAULT '',
+        refraction_od_axe   TEXT DEFAULT '',
+        refraction_og_sph   TEXT DEFAULT '',
+        refraction_og_cyl   TEXT DEFAULT '',
+        refraction_og_axe   TEXT DEFAULT '',
+        segment_ant         TEXT DEFAULT '',
+        notes               TEXT DEFAULT '',
+        medecin             TEXT DEFAULT '',
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS ordonnances (
         id          TEXT PRIMARY KEY,
         patient_id  TEXT NOT NULL,
         date        TEXT DEFAULT '',
-        motif       TEXT DEFAULT '',
-        diagnostic  TEXT DEFAULT '',
-        traitement  TEXT DEFAULT '',
-        tension_od  TEXT DEFAULT '',
-        tension_og  TEXT DEFAULT '',
-        acuite_od   TEXT DEFAULT '',
-        acuite_og   TEXT DEFAULT '',
-        notes       TEXT DEFAULT '',
         medecin     TEXT DEFAULT '',
+        type        TEXT DEFAULT 'medicaments',
+        contenu     TEXT DEFAULT '{}',
+        notes       TEXT DEFAULT '',
         FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
     );
 
@@ -174,22 +216,21 @@ def _seed_data(db):
         "VALUES (?,?,?,?,?,?,?)",
         [
             ("U001", "dr.martin",     generate_password_hash("medecin123"), "medecin",   "Dr. Martin", "Jean",      None),
-            ("U002", "assist.sara",   generate_password_hash("assist123"),  "assistant", "Benali",     "Sara",      None),
             ("U003", "patient.marie", generate_password_hash("patient123"), "patient",   "Dupont",     "Marie",     "P001"),
             ("U004", "patient.jp",    generate_password_hash("patient123"), "patient",   "Bernard",    "Jean-Paul", "P002"),
         ]
     )
 
     db.executemany(
-        "INSERT INTO patients (id, nom, prenom, ddn, sexe, telephone, email, antecedents, allergies) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO patients (id, nom, prenom, ddn, sexe, telephone, email, antecedents, allergies, medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
         [
             ("P001", "Dupont",  "Marie",    "1975-03-15", "F",
              "06 12 34 56 78", "marie.dupont@email.com",
-             '["Glaucome chronique","Myopie forte (-6D)"]', '["Pénicilline"]'),
+             '["Glaucome chronique","Myopie forte (-6D)"]', '["Pénicilline"]', "U001"),
             ("P002", "Bernard", "Jean-Paul", "1958-11-28", "M",
              "06 98 76 54 32", "jp.bernard@email.com",
-             '["DMLA exsudative OG","Diabète type 2"]', '[]'),
+             '["DMLA exsudative OG","Diabète type 2"]', '[]', "U001"),
         ]
     )
 

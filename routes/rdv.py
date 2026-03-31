@@ -72,10 +72,24 @@ def add_rdv():
     })
 
 
+@bp.route('/api/rdv/<rdv_id>', methods=['DELETE'])
+def delete_rdv(rdv_id):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    row = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "RDV non trouvé"}), 404
+    db.execute("DELETE FROM rdv WHERE id=?", (rdv_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route('/api/rdv/<rdv_id>/valider', methods=['POST'])
 def valider_rdv(rdv_id):
     u = current_user()
-    if not u or u['role'] not in ('medecin', 'assistant'):
+    if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     data = request.json or {}
     db = get_db()

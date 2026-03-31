@@ -30,10 +30,11 @@ def create_app():
     from routes.questions     import bp as questions_bp
     from routes.ai            import bp as ai_bp
     from routes.notifications import bp as notifs_bp
+    from routes.ordonnances   import bp as ordonnances_bp
     from routes.main          import bp as main_bp
 
     for blueprint in (auth_bp, patients_bp, rdv_bp, docs_bp, questions_bp,
-                      ai_bp, notifs_bp, main_bp):
+                      ai_bp, notifs_bp, ordonnances_bp, main_bp):
         app.register_blueprint(blueprint)
 
     return app
@@ -45,21 +46,20 @@ app = create_app()
 if __name__ == '__main__':
     from llm import GROQ_API_KEY, GEMINI_API_KEY, GROQ_MODEL, GEMINI_MODEL
     print("\n" + "=" * 60)
-    print("  👁  OphtalmoScan v2 — SQLite Edition")
+    print("  OphtalmoScan v2 -- SQLite Edition")
     print("=" * 60)
     if not GROQ_API_KEY:
-        print("  ⚠️  GROQ_API_KEY manquante !")
+        print("  [!] GROQ_API_KEY manquante !")
     if not GEMINI_API_KEY:
-        print("  ⚠️  GEMINI_API_KEY manquante !")
+        print("  [!] GEMINI_API_KEY manquante !")
     if not os.environ.get("SECRET_KEY"):
-        print("  ⚠️  SECRET_KEY non définie, utilisation du fallback de dev.")
-    print("  Comptes de démonstration :")
-    print("  🩺 Médecin   : dr.martin / medecin123")
-    print("  👩‍💼 Assistant : assist.sara / assist123")
-    print("  🧑 Patient 1 : patient.marie / patient123")
-    print("  🧑 Patient 2 : patient.jp / patient123")
+        print("  [!] SECRET_KEY non definie, utilisation du fallback de dev.")
+    print("  Comptes de demonstration :")
+    print("  Medecin   : dr.martin / medecin123")
+    print("  Patient 1 : patient.marie / patient123")
+    print("  Patient 2 : patient.jp / patient123")
     print("=" * 60)
-    print(f"  🤖 LLM : {GROQ_MODEL}  +  {GEMINI_MODEL} (fallback)")
-    print(f"  🗄  DB  : ophtalmo.db (SQLite)")
+    print(f"  LLM : {GROQ_MODEL} + {GEMINI_MODEL} (fallback)")
+    print(f"  DB  : ophtalmo.db (SQLite)")
     print("=" * 60 + "\n")
     app.run(debug=True, port=5000)
