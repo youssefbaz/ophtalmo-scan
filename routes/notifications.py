@@ -16,11 +16,6 @@ def get_notifications():
         rows = db.execute(
             "SELECT * FROM notifications ORDER BY date DESC LIMIT 20"
         ).fetchall()
-    elif u['role'] == 'assistant':
-        rows = db.execute(
-            "SELECT * FROM notifications WHERE type IN ('rdv_demande','rdv_urgent') "
-            "ORDER BY date DESC LIMIT 10"
-        ).fetchall()
     else:
         rows = db.execute(
             "SELECT * FROM notifications WHERE patient_id=? AND from_role='medecin' "

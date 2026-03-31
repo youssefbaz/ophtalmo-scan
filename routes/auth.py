@@ -17,8 +17,9 @@ def login():
         session['username'] = username
         return jsonify({
             "ok": True,
-            "role": row['role'],
-            "nom": row['nom'],
+            "id":    row['id'],
+            "role":  row['role'],
+            "nom":   row['nom'],
             "prenom": row['prenom'] or ''
         })
     return jsonify({"ok": False, "error": "Identifiants incorrects"}), 401
@@ -37,8 +38,9 @@ def me():
         return jsonify({"authenticated": False}), 401
     info = {
         "authenticated": True,
-        "role": u['role'],
-        "nom": u['nom'],
+        "id":    u['id'],
+        "role":  u['role'],
+        "nom":   u['nom'],
         "prenom": u['prenom'] or ''
     }
     if u['role'] == 'patient':
@@ -46,9 +48,21 @@ def me():
     return jsonify(info)
 
 
+@bp.route('/api/medecins', methods=['GET'])
+def get_medecins():
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify([]), 403
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, nom, prenom, username FROM users WHERE role='medecin' ORDER BY nom"
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 @bp.route('/api/register', methods=['POST'])
 def register():
-    """Créer un compte utilisateur (médecin, assistant ou patient).
+    """Créer un compte utilisateur (médecin ou patient).
     Réservé aux médecins connectés."""
     u = current_user()
     if not u or u['role'] != 'medecin':
@@ -64,8 +78,8 @@ def register():
 
     if not all([username, password, role, nom]):
         return jsonify({"error": "Champs requis : username, password, role, nom"}), 400
-    if role not in ('medecin', 'assistant', 'patient'):
-        return jsonify({"error": "Rôle invalide (medecin | assistant | patient)"}), 400
+    if role not in ('medecin', 'patient'):
+        return jsonify({"error": "Rôle invalide (medecin | patient)"}), 400
 
     db = get_db()
     if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
