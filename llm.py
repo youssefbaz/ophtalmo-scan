@@ -1,10 +1,10 @@
 import os
 import requests as http_requests
 
-GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL     = "llama-3.3-70b-versatile"
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL   = "gemini-1.5-flash"
+GROQ_API_KEY    = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL      = "llama-3.3-70b-versatile"
+GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL    = "gemini-2.0-flash"
 
 # ─── SYSTEM PROMPTS ───────────────────────────────────────────────────────────
 
@@ -45,26 +45,38 @@ def _call_groq(prompt, system, max_tokens):
     return r.json()['choices'][0]['message']['content']
 
 
-def _call_gemini(prompt, system, max_tokens):
+def _call_gemini(prompt, system, max_tokens, image_b64=None):
+    parts = []
+    if image_b64:
+        # Detect mime type from magic bytes
+        try:
+            import base64 as _b64
+            hdr = _b64.b64decode(image_b64[:16])
+            if hdr[:8] == b'\x89PNG\r\n\x1a\n':
+                mime = "image/png"
+            elif hdr[:3] == b'\xff\xd8\xff':
+                mime = "image/jpeg"
+            else:
+                mime = "image/jpeg"
+        except Exception:
+            mime = "image/jpeg"
+        parts.append({"inline_data": {"mime_type": mime, "data": image_b64}})
+    parts.append({"text": f"{system}\n\n{prompt}"})
     r = http_requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
         params={"key": GEMINI_API_KEY},
         json={
-            "contents": [{"parts": [{"text": f"{system}\n\n{prompt}"}]}],
+            "contents": [{"parts": parts}],
             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.3}
         },
-        timeout=40
+        timeout=60
     )
     r.raise_for_status()
     return r.json()['candidates'][0]['content']['parts'][0]['text']
 
 
 def call_llm(prompt, system, image_b64=None, max_tokens=800):
-    if image_b64:
-        return ("⚠️ L'analyse automatique d'images n'est pas disponible dans cette version. "
-                "Veuillez analyser l'image manuellement et saisir vos observations dans les notes.")
-
-    if GROQ_API_KEY:
+    if GROQ_API_KEY and not image_b64:
         try:
             result = _call_groq(prompt, system, max_tokens)
             print("[LLM] Réponse via Groq")
@@ -74,7 +86,7 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
 
     if GEMINI_API_KEY:
         try:
-            result = _call_gemini(prompt, system, max_tokens)
+            result = _call_gemini(prompt, system, max_tokens, image_b64)
             print("[LLM] Réponse via Gemini (fallback)")
             return result
         except Exception as e:

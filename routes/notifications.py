@@ -41,3 +41,14 @@ def mark_lu(nid):
     db.execute("UPDATE notifications SET lu=1 WHERE id=?", (nid,))
     db.commit()
     return jsonify({"ok": True})
+
+
+@bp.route('/api/notifications', methods=['DELETE'])
+def clear_notifications():
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    db.execute("DELETE FROM notifications")
+    db.commit()
+    return jsonify({"ok": True})

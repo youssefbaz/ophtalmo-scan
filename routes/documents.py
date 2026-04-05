@@ -84,7 +84,7 @@ def analyze_document(pid, doc_id):
         return jsonify({}), 404
 
     antecedents = json.loads(p['antecedents'] or '[]')
-    age = datetime.datetime.now().year - int(p['ddn'][:4]) if p.get('ddn') else 0
+    age = datetime.datetime.now().year - int(p['ddn'][:4]) if p['ddn'] else 0
     context = (f"Patient : {p['prenom']} {p['nom']}, {age} ans. "
                f"Antécédents : {', '.join(antecedents)}")
     prompt = (f"Le médecin a uploadé un document de type '{doc['type']}'. "
