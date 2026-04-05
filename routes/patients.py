@@ -168,6 +168,24 @@ def add_patient():
     return jsonify({"ok": True, "id": pid}), 201
 
 
+@bp.route('/api/patients/<pid>', methods=['DELETE'])
+def delete_patient(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
+        return jsonify({"error": "Non trouvé"}), 404
+    db.execute("DELETE FROM historique WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM rdv WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM documents WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM questions WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM ordonnances WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM patients WHERE id=?", (pid,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route('/api/patients/<pid>', methods=['PUT'])
 def update_patient(pid):
     u = current_user()
@@ -274,11 +292,12 @@ def import_csv():
         for pd_data in patients_list:
             pid = _next_patient_id(db)
             db.execute(
-                "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (pid, pd_data.get("nom",""), pd_data.get("prenom",""), pd_data.get("ddn",""),
                  pd_data.get("sexe",""), pd_data.get("telephone",""), pd_data.get("email",""),
-                 json.dumps(pd_data.get("antecedents",[])), json.dumps(pd_data.get("allergies",[])))
+                 json.dumps(pd_data.get("antecedents",[])), json.dumps(pd_data.get("allergies",[])),
+                 u['id'])
             )
             added.append({"id": pid, "nom": pd_data.get("nom",""), "prenom": pd_data.get("prenom","")})
         db.commit()
@@ -357,9 +376,45 @@ def delete_historique(pid, hid):
     return jsonify({"ok": True})
 
 
-@bp.route('/api/import/image', methods=['POST'])
-def import_image():
+@bp.route('/api/search', methods=['GET'])
+def search_global():
     u = current_user()
     if not u or u['role'] != 'medecin':
-        return jsonify({"error": "Accès refusé"}), 403
-    return jsonify({"ok": False, "error": "L'import par image n'est pas disponible. Utilisez l'import CSV."})
+        return jsonify([]), 403
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    db  = get_db()
+    ql  = f"%{q.lower()}%"
+    results = []
+
+    # Patients — nom, prénom, téléphone, email
+    rows = db.execute(
+        "SELECT id, nom, prenom, ddn FROM patients "
+        "WHERE lower(nom) LIKE ? OR lower(prenom) LIKE ? OR telephone LIKE ? OR email LIKE ?",
+        (ql, ql, ql, ql)
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "type": "patient", "pid": r["id"],
+            "label": f"{r['prenom']} {r['nom']}",
+            "sub":   f"Patient · {r['ddn'] or '—'}"
+        })
+
+    # Consultations — motif, diagnostic, notes
+    rows = db.execute(
+        "SELECT h.id, h.patient_id, h.date, h.motif, h.diagnostic, p.nom, p.prenom "
+        "FROM historique h JOIN patients p ON h.patient_id=p.id "
+        "WHERE lower(h.motif) LIKE ? OR lower(h.diagnostic) LIKE ? OR lower(h.notes) LIKE ?",
+        (ql, ql, ql)
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "type": "consultation", "pid": r["patient_id"],
+            "label": f"{r['motif'] or r['diagnostic'] or 'Consultation'}",
+            "sub":   f"{r['prenom']} {r['nom']} · {r['date']}"
+        })
+
+    return jsonify(results[:12])
+
+

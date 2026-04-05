@@ -203,6 +203,14 @@ def _create_tables(db):
         lu          INTEGER DEFAULT 0,
         data        TEXT DEFAULT '{}'
     );
+
+    CREATE INDEX IF NOT EXISTS idx_patients_medecin    ON patients(medecin_id);
+    CREATE INDEX IF NOT EXISTS idx_historique_patient  ON historique(patient_id, date);
+    CREATE INDEX IF NOT EXISTS idx_rdv_patient         ON rdv(patient_id, date);
+    CREATE INDEX IF NOT EXISTS idx_rdv_date_statut     ON rdv(date, statut);
+    CREATE INDEX IF NOT EXISTS idx_documents_patient   ON documents(patient_id, source);
+    CREATE INDEX IF NOT EXISTS idx_questions_patient   ON questions(patient_id, statut);
+    CREATE INDEX IF NOT EXISTS idx_notifs_lu           ON notifications(lu, date);
     """)
     db.commit()
 

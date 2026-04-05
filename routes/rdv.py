@@ -53,7 +53,7 @@ def add_rdv():
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
         (rdv_id, pid, data.get('date',''), data.get('heure',''),
          data.get('type','Consultation'), statut,
-         data.get('medecin','Dr. Martin'), data.get('notes',''),
+         data.get('medecin', u['nom']), data.get('notes',''),
          1 if urgent else 0, u['role'])
     )
     db.commit()

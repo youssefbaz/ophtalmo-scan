@@ -181,6 +181,19 @@ body {
 
 /* ── TOPBAR ── */
 .topbar-title { font-family: 'Playfair Display', serif; font-size: 18px; flex: 1; }
+.global-search-wrap { position:relative; }
+.global-search-input { background:var(--bg3); border:1px solid var(--border); border-radius:20px; padding:6px 14px 6px 34px; font-size:13px; color:var(--text); width:220px; outline:none; transition:border-color .2s,width .2s; }
+.global-search-input:focus { border-color:var(--teal); width:280px; }
+.global-search-input::placeholder { color:var(--text3); }
+.global-search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text3); pointer-events:none; }
+.global-search-dropdown { display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg3); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); z-index:300; max-height:340px; overflow-y:auto; min-width:320px; }
+.global-search-dropdown.open { display:block; }
+.gsd-item { padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .15s; display:flex;align-items:center;gap:10px; }
+.gsd-item:last-child { border-bottom:none; }
+.gsd-item:hover { background:var(--teal-dim); }
+.gsd-icon { font-size:16px; flex-shrink:0; }
+.gsd-label { font-size:13px; color:var(--text); font-weight:500; }
+.gsd-sub { font-size:11px; color:var(--text3); }
 .topbar-user {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 14px; border-radius: 10px;
@@ -483,6 +496,77 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 .anon-card {background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
 .anon-id { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--teal2); background: var(--teal-dim); padding: 6px 12px; border-radius: 8px; }
 .anon-info { flex: 1; }
+
+/* ── PATIENT HEADER V2 ── */
+.patient-header-v2 {
+  background: linear-gradient(135deg, #0e2840 0%, var(--bg2) 100%);
+  border: 1px solid var(--border); border-radius: 18px;
+  padding: 22px 24px; margin-bottom: 22px;
+  display: grid; grid-template-columns: 1fr auto auto; gap: 24px; align-items: start;
+}
+.ph-identity { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
+.patient-avatar-lg {
+  width: 68px; height: 68px; border-radius: 18px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif; font-size: 24px; color: white;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.patient-avatar-lg.male  { background: linear-gradient(135deg, #0c7a76, var(--teal2)); }
+.patient-avatar-lg.female{ background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+.ph-id-info { flex: 1; min-width: 0; }
+.ph-meta-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.ph-meta-chip {
+  font-size: 11px; color: var(--text2);
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 9px; white-space: nowrap;
+}
+.ph-meta-chip.amber { color: #fcd34d; background: var(--amber-dim); border-color: rgba(245,158,11,0.3); }
+.ph-contact-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+.ph-contact-item { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
+
+/* ── CLINICAL SNAPSHOT ── */
+.ph-snapshot {
+  min-width: 255px; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  flex-shrink: 0;
+}
+.ph-snapshot-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--teal2); margin-bottom: 10px; }
+.ph-snapshot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.ph-snap-card { background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.04); }
+.ph-snap-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+.ph-snap-value { font-family: 'Space Mono', monospace; font-size: 14px; color: var(--text); margin-top: 3px; font-weight: 700; }
+.ph-snap-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); gap: 8px; }
+
+/* ── PATIENT ACTIONS ── */
+.ph-actions { display: flex; flex-direction: column; gap: 6px; min-width: 148px; flex-shrink: 0; }
+.ph-actions .btn { justify-content: center; }
+.ph-actions-row { display: flex; gap: 5px; }
+.ph-actions-row .btn { flex: 1; justify-content: center; }
+
+/* ── TAB COUNT BADGE ── */
+.tab-count { display: inline-flex; align-items: center; justify-content: center; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.1); color: var(--text2); margin-left: 4px; }
+.tab-count-amber { background: var(--amber-dim); color: #fcd34d; }
+
+/* ── POST-OP BANNER ── */
+.postop-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(90deg, rgba(14,165,160,0.07) 0%, transparent 100%);
+  border: 1px solid rgba(14,165,160,0.2); border-radius: 10px;
+  padding: 11px 16px; margin-bottom: 18px; cursor: pointer; transition: all 0.15s;
+}
+.postop-banner:hover { border-color: var(--teal); background: var(--teal-dim); }
+
+/* ── SUBTABS ── */
+.subtabs { display: flex; gap: 5px; margin-bottom: 16px; }
+.subtab-btn {
+  padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text2);
+  font-family: 'Tajawal', sans-serif; font-size: 12px; cursor: pointer; transition: all 0.15s;
+}
+.subtab-btn:hover { border-color: var(--teal); color: var(--text); }
+.subtab-btn.active { background: var(--teal-dim); border-color: var(--teal); color: var(--teal2); font-weight: 600; }
+.subtab-content { display: none; }
+.subtab-content.active { display: block; }
 </style>
 </head>
 <body>
@@ -537,6 +621,12 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   <main class="main">
     <div class="topbar">
       <div class="topbar-title" id="topbarTitle">Tableau de bord</div>
+      <div id="globalSearchWrap" style="display:none" class="global-search-wrap">
+        <svg class="global-search-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>
+        <input class="global-search-input" id="globalSearchInput" type="text" placeholder="Rechercher..." autocomplete="off"
+               oninput="globalSearchDebounce()" onkeydown="if(event.key==='Escape')closeGlobalSearch()">
+        <div class="global-search-dropdown" id="globalSearchDropdown"></div>
+      </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button class="notif-btn" onclick="toggleNotifs()" id="notifBtn">
           <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
@@ -692,6 +782,7 @@ function initApp() {
   loadNotifications();
   if (USER.role === 'medecin') {
     api('/api/medecins').then(list => { MEDECINS = list || []; });
+    document.getElementById('globalSearchWrap').style.display = 'block';
   }
 
   if (USER.role === 'medecin') showView('dashboard-medecin');
@@ -838,6 +929,17 @@ async function renderDashboardMedecin(c) {
       }
     </div>
 
+    <!-- Notes rapides -->
+    <div style="margin-bottom:24px">
+      <div class="section-title">📝 Notes rapides</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="input" id="noteInput" placeholder="Ajouter une note…" style="flex:1;padding:8px 12px"
+               onkeydown="if(event.key==='Enter')addNote()">
+        <button class="btn btn-primary btn-sm" onclick="addNote()">+</button>
+      </div>
+      <div id="notesList" style="display:flex;flex-direction:column;gap:6px">${renderNotesList()}</div>
+    </div>
+
     <div class="grid-2">
       <div>
         <div class="section-title">Prochains rendez-vous</div>
@@ -853,7 +955,10 @@ async function renderDashboardMedecin(c) {
         `).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Aucun RDV à venir</div>'}
       </div>
       <div>
-        <div class="section-title">Activité récente</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="section-title" style="margin-bottom:0">Activité récente</div>
+          ${notifs.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.7" onclick="clearActivite()">🗑 Effacer tout</button>` : ''}
+        </div>
         ${notifs.slice(0,6).map(n => `
           <div class="notif-item ${n.lu?'':'unread'}" style="border-radius:10px;margin-bottom:6px;border:1px solid var(--border)" onclick="markNotifLu('${n.id}')">
             <div class="notif-msg">${n.message}</div>
@@ -945,60 +1050,150 @@ async function renderDashboardPatient(c) {
 
 // ─── PATIENT PROFILE (MÉDECIN) ────────────────────────────────────────────────
 async function renderPatientProfile(c, pid) {
-  const patient = await api(`/api/patients/${pid}`);
+  const [patient, docs, questions] = await Promise.all([
+    api(`/api/patients/${pid}`),
+    api(`/api/patients/${pid}/documents`),
+    api(`/api/patients/${pid}/questions`)
+  ]);
   window._currentPatient = patient;
-  const docs = await api(`/api/patients/${pid}/documents`);
-  const questions = await api(`/api/patients/${pid}/questions`);
+
   const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
-  
+  const lastConsult = patient.historique?.[0] || null;
+  const today = new Date().toISOString().slice(0,10);
+  const nextRdv = (patient.rdv || [])
+    .filter(r => r.date >= today && r.statut !== 'annulé')
+    .sort((a,b) => a.date.localeCompare(b.date))[0] || null;
+  const pendingQ = questions.filter(q => q.statut === 'en_attente').length;
+  const medecinName = MEDECINS.find(m => m.id === patient.medecin_id)?.nom || '';
+  const totalMedia = (patient.imagerie?.length || 0) + (docs?.length || 0);
+
+  const iopColor = v => {
+    const n = parseFloat(v);
+    if (!v || isNaN(n)) return 'var(--text2)';
+    if (n > 21) return 'var(--red)';
+    if (n > 18) return 'var(--amber)';
+    return 'var(--green)';
+  };
+
   c.innerHTML = `
-    <div class="patient-header">
-      <div class="patient-avatar">${patient.prenom[0]}${patient.nom[0]}</div>
-      <div style="flex:1">
-        <div class="patient-fullname">${patient.prenom} ${patient.nom}</div>
-        <div class="patient-meta">
-          <span class="patient-meta-item">🎂 ${age} ans (${fmtDate(patient.ddn)})</span>
-          <span class="patient-meta-item">⚧ ${patient.sexe==='F'?'Féminin':'Masculin'}</span>
-          <span class="patient-meta-item">📱 ${patient.telephone}</span>
-          <span class="patient-meta-item">✉ ${patient.email}</span>
-        </div>
-        <div class="badges" style="margin-top:8px">
-          ${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')}
-          ${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')}
+    <!-- ── HEADER V2 ── -->
+    <div class="patient-header-v2">
+
+      <!-- LEFT: Identité -->
+      <div class="ph-identity">
+        <div class="patient-avatar-lg ${patient.sexe==='F'?'female':'male'}">${patient.prenom[0]}${patient.nom[0]}</div>
+        <div class="ph-id-info">
+          <div class="patient-fullname">${patient.prenom} ${patient.nom}</div>
+          <div class="ph-meta-row">
+            <span class="ph-meta-chip">🎂 ${age} ans · ${fmtDate(patient.ddn)}</span>
+            <span class="ph-meta-chip">⚧ ${patient.sexe==='F'?'Féminin':'Masculin'}</span>
+            ${medecinName ? `<span class="ph-meta-chip">🩺 ${medecinName}</span>` : ''}
+            ${patient.date_chirurgie ? `<span class="ph-meta-chip amber">✂ Post-op ${fmtDate(patient.date_chirurgie)}</span>` : ''}
+          </div>
+          <div class="ph-contact-row">
+            <span class="ph-contact-item">📱 ${patient.telephone || '—'}</span>
+            <span class="ph-contact-item">✉ ${patient.email || '—'}</span>
+          </div>
+          <div class="badges" style="margin-top:10px">
+            ${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')}
+            ${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')}
+          </div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ RDV</button>
-        <button class="btn btn-amber btn-sm" onclick="openEditPatient('${pid}')">✏ Modifier</button>
-        <button class="btn btn-ghost btn-sm" onclick="openAssignerMedecin('${pid}')">👨‍⚕️ Médecin</button>
-        <button class="btn btn-ghost btn-sm" onclick="startAiContext('${pid}')">🤖 IA</button>
-        <button class="btn btn-export btn-sm" onclick="exportPatientAnon('${pid}')">⬇ Export</button>
-        ${patient.date_chirurgie ? `<div style="font-size:10px;color:var(--teal2);text-align:center">✂ ${fmtDate(patient.date_chirurgie)}</div>` : `<button class="btn btn-ghost btn-sm" onclick="setDateChirurgie('${pid}')">✂ Post-op</button>`}
+
+      <!-- MIDDLE: Snapshot clinique -->
+      <div class="ph-snapshot">
+        <div class="ph-snapshot-title">
+          Dernière consultation${lastConsult ? ' · ' + fmtDate(lastConsult.date) : ''}
+        </div>
+        <div class="ph-snapshot-grid">
+          <div class="ph-snap-card">
+            <div class="ph-snap-label">Acuité OD</div>
+            <div class="ph-snap-value">${lastConsult?.acuite_od || '—'}</div>
+          </div>
+          <div class="ph-snap-card">
+            <div class="ph-snap-label">Acuité OG</div>
+            <div class="ph-snap-value">${lastConsult?.acuite_og || '—'}</div>
+          </div>
+          <div class="ph-snap-card">
+            <div class="ph-snap-label">Tonus OD</div>
+            <div class="ph-snap-value" style="color:${iopColor(lastConsult?.tension_od)}">${lastConsult?.tension_od ? lastConsult.tension_od + ' mmHg' : '—'}</div>
+          </div>
+          <div class="ph-snap-card">
+            <div class="ph-snap-label">Tonus OG</div>
+            <div class="ph-snap-value" style="color:${iopColor(lastConsult?.tension_og)}">${lastConsult?.tension_og ? lastConsult.tension_og + ' mmHg' : '—'}</div>
+          </div>
+        </div>
+        <div class="ph-snap-footer">
+          <span style="font-size:11px;color:${nextRdv?'var(--teal2)':'var(--text3)'}">
+            📅 ${nextRdv ? fmtDate(nextRdv.date) + ' · ' + nextRdv.heure : 'Aucun RDV à venir'}
+          </span>
+          <span style="font-size:11px;color:var(--text3)">${patient.historique.length} consul.</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Actions -->
+      <div class="ph-actions">
+        <button class="btn btn-primary btn-sm" onclick="openAddConsultation('${pid}')">+ Consultation</button>
+        <button class="btn btn-ghost btn-sm" onclick="openAddRdv('${pid}')">📅 Rendez-vous</button>
+        <button class="btn btn-ghost btn-sm" onclick="startAiContext('${pid}')">🤖 Assistant IA</button>
+        <div class="ph-actions-row" style="margin-top:2px">
+          <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${pid}')" title="Modifier">✏ Modifier</button>
+          <button class="btn btn-ghost btn-sm" onclick="openAssignerMedecin('${pid}')" title="Médecin">👨‍⚕️</button>
+          <button class="btn btn-export btn-sm" onclick="exportPatientAnon('${pid}')" title="Exporter">⬇</button>
+          <button class="btn btn-sm" style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);color:var(--red)" onclick="deletePatient('${pid}','${patient.prenom} ${patient.nom}')" title="Supprimer">🗑</button>
+        </div>
+        ${!patient.date_chirurgie ? `<button class="btn btn-ghost btn-sm" onclick="setDateChirurgie('${pid}')">✂ Déf. chirurgie</button>` : ''}
       </div>
     </div>
-    
+
+    <!-- ── TABS (5) ── -->
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('hist','${pid}',this)">📋 Historique</button>
-      <button class="tab-btn" onclick="switchTab('ordo','${pid}',this)">📄 Ordonnances${patient.ordonnances?.length?` (${patient.ordonnances.length})`:''}</button>
-      <button class="tab-btn" onclick="switchTab('postop','${pid}',this)">🗓 Post-Op</button>
-      <button class="tab-btn" onclick="switchTab('img','${pid}',this)">🔬 Imagerie</button>
-      <button class="tab-btn" onclick="switchTab('docs','${pid}',this)">📎 Documents</button>
-      <button class="tab-btn" onclick="switchTab('rdvp','${pid}',this)">📅 RDV</button>
-      <button class="tab-btn" onclick="switchTab('qst','${pid}',this)">💬 Questions${questions.length?` (${questions.filter(q=>q.statut==='en_attente').length})`:''}</button>
+      <button class="tab-btn active" onclick="switchTab('hist','${pid}',this)">
+        📋 Consultations<span class="tab-count">${patient.historique.length}</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('ordo','${pid}',this)">
+        📄 Ordonnances${(patient.ordonnances||[]).length ? `<span class="tab-count">${patient.ordonnances.length}</span>` : ''}
+      </button>
+      <button class="tab-btn" onclick="switchTab('media','${pid}',this)">
+        🔬 Documents${totalMedia ? `<span class="tab-count">${totalMedia}</span>` : ''}
+      </button>
+      <button class="tab-btn" onclick="switchTab('rdvp','${pid}',this)">
+        📅 RDV${patient.rdv?.length ? `<span class="tab-count">${patient.rdv.length}</span>` : ''}
+      </button>
+      <button class="tab-btn" onclick="switchTab('qst','${pid}',this)">
+        💬 Questions${pendingQ ? `<span class="tab-count tab-count-amber">${pendingQ}</span>` : ''}
+      </button>
     </div>
-    
+
+    <!-- ── TAB: Consultations (+ Post-Op intégré) ── -->
     <div class="tab-content active" id="tab-hist">
+      ${patient.date_chirurgie ? `
+      <div class="postop-banner" onclick="togglePostOp()">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:34px;height:34px;border-radius:10px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✂</div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--teal2)">${patient.type_chirurgie || 'Chirurgie ophtalmologique'}</div>
+            <div style="font-size:11px;color:var(--text3)">Suivi post-opératoire · Opéré le ${fmtDate(patient.date_chirurgie)}</div>
+          </div>
+        </div>
+        <span id="postopToggleLabel" style="font-size:11px;color:var(--text3);white-space:nowrap">Afficher le suivi ▼</span>
+      </div>
+      <div id="postop-section" style="display:none;margin-bottom:24px;padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
+        ${renderPostOpTimeline(patient)}
+      </div>` : ''}
+
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div style="font-size:13px;color:var(--text2)">${patient.historique.length} consultation(s)</div>
+        <div style="font-size:13px;color:var(--text2)">${patient.historique.length} consultation(s) enregistrée(s)</div>
         <button class="btn btn-primary btn-sm" onclick="openAddConsultation('${pid}')">+ Nouvelle consultation</button>
       </div>
       ${patient.historique.length >= 2 ? `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div class="card card-sm">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal2);margin-bottom:8px">Évolution Tonus (mmHg)</div>
           <canvas id="chart-iop-${pid}" style="max-height:160px"></canvas>
         </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div class="card card-sm">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal2);margin-bottom:8px">Évolution Acuité Visuelle</div>
           <canvas id="chart-av-${pid}" style="max-height:160px"></canvas>
         </div>
@@ -1012,7 +1207,7 @@ async function renderPatientProfile(c, pid) {
                 <div class="tl-title">${h.motif}</div>
               </div>
               <div style="display:flex;gap:6px">
-                <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openEditConsultation('${pid}',${JSON.stringify(h).replace(/"/g,'&quot;')})">✏</button>
+                <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openEditConsultation('${pid}','${h.id}')">✏</button>
                 <button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.6" onclick="deleteConsultation('${pid}','${h.id}')">🗑</button>
               </div>
             </div>
@@ -1034,10 +1229,11 @@ async function renderPatientProfile(c, pid) {
             </div>
             ${h.notes?`<div class="tl-note">📝 ${h.notes}</div>`:''}
           </div>
-        `).join('') || '<div style="color:var(--text3);text-align:center;padding:30px">Aucun historique</div>'}
+        `).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucune consultation enregistrée</div>'}
       </div>
     </div>
-    
+
+    <!-- ── TAB: Ordonnances ── -->
     <div class="tab-content" id="tab-ordo">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-size:13px;color:var(--text2)">${(patient.ordonnances||[]).length} ordonnance(s)</div>
@@ -1046,60 +1242,87 @@ async function renderPatientProfile(c, pid) {
       ${renderOrdonnancesList(patient.ordonnances||[], pid)}
     </div>
 
-    <div class="tab-content" id="tab-postop">
-      ${patient.date_chirurgie ? renderPostOpTimeline(patient) : `
-        <div style="text-align:center;padding:40px;color:var(--text3)">
-          <div style="font-size:32px;margin-bottom:12px">✂️</div>
-          <div style="font-size:14px;margin-bottom:16px">Aucune date de chirurgie définie pour ce patient</div>
-          <button class="btn btn-primary btn-sm" onclick="setDateChirurgie('${pid}')">Définir une date de chirurgie</button>
+    <!-- ── TAB: Documents & Imagerie (fusionnés) ── -->
+    <div class="tab-content" id="tab-media">
+      <div class="subtabs">
+        <button class="subtab-btn active" onclick="switchSubtab('stab-img',this)">
+          🔬 Imagerie médicale
+          ${patient.imagerie?.length ? `<span class="tab-count">${patient.imagerie.length}</span>` : ''}
+        </button>
+        <button class="subtab-btn" onclick="switchSubtab('stab-docs',this)">
+          📎 Documents patient
+          ${docs?.length ? `<span class="tab-count">${docs.length}</span>` : ''}
+        </button>
+      </div>
+
+      <div id="stab-img" class="subtab-content active">
+        <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;color:var(--text2)">OCT, rétinographies, angiographies…</div>
+          <button class="btn btn-primary btn-sm" onclick="openUploadImagerie('${pid}')">+ Ajouter imagerie</button>
         </div>
-      `}
-    </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
-        ${patient.imagerie.map(img=>`
-          <div class="doc-card" onclick="openImageViewer('${img.id}','${escJ(img.type)}','${escJ(img.notes)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
-            <div class="doc-preview">
-              <div style="color:var(--text3);font-size:32px;text-align:center">🔬</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+          ${patient.imagerie.map(img=>`
+            <div class="doc-card" onclick="openImageViewer('${img.id}','${pid}','${escJ(img.type)}','${escJ(img.notes)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
+              <div class="doc-preview">
+                <div style="color:var(--text3);font-size:32px;text-align:center">🔬</div>
+              </div>
+              <div class="doc-info">
+                <div class="doc-type">${img.type}</div>
+                <div class="doc-date">${fmtDate(img.date)}</div>
+                ${img.notes ? `<div class="doc-uploader" style="margin-top:4px">${img.notes}</div>` : ''}
+                <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center"
+                  onclick="event.stopPropagation();analyzeImageAI('${img.id}','${pid}','${escJ(img.type)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
+                  🤖 Analyser IA
+                </button>
+              </div>
             </div>
-            <div class="doc-info">
-              <div class="doc-type">${img.type}</div>
-              <div class="doc-date">${fmtDate(img.date)}</div>
-              <div class="doc-uploader" style="margin-top:4px;font-size:11px;color:var(--text2)">${img.notes}</div>
-              <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="event.stopPropagation();analyzeImageAI('${img.id}','${escJ(img.type)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">🤖 Analyser IA</button>
-            </div>
-          </div>
-        `).join('') || '<div style="color:var(--text3);text-align:center;padding:30px">Aucune imagerie</div>'}
+          `).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucune imagerie enregistrée</div>'}
+        </div>
+      </div>
+
+      <div id="stab-docs" class="subtab-content">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Radios, scanners et documents transmis par le patient</div>
+        <div id="docs-grid-${pid}">${renderDocsGrid(docs, pid)}</div>
       </div>
     </div>
-    
-    <div class="tab-content" id="tab-docs">
-      <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:13px;color:var(--text2)">Documents uploadés par le patient (radios, scanners...)</div>
-      </div>
-      <div id="docs-grid-${pid}">
-        ${renderDocsGrid(docs, pid)}
-      </div>
-    </div>
-    
+
+    <!-- ── TAB: RDV ── -->
     <div class="tab-content" id="tab-rdvp">
-      <div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ Nouveau RDV</button></div>
-      ${patient.rdv.sort((a,b)=>a.date.localeCompare(b.date)).map(r=>`
-        <div class="rdv-card ${r.urgent?'urgent':''}">
-          <div class="rdv-date-block ${r.urgent?'urgent':''}"><div class="rdv-day ${r.urgent?'urgent':''}">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
-          <div class="rdv-info">
-            <div class="rdv-type">${r.urgent?'🚨 ':''} ${r.type}</div>
-            <div class="rdv-meta">⏰ ${r.heure} · ${r.medecin} · ${new Date(r.date).getFullYear()}</div>
-            ${r.notes?`<div style="font-size:11px;color:var(--text3);margin-top:2px">📝 ${r.notes}</div>`:''}
+      <div style="margin-bottom:14px">
+        <button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ Nouveau RDV</button>
+      </div>
+      ${patient.rdv.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>{
+        const isPast = r.date < new Date().toISOString().slice(0,10);
+        return `
+        <div class="rdv-card ${r.urgent?'urgent':''}" style="${isPast?'opacity:.65':''}">
+          <div class="rdv-date-block ${r.urgent?'urgent':''}">
+            <div class="rdv-day ${r.urgent?'urgent':''}">${new Date(r.date).getDate()}</div>
+            <div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})} ${new Date(r.date).getFullYear()}</div>
+          </div>
+          <div class="rdv-info" style="flex:1">
+            <div class="rdv-type">${r.urgent?'🚨 ':''}${r.type}</div>
+            <div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div>
+            <div id="rdv-detail-${r.id}" style="display:none;margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text2)">
+              <div><strong>Date :</strong> ${fmtDateLong(r.date)}</div>
+              <div><strong>Heure :</strong> ${r.heure}</div>
+              <div><strong>Type :</strong> ${r.type}</div>
+              <div><strong>Médecin :</strong> ${r.medecin}</div>
+              <div><strong>Statut :</strong> ${r.statut}</div>
+              ${r.notes?`<div><strong>Notes :</strong> ${r.notes}</div>`:''}
+              ${r.urgent?`<div style="color:var(--red);margin-top:4px">⚠ RDV urgent</div>`:''}
+              ${r.demande_par?`<div><strong>Demandé par :</strong> ${r.demande_par}</div>`:''}
+            </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
             <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
-            ${r.statut==='en_attente'?`<button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">Confirmer</button>`:''}
+            <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="toggleRdvDetail('${r.id}')">+ infos</button>
+            ${r.statut==='en_attente'&&USER.role==='medecin'?`<button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">Confirmer</button>`:''}
             ${USER.role==='medecin'?`<button class="btn btn-red btn-sm" onclick="deleteRdv('${r.id}')">🗑</button>`:''}
           </div>
-        </div>
-      `).join('')}
+        </div>`; }).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucun rendez-vous</div>'}
     </div>
-    
+
+    <!-- ── TAB: Questions ── -->
     <div class="tab-content" id="tab-qst">
       ${renderQuestionsPanel(questions, pid)}
     </div>`;
@@ -1107,6 +1330,43 @@ async function renderPatientProfile(c, pid) {
   if (patient.historique.length >= 2) {
     setTimeout(() => renderEvolutionCharts(patient, pid), 50);
   }
+}
+
+function togglePostOp() {
+  const section = document.getElementById('postop-section');
+  const label   = document.getElementById('postopToggleLabel');
+  if (!section) return;
+  const open = section.style.display !== 'none';
+  section.style.display = open ? 'none' : 'block';
+  label.textContent = open ? 'Afficher le suivi ▼' : 'Masquer le suivi ▲';
+}
+
+function switchSubtab(targetId, btn) {
+  const parent = btn.closest('.tab-content');
+  parent.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+  parent.querySelectorAll('.subtab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const el = document.getElementById(targetId);
+  if (el) el.classList.add('active');
+}
+
+function openUploadImagerie(pid) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = async () => {
+    const file = input.files[0]; if (!file) return;
+    const type = prompt('Type d\'imagerie ?', 'OCT Macula');
+    if (!type) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const b64 = e.target.result.split(',')[1];
+      const res = await api(`/api/patients/${pid}/upload`, 'POST', {image: b64, type, description: file.name, source: 'imagerie'});
+      if (res.ok) loadPatient(pid);
+      else alert(res.error || 'Erreur upload');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
 }
 
 function renderDocsGrid(docs, pid) {
@@ -1180,43 +1440,157 @@ function renderQuestionsPanel(questions, pid) {
 }
 
 // ─── AGENDA ───────────────────────────────────────────────────────────────────
+// ─── AGENDA / CALENDRIER ──────────────────────────────────────────────────────
+let _calYear, _calMonth, _allRdvs = [];
+
 async function renderAgenda(c) {
-  const rdvs = await api('/api/rdv');
-  const today = new Date().toISOString().slice(0,10);
-  const grouped = {};
-  rdvs.forEach(r => { if (!grouped[r.date]) grouped[r.date] = []; grouped[r.date].push(r); });
-  const sorted = Object.keys(grouped).sort();
-  
+  _allRdvs = await api('/api/rdv');
+  const now = new Date();
+  _calYear  = now.getFullYear();
+  _calMonth = now.getMonth();
+  _renderCalendar(c);
+}
+
+function _renderCalendar(c) {
+  const today   = new Date().toISOString().slice(0,10);
+  const months  = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const days    = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+  // Build day map for current month
+  const rdvMap  = {};
+  _allRdvs.forEach(r => { if (!rdvMap[r.date]) rdvMap[r.date] = []; rdvMap[r.date].push(r); });
+
+  // Stats for header
+  const confirmed = _allRdvs.filter(r => r.statut === 'confirmé').length;
+  const pending   = _allRdvs.filter(r => r.statut === 'en_attente').length;
+  const urgent    = _allRdvs.filter(r => r.urgent).length;
+
+  // Calendar grid
+  const firstDay = new Date(_calYear, _calMonth, 1);
+  const lastDay  = new Date(_calYear, _calMonth + 1, 0);
+  // Monday-based: 0=Mon … 6=Sun
+  let startDow = firstDay.getDay(); // 0=Sun
+  startDow = (startDow === 0) ? 6 : startDow - 1;
+
+  let cells = '';
+  // Empty cells before first day
+  for (let i = 0; i < startDow; i++) cells += `<div class="cal-cell cal-empty"></div>`;
+
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dateStr = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayRdvs = rdvMap[dateStr] || [];
+    const isToday = dateStr === today;
+    const hasUrgent = dayRdvs.some(r => r.urgent);
+    const dots = dayRdvs.slice(0,4).map(r => {
+      const col = r.urgent ? 'var(--red)' : r.statut==='confirmé' ? 'var(--teal)' : 'var(--amber)';
+      return `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col}"></span>`;
+    }).join('');
+    cells += `
+      <div class="cal-cell ${isToday?'cal-today':''} ${dayRdvs.length?'cal-has-rdv':''} ${hasUrgent?'cal-urgent':''}"
+           onclick="calSelectDay('${dateStr}')">
+        <div class="cal-day-num">${d}</div>
+        ${dayRdvs.length ? `<div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:2px">${dots}</div>` : ''}
+        ${dayRdvs.length ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">${dayRdvs.length} rdv</div>` : ''}
+      </div>`;
+  }
+
+  // Upcoming list (next 7 days)
+  const upcoming = _allRdvs
+    .filter(r => r.date >= today && r.statut !== 'annulé')
+    .sort((a,b) => (a.date+a.heure).localeCompare(b.date+b.heure))
+    .slice(0, 8);
+
   c.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <div style="font-size:13px;color:var(--text2)">${rdvs.length} rendez-vous total</div>
+    <style>
+      .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+      .cal-header-day { text-align:center; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); padding:6px 0; }
+      .cal-cell { min-height:64px; border-radius:8px; padding:6px; background:var(--card); border:1px solid var(--border); cursor:pointer; transition:border-color .15s; }
+      .cal-cell:hover { border-color:var(--teal); }
+      .cal-cell.cal-empty { background:transparent; border:none; cursor:default; }
+      .cal-cell.cal-today { border-color:var(--teal); background:var(--teal-dim); }
+      .cal-cell.cal-has-rdv { }
+      .cal-cell.cal-urgent { border-color:rgba(239,68,68,.5); }
+      .cal-cell.cal-selected { border-color:var(--teal); box-shadow:0 0 0 2px rgba(14,165,160,.3); }
+      .cal-day-num { font-size:12px; font-weight:600; color:var(--text2); }
+      .cal-cell.cal-today .cal-day-num { color:var(--teal2); }
+      .cal-day-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+    </style>
+
+    <!-- Header stats -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="badge badge-teal">✓ ${confirmed} confirmé(s)</span>
+        <span class="badge badge-amber">⏳ ${pending} en attente</span>
+        ${urgent ? `<span class="badge badge-red">🚨 ${urgent} urgent(s)</span>` : ''}
+      </div>
       ${USER.role==='medecin'?`<button class="btn btn-primary btn-sm" onclick="openAddRdv(null)">+ Nouveau RDV</button>`:''}
     </div>
-    ${sorted.map(date=>`
-      <div style="margin-bottom:20px">
-        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--teal2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-left:4px">
-          ${date===today?'AUJOURD\'HUI — ':''}${fmtDateLong(date)}
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+      <!-- Calendar -->
+      <div>
+        <!-- Month nav -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">‹ Précédent</button>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">${months[_calMonth]} ${_calYear}</div>
+          <button class="btn btn-ghost btn-sm" onclick="calNav(1)">Suivant ›</button>
         </div>
-        ${grouped[date].map(r=>`
-          <div class="rdv-card ${r.urgent?'urgent':''}" ${USER.role==='medecin'?`style="cursor:pointer" onclick="loadPatient('${r.patient_id}')"`:''}
->
-            <div class="rdv-date-block ${r.urgent?'urgent':''}">
-              <div class="rdv-day ${r.urgent?'urgent':''}">${r.heure.split(':')[0]}</div>
-              <div class="rdv-month">h${r.heure.split(':')[1]}</div>
-            </div>
-            <div class="rdv-info">
-              <div class="rdv-type">${r.urgent?'🚨 ':''} ${USER.role!=='patient'?r.patient_prenom+' '+r.patient_nom+' — ':''}${r.type}</div>
-              <div class="rdv-meta">${r.medecin}${r.notes?' · '+r.notes:''}</div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
-              <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
-              ${r.statut==='en_attente'&&USER.role!=='patient'?`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();validerRdv('${r.id}','confirmé')">✓</button>`:''}
-              ${USER.role==='medecin'?`<button class="btn btn-red btn-sm" onclick="event.stopPropagation();deleteRdv('${r.id}')">🗑</button>`:''}
-            </div>
-          </div>
-        `).join('')}
+        <!-- Day headers -->
+        <div class="cal-grid" style="margin-bottom:4px">
+          ${days.map(d=>`<div class="cal-header-day">${d}</div>`).join('')}
+        </div>
+        <!-- Day cells -->
+        <div class="cal-grid">${cells}</div>
       </div>
-    `).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucun rendez-vous</div>'}`;
+
+      <!-- Side panel -->
+      <div>
+        <div id="calDayPanel" class="cal-day-panel">
+          <div style="font-size:12px;font-weight:600;color:var(--teal2);margin-bottom:12px">PROCHAINS RDV</div>
+          ${upcoming.length ? upcoming.map(r => _rdvMiniCard(r)).join('') :
+            '<div style="color:var(--text3);font-size:13px">Aucun RDV à venir</div>'}
+        </div>
+      </div>
+    </div>`;
+}
+
+function _rdvMiniCard(r) {
+  const col = r.urgent ? 'var(--red)' : r.statut==='confirmé' ? 'var(--teal)' : 'var(--amber)';
+  return `
+    <div style="padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;${USER.role==='medecin'?'cursor:pointer':''};"
+         ${USER.role==='medecin'?`onclick="loadPatient('${r.patient_id}')"`:''}>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${r.heure} · ${r.type}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-left:16px">${r.patient_prenom||''} ${r.patient_nom||''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-left:16px">${fmtDate(r.date)} · <span style="color:${col}">${r.statut}</span></div>
+      ${r.statut==='en_attente'&&USER.role==='medecin'?`
+        <div style="display:flex;gap:6px;margin-top:6px;margin-left:16px">
+          <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','annulé')">✗ Annuler</button>
+        </div>`:''}
+    </div>`;
+}
+
+function calNav(dir) {
+  _calMonth += dir;
+  if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+  if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+  _renderCalendar(document.getElementById('mainContent'));
+}
+
+function calSelectDay(dateStr) {
+  // Highlight selected cell
+  document.querySelectorAll('.cal-cell').forEach(el => el.classList.remove('cal-selected'));
+  event.currentTarget.classList.add('cal-selected');
+
+  const panel = document.getElementById('calDayPanel');
+  const dayRdvs = _allRdvs.filter(r => r.date === dateStr).sort((a,b) => a.heure.localeCompare(b.heure));
+  panel.innerHTML = `
+    <div style="font-size:12px;font-weight:600;color:var(--teal2);margin-bottom:12px">${fmtDateLong(dateStr).toUpperCase()}</div>
+    ${dayRdvs.length ? dayRdvs.map(r => _rdvMiniCard(r)).join('') :
+      '<div style="color:var(--text3);font-size:13px">Aucun rendez-vous ce jour</div>'}`;
 }
 
 // ─── QUESTIONS MÉDECIN ────────────────────────────────────────────────────────
@@ -1227,6 +1601,7 @@ async function renderQuestionsMedecin(c) {
 
   for (const pid of Object.keys(patientsMap)) {
     const qs = await api(`/api/patients/${pid}/questions`);
+    if (!Array.isArray(qs)) continue;
     const p = patientsMap[pid];
     qs.forEach(q => questions_all.push({...q, patient_id: pid, patient_nom: `${p.prenom} ${p.nom}`}));
   }
@@ -1442,12 +1817,11 @@ async function startAiContext(pid) {
   setTimeout(()=>addMsg('ai',`Contexte chargé pour ${p.prenom} ${p.nom}.\nAntécédents: ${p.antecedents.join(', ')}\nDernier traitement: ${p.historique[0]?.traitement||'NC'}\n\nQuelle est votre question ?`),100);
 }
 
-async function analyzeImageAI(imgId, type, patientName, antecedents) {
-  // Show AI analysis in a simple way
+async function analyzeImageAI(imgId, pid, type, patientName, antecedents) {
   const el = event.target;
   el.textContent = '⏳ Analyse...'; el.disabled=true;
   const context = `Patient: ${patientName}. Antécédents: ${antecedents}`;
-  const res = await api('/api/ai/analyze-image','POST',{image:null,type,context});
+  const res = await api('/api/ai/analyze-image','POST',{doc_id:imgId,patient_id:pid,type,context});
   alert('Analyse IA:\n\n'+(res.analysis||res.error));
   el.textContent='🤖 Analyser IA'; el.disabled=false;
 }
@@ -1462,7 +1836,7 @@ async function analyzeDocAI(pid, docId, type) {
   el.textContent='🤖 Analyser'; el.disabled=false;
 }
 
-function openImageViewer(imgId, type, notes, patientName, antecedents) {
+function openImageViewer(imgId, pid, type, notes, patientName, antecedents) {
   document.getElementById('modalImageTitle').textContent = type;
   document.getElementById('modalImageContent').innerHTML = `
     <div style="background:#000;border-radius:12px;min-height:200px;display:flex;align-items:center;justify-content:center;font-size:60px;margin-bottom:16px">🔬</div>
@@ -1472,16 +1846,16 @@ function openImageViewer(imgId, type, notes, patientName, antecedents) {
       <div id="aiAnalysisText" style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6"></div>
     </div>
     <div style="margin-top:14px;display:flex;gap:10px">
-      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 Analyser avec IA</button>
+      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(imgId)}','${escJ(pid)}','${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 Analyser avec IA</button>
       <button class="btn btn-ghost" onclick="closeModal('modalImage')">Fermer</button>
     </div>`;
   openModal('modalImage');
 }
 
-async function runImageAnalysis(type, patientName, antecedents) {
+async function runImageAnalysis(imgId, pid, type, patientName, antecedents) {
   const btn=document.getElementById('analyzeImgBtn');
   btn.disabled=true; btn.innerHTML='<span class="loading-dots"><span></span><span></span><span></span></span>';
-  const res = await api('/api/ai/analyze-image','POST',{image:null,type,context:`Patient: ${patientName}. Antécédents: ${antecedents}`});
+  const res = await api('/api/ai/analyze-image','POST',{doc_id:imgId,patient_id:pid,type,context:`Patient: ${patientName}. Antécédents: ${antecedents}`});
   document.getElementById('aiAnalysisBox').style.display='block';
   document.getElementById('aiAnalysisText').textContent = res.analysis||res.error;
   btn.disabled=false; btn.innerHTML='🔄 Ré-analyser';
@@ -1503,7 +1877,7 @@ function openAddRdv(pid) {
       <div><label class="lbl">Date</label><input type="date" class="input" id="rdvDate"></div>
       <div><label class="lbl">Heure</label><input type="time" class="input" id="rdvHeure" value="09:00"></div>
     </div>
-    <div class="form-full"><label class="lbl">Médecin</label><input class="input" id="rdvMedecin" value="Dr. Martin"></div>
+    <div class="form-full"><label class="lbl">Médecin</label><input class="input" id="rdvMedecin" value="${USER.nom}"></div>
     <div class="form-full"><label class="lbl">Notes</label><textarea class="input" id="rdvNotes" rows="2" placeholder="Instructions particulières..."></textarea></div>
     <div style="margin-top:14px;display:flex;gap:10px">
       <button class="btn btn-primary" onclick="submitRdv(false)">Créer le RDV</button>
@@ -1557,7 +1931,7 @@ async function submitRdv(urgent) {
   const payload = {
     patient_id: pid, type: document.getElementById('rdvType').value,
     date: document.getElementById('rdvDate').value, heure: document.getElementById('rdvHeure').value,
-    medecin: document.getElementById('rdvMedecin')?.value || 'Dr. Martin',
+    medecin: document.getElementById('rdvMedecin')?.value || USER.nom,
     notes: document.getElementById('rdvNotes').value, urgent
   };
   const res = await api('/api/rdv','POST',payload);
@@ -1616,37 +1990,14 @@ async function submitAddPatient() {
 // ─── IMPORT MODAL ─────────────────────────────────────────────────────────────
 function openImport() {
   document.getElementById('modalImportContent').innerHTML = `
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchImportTab('csv',this)">📊 CSV / Excel</button>
-      <button class="tab-btn" onclick="switchImportTab('image',this)">📷 Photo / Scan</button>
-    </div>
-    <div class="tab-content active" id="itab-csv">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Collez le contenu de votre fichier CSV ou copiez-collez depuis Excel. L'IA normalisera automatiquement les colonnes.</div>
-      <textarea class="input" id="csvContent" rows="8" placeholder="nom,prenom,ddn,telephone&#10;Dupont,Marie,1975-03-15,06...&#10;..."></textarea>
-      <div style="margin-top:12px;display:flex;gap:10px">
-        <button class="btn btn-primary" onclick="submitImportCsv()">🤖 Importer avec IA</button>
-        <label class="btn btn-ghost" style="cursor:pointer">📁 Charger fichier<input type="file" accept=".csv,.txt,.xlsx" style="display:none" onchange="loadCsvFile(this)"></label>
-      </div>
-    </div>
-    <div class="tab-content" id="itab-image">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Photographiez une fiche patient, une liste papier ou un document scanné. L'IA extraira automatiquement les informations.</div>
-      <div class="import-zone" id="importImgZone" onclick="document.getElementById('importImgInput').click()">
-        <div class="import-icon">📷</div>
-        <div class="import-text">Cliquez ou glissez l'image</div>
-        <div class="import-sub">Photo de fiche, liste papier, document scanné</div>
-      </div>
-      <input type="file" id="importImgInput" accept="image/*" style="display:none" onchange="previewAndImportImage(this)">
-      <div id="importImagePreview" style="margin-top:12px"></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Collez le contenu de votre fichier CSV ou copiez-collez depuis Excel. L'IA normalisera automatiquement les colonnes.</div>
+    <textarea class="input" id="csvContent" rows="8" placeholder="nom,prenom,ddn,telephone&#10;Dupont,Marie,1975-03-15,06...&#10;..."></textarea>
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="submitImportCsv()">🤖 Importer avec IA</button>
+      <label class="btn btn-ghost" style="cursor:pointer">📁 Charger fichier<input type="file" accept=".csv,.txt,.xlsx" style="display:none" onchange="loadCsvFile(this)"></label>
     </div>
     <div id="importResult" style="margin-top:14px"></div>`;
   openModal('modalImport');
-}
-
-function switchImportTab(tab, btn) {
-  document.querySelectorAll('#modalImportContent .tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('#modalImportContent .tab-content').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('itab-'+tab).classList.add('active');
 }
 
 function loadCsvFile(input) {
@@ -1667,28 +2018,6 @@ async function submitImportCsv() {
     loadPatientsSidebar();
   } else {
     res_el.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">❌ Erreur: ${res.error}<br><small>${res.raw||''}</small></div>`;
-  }
-}
-
-function previewAndImportImage(input) {
-  const file = input.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const b64 = e.target.result.split(',')[1];
-    document.getElementById('importImagePreview').innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:200px;border-radius:10px;margin-bottom:10px"><br><button class="btn btn-primary btn-sm" onclick="submitImportImage('${b64}')">🤖 Extraire les données</button>`;
-  };
-  reader.readAsDataURL(file);
-}
-
-async function submitImportImage(b64) {
-  const res_el = document.getElementById('importResult');
-  res_el.innerHTML = '<div style="color:var(--teal2)"><span class="loading-dots"><span></span><span></span><span></span></span> Extraction IA en cours...</div>';
-  const res = await api('/api/import/image','POST',{image:b64});
-  if(res.ok) {
-    res_el.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px">✅ ${res.added.length} patient(s) extrait(s):<br>${res.added.map(p=>`<strong>${p.prenom} ${p.nom}</strong> (${p.id})`).join(', ')}</div>`;
-    loadPatientsSidebar();
-  } else {
-    res_el.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">❌ ${res.error}</div>`;
   }
 }
 
@@ -1830,6 +2159,17 @@ async function setDateChirurgie(pid) {
   else alert('Erreur: ' + (res.error || 'inconnue'));
 }
 
+async function deletePatient(pid, name) {
+  if (!confirm(`Supprimer définitivement le patient ${name} ?\n\nToutes ses consultations, rendez-vous, documents et ordonnances seront supprimés. Cette action est irréversible.`)) return;
+  const res = await api(`/api/patients/${pid}`, 'DELETE');
+  if (res.ok) {
+    loadPatientsSidebar();
+    document.getElementById('main-content').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)">Sélectionnez un patient</div>';
+  } else {
+    alert('Erreur : ' + (res.error || 'Impossible de supprimer'));
+  }
+}
+
 async function exportPatientAnon(pid) {
   const res = await api(`/api/patients/${pid}/export`);
   if (res.error) { alert('Erreur export'); return; }
@@ -1847,8 +2187,6 @@ function setSidebarFilter(showAll) {
   _showAllPatients = showAll;
   const btnMes  = document.getElementById('btnMesPatients');
   const btnTous = document.getElementById('btnTousPatients');
-  if (btnMes)  btnMes.className  = (showAll ? 'btn btn-sm btn-ghost'   : 'btn btn-sm btn-primary') + ' ' + btnMes.style.cssText;
-  if (btnTous) btnTous.className = (showAll ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost')  + ' ' + btnTous.style.cssText;
   if (btnMes)  btnMes.className  = showAll ? 'btn btn-sm btn-ghost'   : 'btn btn-sm btn-primary';
   if (btnTous) btnTous.className = showAll ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost';
   loadPatientsSidebar();
@@ -1953,7 +2291,7 @@ async function submitEditPatient(pid) {
   const res = await api(`/api/patients/${pid}`, 'PUT', body);
   if (res.ok) {
     closeModal('modalEditPatient');
-    renderPatientProfile(document.getElementById('content'), pid);
+    loadPatient(pid);
   }
 }
 
@@ -1985,6 +2323,101 @@ async function handleNotifClick(nid, type, pid) {
 }
 
 async function markNotifLu(nid) { await api(`/api/notifications/${nid}/lu`,'POST'); loadNotifications(); }
+
+// ─── NOTES RAPIDES ────────────────────────────────────────────────────────────
+function getNotes() {
+  try { return JSON.parse(localStorage.getItem('ophtalmo_notes') || '[]'); } catch { return []; }
+}
+function saveNotes(notes) { localStorage.setItem('ophtalmo_notes', JSON.stringify(notes)); }
+
+function renderNotesList() {
+  const notes = getNotes();
+  if (!notes.length) return '<div style="color:var(--text3);font-size:13px">Aucune note</div>';
+  return notes.map((n, i) => `
+    <div style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="flex:1;font-size:13px;color:var(--text);white-space:pre-wrap">${n.text}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <div style="font-size:10px;color:var(--text3)">${n.date}</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px" onclick="deleteNote(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function addNote() {
+  const input = document.getElementById('noteInput');
+  const text  = input.value.trim();
+  if (!text) return;
+  const notes = getNotes();
+  notes.unshift({ text, date: new Date().toLocaleDateString('fr-FR', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) });
+  saveNotes(notes);
+  input.value = '';
+  document.getElementById('notesList').innerHTML = renderNotesList();
+}
+
+function deleteNote(i) {
+  const notes = getNotes();
+  notes.splice(i, 1);
+  saveNotes(notes);
+  document.getElementById('notesList').innerHTML = renderNotesList();
+}
+
+// ─── RECHERCHE GLOBALE ────────────────────────────────────────────────────────
+let _searchTimer = null;
+function globalSearchDebounce() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(runGlobalSearch, 250);
+}
+
+async function runGlobalSearch() {
+  const q = document.getElementById('globalSearchInput').value.trim();
+  const dd = document.getElementById('globalSearchDropdown');
+  if (q.length < 2) { dd.classList.remove('open'); return; }
+  dd.innerHTML = '<div style="padding:12px 14px;color:var(--text3);font-size:13px">Recherche…</div>';
+  dd.classList.add('open');
+  const results = await api(`/api/search?q=${encodeURIComponent(q)}`);
+  if (!results.length) {
+    dd.innerHTML = '<div style="padding:12px 14px;color:var(--text3);font-size:13px">Aucun résultat</div>';
+    return;
+  }
+  dd.innerHTML = results.map(r => `
+    <div class="gsd-item" onclick="globalSearchSelect('${r.pid}')">
+      <div class="gsd-icon">${r.type === 'patient' ? '👤' : '📋'}</div>
+      <div>
+        <div class="gsd-label">${r.label}</div>
+        <div class="gsd-sub">${r.sub}</div>
+      </div>
+    </div>`).join('');
+}
+
+function globalSearchSelect(pid) {
+  closeGlobalSearch();
+  loadPatient(pid);
+}
+
+function closeGlobalSearch() {
+  document.getElementById('globalSearchInput').value = '';
+  document.getElementById('globalSearchDropdown').classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.global-search-wrap')) closeGlobalSearch();
+});
+
+function toggleRdvDetail(rdvId) {
+  const el = document.getElementById('rdv-detail-' + rdvId);
+  if (!el) return;
+  const btn = el.closest('.rdv-card').querySelector('.btn-ghost');
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '+ infos' : '- infos';
+}
+
+async function clearActivite() {
+  if (!confirm('Effacer tout l\'historique d\'activité ?')) return;
+  await api('/api/notifications', 'DELETE');
+  loadNotifications();
+  showView('dashboard-medecin');
+}
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 function switchTab(tab, pid, btn) {
@@ -2146,7 +2579,9 @@ async function deleteConsultation(pid, hid) {
   loadPatient(pid);
 }
 
-function openEditConsultation(pid, h) {
+function openEditConsultation(pid, hid) {
+  const h = (window._currentPatient?.historique || []).find(x => x.id === hid);
+  if (!h) { alert('Consultation introuvable'); return; }
   document.getElementById('modalConsultationContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div><label class="lbl">Date</label><input class="input" type="date" id="cDate" value="${h.date}"></div>

@@ -44,7 +44,7 @@ def add_question(pid):
     ).fetchone()
     antecedents = json.loads(p['antecedents'] or '[]')
     allergies   = json.loads(p['allergies']   or '[]')
-    age         = datetime.datetime.now().year - int(p['ddn'][:4]) if p.get('ddn') else 0
+    age         = datetime.datetime.now().year - int(p['ddn'][:4]) if p['ddn'] else 0
 
     context = f"""Patient : {p['prenom']} {p['nom']}, {age} ans, {p['sexe']}.
 Antécédents : {', '.join(antecedents)}.
