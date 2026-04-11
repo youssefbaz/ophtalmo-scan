@@ -1,6 +1,7 @@
 import json, uuid, datetime, logging
 from flask import Blueprint, request, jsonify, Response
 from database import get_db, current_user, require_role, log_audit
+from security_utils import decrypt_patient
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +80,11 @@ def delete_ordonnance(pid, oid):
 def ordonnance_pdf(pid, oid):
     """Generate a printable PDF for an ordonnance using ReportLab."""
     db = get_db()
-    p   = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    ord_ = db.execute("SELECT * FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone()
-    if not p or not ord_:
+    p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    ord_  = db.execute("SELECT * FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone()
+    if not p_row or not ord_:
         return jsonify({"error": "Non trouvé"}), 404
+    p = decrypt_patient(dict(p_row))
 
     try:
         from reportlab.lib.pagesizes import A4
@@ -113,7 +115,7 @@ def ordonnance_pdf(pid, oid):
                                        textColor=teal, fontSize=10, spaceAfter=2)
         normal_style = styles['Normal']
 
-        age = datetime.datetime.now().year - int(p['ddn'][:4]) if p.get('ddn') else '?'
+        age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else '?'
 
         elements = [
             Paragraph("👁  OphtalmoScan", title_style),

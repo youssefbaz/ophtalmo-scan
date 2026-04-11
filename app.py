@@ -11,7 +11,10 @@ import logging.handlers
 from datetime import timedelta
 from flask import Flask, jsonify
 from dotenv import load_dotenv
-load_dotenv()
+# Load .env with an absolute path so it is found regardless of cwd,
+# and with override=True so env vars set after a first (bad) load are corrected.
+_DOTENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(_DOTENV_PATH, override=True)
 
 
 def _configure_logging():
@@ -32,6 +35,14 @@ def _configure_logging():
 
 def create_app():
     _configure_logging()
+
+    # Force .env to be loaded (with correct absolute path) before any security
+    # module initialises its Fernet singleton. Also reset the singleton so that
+    # if security_utils was imported before this point it gets re-keyed.
+    load_dotenv(_DOTENV_PATH, override=True)
+    import security_utils as _su
+    _su._FERNET = None  # discard any singleton built before the key was available
+
     app = Flask(__name__)
 
     # ── Secret key (hard-fail if missing) ────────────────────────────────────
@@ -88,11 +99,53 @@ def create_app():
     from routes.ivt           import bp as ivt_bp
     from routes.admin         import bp as admin_bp
     from routes.agenda        import bp as agenda_bp
+    from routes.stats         import bp as stats_bp
+    from routes.totp          import bp as totp_bp
+    from routes.consent       import bp as consent_bp
 
     for blueprint in (auth_bp, patients_bp, rdv_bp, docs_bp, questions_bp,
                       ai_bp, notifs_bp, ordonnances_bp, main_bp, ivt_bp,
-                      admin_bp, agenda_bp):
+                      admin_bp, agenda_bp, stats_bp, totp_bp, consent_bp):
         app.register_blueprint(blueprint)
+
+    # ── Flask-Talisman (Step 7 — Security headers / HTTPS) ───────────────────
+    # Only enforce HTTPS in production (SESSION_COOKIE_SECURE=1).
+    # In development (plain HTTP) Talisman is initialised but HTTPS is not forced.
+    try:
+        from flask_talisman import Talisman
+        _force_https = os.environ.get('SESSION_COOKIE_SECURE', '0') == '1'
+        Talisman(
+            app,
+            force_https=_force_https,
+            strict_transport_security=_force_https,
+            strict_transport_security_max_age=31536000,
+            content_security_policy={
+                'default-src': ["'self'"],
+                'script-src':  ["'self'", "'unsafe-inline'",
+                                 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
+                'style-src':   ["'self'", "'unsafe-inline'",
+                                 'cdn.jsdelivr.net', 'fonts.googleapis.com'],
+                'font-src':    ["'self'", 'fonts.gstatic.com', 'data:'],
+                'img-src':     ["'self'", 'data:', 'blob:'],
+                'connect-src': ["'self'"],
+                'frame-ancestors': ["'none'"],
+            },
+            referrer_policy='strict-origin-when-cross-origin',
+            feature_policy={
+                'geolocation': "'none'",
+                'camera':      "'none'",
+                'microphone':  "'none'",
+            },
+            session_cookie_secure=_force_https,
+        )
+        logging.getLogger(__name__).info(
+            f"Talisman initialised (force_https={_force_https})"
+        )
+    except ImportError:
+        logging.getLogger(__name__).warning(
+            "flask-talisman not installed — security headers not applied. "
+            "Run: pip install flask-talisman"
+        )
 
     # ── Error handlers ────────────────────────────────────────────────────────
     @app.errorhandler(400)

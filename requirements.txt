@@ -8,3 +8,15 @@ gunicorn==23.0.0
 flask-limiter==3.9.0
 flask-wtf==1.2.2
 reportlab==4.2.5
+# ── Step 1: PostgreSQL support
+psycopg2-binary==2.9.10
+# ── Step 3: 2FA (TOTP)
+pyotp==2.9.0
+qrcode[pil]==8.0
+Pillow==11.1.0
+# ── Step 4: Field-level encryption
+cryptography==44.0.2
+# ── Step 6: Input sanitisation
+bleach==6.2.0
+# ── Step 7: Security headers
+flask-talisman==1.1.0

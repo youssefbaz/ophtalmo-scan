@@ -1,6 +1,7 @@
 import uuid, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
+from security_utils import decrypt_field
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,8 @@ def get_rdv():
     result = [dict(r) for r in rows]
     for r in result:
         r['urgent'] = bool(r['urgent'])
+        r['patient_nom']    = decrypt_field(r.get('patient_nom', '') or '')
+        r['patient_prenom'] = decrypt_field(r.get('patient_prenom', '') or '')
     return jsonify(result)
 
 
@@ -207,8 +210,10 @@ def valider_rdv(rdv_id):
         (new_statut, new_notes, new_date, new_heure, rdv_id)
     )
     db.commit()
+    patient_nom    = decrypt_field(row['nom']    or '')
+    patient_prenom = decrypt_field(row['prenom'] or '')
     add_notif(db, "rdv_validé",
-              f"RDV confirmé pour {row['prenom']} {row['nom']} le {new_date}",
+              f"RDV confirmé pour {patient_prenom} {patient_nom} le {new_date}",
               u['role'], row['patient_id'])
 
     # Send confirmation email/SMS when status changes to 'confirmé'
