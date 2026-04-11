@@ -9,3 +9,11 @@ ophtalmo.db-wal
 *.log
 .venv/
 venv/
+backups/
+*.db.enc
+*.sql.enc
+.claude/
+seed_test_data.py
+seed_patients.py
+seed_stress.py
+test_grog.py

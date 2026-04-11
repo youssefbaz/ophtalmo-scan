@@ -1,8 +1,9 @@
-import uuid
+import uuid, json
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
-from database import get_db, current_user, add_notif
+from database import get_db, current_user, add_notif, next_medecin_code
 from extensions import limiter
+from security_utils import validate_password, encrypt_patient_fields, sanitize
 
 bp = Blueprint('admin', __name__)
 
@@ -24,12 +25,12 @@ def admin_stats():
     pending  = db.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0]
     medecins = db.execute("SELECT COUNT(*) FROM users WHERE role='medecin' AND status='active'").fetchone()[0]
     patients = db.execute("SELECT COUNT(*) FROM users WHERE role='patient'").fetchone()[0]
-    rejected = db.execute("SELECT COUNT(*) FROM users WHERE status='rejected'").fetchone()[0]
+    inactive = db.execute("SELECT COUNT(*) FROM users WHERE status='inactive'").fetchone()[0]
     return jsonify({
         "pending": pending,
         "medecins": medecins,
         "patients": patients,
-        "rejected": rejected,
+        "inactive": inactive,
     })
 
 
@@ -42,7 +43,7 @@ def admin_get_users():
     db   = get_db()
     role = request.args.get('role')          # optional filter
     status = request.args.get('status')
-    sql  = "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,created_at FROM users WHERE role != 'admin'"
+    sql  = "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at FROM users WHERE role != 'admin'"
     params = []
     if role:
         sql += " AND role=?";   params.append(role)
@@ -61,7 +62,7 @@ def admin_get_pending():
     if err: return err
     db   = get_db()
     rows = db.execute(
-        "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,created_at "
+        "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at "
         "FROM users WHERE status='pending' ORDER BY created_at DESC"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -85,39 +86,56 @@ def admin_validate(uid):
     return jsonify({"ok": True})
 
 
-# ─── REJECT ───────────────────────────────────────────────────────────────────
+# ─── DEACTIVATE / ACTIVATE ────────────────────────────────────────────────────
 
-@bp.route('/api/admin/users/<uid>/reject', methods=['POST'])
-def admin_reject(uid):
+@bp.route('/api/admin/users/<uid>/deactivate', methods=['POST'])
+def admin_deactivate(uid):
     _, err = _require_admin()
     if err: return err
     db  = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
-    db.execute("UPDATE users SET status='rejected' WHERE id=?", (uid,))
+    if row['role'] == 'admin':
+        return jsonify({"error": "Impossible de désactiver le compte administrateur"}), 400
+    db.execute("UPDATE users SET status='inactive' WHERE id=?", (uid,))
     db.commit()
-    add_notif(db, "compte_rejete",
-              f"❌ Compte refusé : {row['prenom']} {row['nom']} ({row['username']})",
+    add_notif(db, "compte_desactive",
+              f"🔒 Compte désactivé : {row['prenom']} {row['nom']} ({row['username']})",
               "admin")
     return jsonify({"ok": True})
 
 
-# ─── DELETE USER ──────────────────────────────────────────────────────────────
-
-@bp.route('/api/admin/users/<uid>', methods=['DELETE'])
-def admin_delete_user(uid):
+@bp.route('/api/admin/users/<uid>/activate', methods=['POST'])
+def admin_activate(uid):
     _, err = _require_admin()
     if err: return err
-    db = get_db()
+    db  = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
-    if row['role'] == 'admin':
-        return jsonify({"error": "Impossible de supprimer le compte administrateur"}), 400
-    db.execute("DELETE FROM users WHERE id=?", (uid,))
+    db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
     db.commit()
+    add_notif(db, "compte_active",
+              f"🔓 Compte activé : {row['prenom']} {row['nom']} ({row['username']})",
+              "admin")
     return jsonify({"ok": True})
+
+
+# ─── GET SINGLE USER ──────────────────────────────────────────────────────────
+
+@bp.route('/api/admin/users/<uid>', methods=['GET'])
+def admin_get_user(uid):
+    _, err = _require_admin()
+    if err: return err
+    db  = get_db()
+    row = db.execute(
+        "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at "
+        "FROM users WHERE id=?", (uid,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+    return jsonify(dict(row))
 
 
 # ─── UPDATE USER ──────────────────────────────────────────────────────────────
@@ -155,8 +173,9 @@ def admin_reset_password(uid):
     if err: return err
     data     = request.json or {}
     new_pw   = data.get("new_password", "")
-    if len(new_pw) < 8:
-        return jsonify({"error": "Mot de passe trop court (min 8 caractères)"}), 400
+    ok, err_msg = validate_password(new_pw)
+    if not ok:
+        return jsonify({"error": err_msg}), 400
     db = get_db()
     if not db.execute("SELECT id FROM users WHERE id=?", (uid,)).fetchone():
         return jsonify({"error": "Utilisateur non trouvé"}), 404
@@ -164,6 +183,66 @@ def admin_reset_password(uid):
                (generate_password_hash(new_pw), uid))
     db.commit()
     return jsonify({"ok": True})
+
+
+# ─── SMTP STATUS + TEST ───────────────────────────────────────────────────────
+
+@bp.route('/api/admin/smtp-status', methods=['GET'])
+def admin_smtp_status():
+    _, err = _require_admin()
+    if err: return err
+    import os
+    host     = os.environ.get("SMTP_HOST", "")
+    port     = os.environ.get("SMTP_PORT", "587")
+    user     = os.environ.get("SMTP_USER", "")
+    password = os.environ.get("SMTP_PASSWORD", "")
+    configured = bool(host and user and password)
+    return jsonify({
+        "configured": configured,
+        "host": host,
+        "port": port,
+        "user": user,
+        "from": os.environ.get("EMAIL_FROM", "") or user,
+    })
+
+
+@bp.route('/api/admin/test-email', methods=['POST'])
+def admin_test_email():
+    _, err = _require_admin()
+    if err: return err
+    data = request.json or {}
+    to   = data.get("to", "").strip()
+    if not to or '@' not in to:
+        return jsonify({"error": "Adresse email destinataire invalide"}), 400
+    try:
+        import smtplib, os
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        host     = os.environ.get("SMTP_HOST", "")
+        port     = int(os.environ.get("SMTP_PORT", "587"))
+        user     = os.environ.get("SMTP_USER", "")
+        password = os.environ.get("SMTP_PASSWORD", "")
+        from_    = os.environ.get("EMAIL_FROM", "") or user
+        if not all([host, user, password]):
+            return jsonify({"error": "SMTP non configuré (SMTP_HOST / SMTP_USER / SMTP_PASSWORD manquants)"}), 400
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = "Test SMTP — OphtalmoScan"
+        msg['From']    = from_
+        msg['To']      = to
+        body = ("<html><body style='font-family:Arial,sans-serif;padding:24px'>"
+                "<h2 style='color:#0e7a76'>Test SMTP réussi ✓</h2>"
+                "<p>La configuration email d'OphtalmoScan fonctionne correctement.</p>"
+                "<p style='color:#6b7280;font-size:12px'>— OphtalmoScan</p>"
+                "</body></html>")
+        msg.attach(MIMEText(body, 'html', 'utf-8'))
+        with smtplib.SMTP(host, port, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(from_, [to], msg.as_string())
+        return jsonify({"ok": True, "message": f"Email de test envoyé à {to}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ─── CREATE MÉDECIN (admin) ───────────────────────────────────────────────────
@@ -184,22 +263,87 @@ def admin_create_medecin():
 
     if not all([username, password, nom, prenom]):
         return jsonify({"error": "Champs requis : username, password, nom, prénom"}), 400
-    if len(password) < 8:
-        return jsonify({"error": "Mot de passe trop court (min 8 caractères)"}), 400
+    ok, err_msg = validate_password(password)
+    if not ok:
+        return jsonify({"error": err_msg}), 400
 
     db = get_db()
     if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
         return jsonify({"error": "Cet identifiant est déjà utilisé"}), 409
 
-    uid = "U" + str(uuid.uuid4())[:6].upper()
+    uid   = "U" + str(uuid.uuid4())[:6].upper()
+    mcode = next_medecin_code(db)
     db.execute(
-        "INSERT INTO users(id,username,password_hash,role,nom,prenom,email,organisation,date_naissance,status) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO users(id,username,password_hash,role,nom,prenom,email,organisation,date_naissance,status,medecin_code) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         (uid, username, generate_password_hash(password),
-         "medecin", nom, prenom, email, organisation, date_naissance, "active")
+         "medecin", nom, prenom, email, organisation, date_naissance, "active", mcode)
     )
     db.commit()
     add_notif(db, "medecin_cree",
-              f"👨‍⚕️ Nouveau médecin créé : Dr. {prenom} {nom} ({username})",
+              f"👨‍⚕️ Nouveau médecin créé : Dr. {prenom} {nom} ({username}) — {mcode}",
               "admin")
-    return jsonify({"ok": True, "id": uid, "username": username}), 201
+    return jsonify({"ok": True, "id": uid, "username": username, "medecin_code": mcode}), 201
+
+
+# ─── CREATE PATIENT (admin) ───────────────────────────────────────────────────
+
+@bp.route('/api/admin/patients', methods=['POST'])
+def admin_create_patient():
+    _, err = _require_admin()
+    if err: return err
+    data = request.json or {}
+
+    nom        = data.get("nom",        "").strip()
+    prenom     = data.get("prenom",     "").strip()
+    ddn        = data.get("ddn",        "").strip()
+    sexe       = data.get("sexe",       "").strip()
+    telephone  = data.get("telephone",  "").strip()
+    email      = data.get("email",      "").strip()
+    medecin_id = data.get("medecin_id", "").strip()
+    send_email = data.get("send_email", True)
+    antecedents = data.get("antecedents", [])
+    allergies   = data.get("allergies",   [])
+
+    if not nom or not prenom:
+        return jsonify({"error": "Nom et prénom requis"}), 400
+
+    from routes.patients import _next_patient_id, _auto_create_account
+    db  = get_db()
+    pid = _next_patient_id(db)
+
+    # If no médecin specified, assign to the first active médecin
+    if not medecin_id:
+        row = db.execute("SELECT id FROM users WHERE role='medecin' AND status='active' LIMIT 1").fetchone()
+        medecin_id = row['id'] if row else ''
+
+    pii = encrypt_patient_fields({
+        "nom":       sanitize(nom,       max_len=100),
+        "prenom":    sanitize(prenom,    max_len=100),
+        "ddn":       sanitize(ddn,       max_len=20),
+        "telephone": sanitize(telephone, max_len=30),
+        "email":     sanitize(email,     max_len=200),
+    })
+
+    db.execute(
+        "INSERT INTO patients(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (pid, pii["nom"], pii["prenom"], pii["ddn"], sexe, pii["telephone"], pii["email"],
+         json.dumps(antecedents), json.dumps(allergies), medecin_id)
+    )
+    db.commit()
+
+    creds = None
+    if send_email or not email:
+        host  = request.host_url.rstrip('/')
+        creds = _auto_create_account(db, pid, nom=nom, prenom=prenom, email=email if send_email else '', app_host=host)
+        if creds:
+            db.commit()
+    else:
+        host  = request.host_url.rstrip('/')
+        creds = _auto_create_account(db, pid, nom=nom, prenom=prenom, email='', app_host=host)
+        if creds:
+            db.commit()
+
+    add_notif(db, "patient_added", f"Nouveau patient ajouté par admin : {prenom} {nom}", "admin", pid)
+    return jsonify({"ok": True, "id": pid, "credentials": creds}), 201

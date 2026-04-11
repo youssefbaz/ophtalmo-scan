@@ -1,21 +1,35 @@
 import json, datetime, hashlib, re, csv, io, uuid, calendar, logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, abort
 from database import get_db, current_user, add_notif, require_role, log_audit
 from llm import call_llm, SYSTEM_IMPORT
+from security_utils import decrypt_patient, decrypt_field, encrypt_patient_fields, sanitize
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('patients', __name__)
 
 
+def _assert_owns_patient(db, u, pid):
+    """Abort 403 if a médecin does not own the patient. Admins pass freely."""
+    if u['role'] == 'admin':
+        return
+    if u['role'] == 'medecin':
+        row = db.execute(
+            "SELECT id FROM patients WHERE id=? AND medecin_id=?", (pid, u['id'])
+        ).fetchone()
+        if not row:
+            abort(403)
+    # patients are checked separately at the route level (patient_id match)
+
+
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 def _build_patient(db, pid, strip_images=True):
-    """Assemble a full patient dict from all DB tables."""
+    """Assemble a full patient dict from all DB tables (PII decrypted)."""
     row = db.execute("SELECT * FROM patients WHERE id = ?", (pid,)).fetchone()
     if not row:
         return None
-    p = dict(row)
+    p = decrypt_patient(dict(row))
     p['antecedents'] = json.loads(p['antecedents'] or '[]')
     p['allergies']   = json.loads(p['allergies']   or '[]')
 
@@ -188,21 +202,29 @@ def get_patients():
     if u['role'] == 'patient':
         pid = u.get('patient_id')
         row = db.execute("SELECT id, nom, prenom FROM patients WHERE id=?", (pid,)).fetchone()
-        return jsonify([dict(row)] if row else [])
+        if row:
+            return jsonify([decrypt_patient(dict(row))])
+        return jsonify([])
 
     # médecin — ses propres patients avec recherche optionnelle (single JOIN, no N+1)
-    rows = db.execute("""
+    mid = u['id'] if u['role'] == 'medecin' else None
+    query = """
         SELECT p.*,
                COUNT(CASE WHEN r.urgent=1 AND r.statut='en_attente' THEN 1 END) AS nb_rdv_urgent
         FROM patients p
         LEFT JOIN rdv r ON r.patient_id = p.id
-        WHERE p.medecin_id = ?
+        {where}
         GROUP BY p.id
         ORDER BY p.nom, p.prenom
-    """, (u['id'],)).fetchall()
+    """
+    if mid:
+        rows = db.execute(query.format(where="WHERE p.medecin_id = ?"), (mid,)).fetchall()
+    else:
+        rows = db.execute(query.format(where=""), ()).fetchall()
+
     result = []
     for row in rows:
-        p = dict(row)
+        p = decrypt_patient(dict(row))
         p['antecedents'] = json.loads(p['antecedents'] or '[]')
         if q and not (q in p['nom'].lower() or q in p['prenom'].lower() or q in p['id'].lower()):
             continue
@@ -223,6 +245,9 @@ def get_patient(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    # Enforce medecin ownership — a médecin can only access their own patients
+    if u['role'] in ('medecin',):
+        _assert_owns_patient(db, u, pid)
     p = _build_patient(db, pid)
     if not p:
         return jsonify({"error": "Non trouvé"}), 404
@@ -245,28 +270,38 @@ def get_patient(pid):
 
 
 @bp.route('/api/patients', methods=['POST'])
-@require_role('medecin')
+@require_role('medecin', 'admin')
 def add_patient():
     u = current_user()
     data = request.json or {}
     db = get_db()
     pid = _next_patient_id(db)
-    medecin_id = data.get("medecin_id") or u['id']
+    medecin_id = data.get("medecin_id") or (u['id'] if u['role'] == 'medecin' else '')
+    send_email = data.get("send_email", True)
+    # Encrypt PII before persisting
+    pii = encrypt_patient_fields({
+        "nom":       sanitize(data.get("nom", ""),       max_len=100),
+        "prenom":    sanitize(data.get("prenom", ""),    max_len=100),
+        "ddn":       sanitize(data.get("ddn", ""),       max_len=20),
+        "telephone": sanitize(data.get("telephone", ""), max_len=30),
+        "email":     sanitize(data.get("email", ""),     max_len=200),
+    })
     try:
         db.execute(
             "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
             "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (pid,
-             data.get("nom",""), data.get("prenom",""), data.get("ddn",""), data.get("sexe",""),
-             data.get("telephone",""), data.get("email",""),
+             pii["nom"], pii["prenom"], pii["ddn"], sanitize(data.get("sexe",""), max_len=10),
+             pii["telephone"], pii["email"],
              json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])),
              medecin_id)
         )
-        host = request.host_url.rstrip('/')
+        host  = request.host_url.rstrip('/')
+        email = data.get("email","") if send_email else ''
         creds = _auto_create_account(
             db, pid,
             nom=data.get("nom",""), prenom=data.get("prenom",""),
-            email=data.get("email",""), app_host=host
+            email=email, app_host=host
         )
         log_audit(db, 'INSERT', 'patients', pid, u['id'], pid,
                   f"{data.get('prenom','')} {data.get('nom','')}")
@@ -277,15 +312,16 @@ def add_patient():
         return jsonify({"error": "Erreur lors de la création du patient"}), 500
     add_notif(db, "patient_added",
               f"Nouveau patient ajouté : {data.get('prenom','')} {data.get('nom','')}",
-              "medecin", pid)
+              u['role'], pid)
     return jsonify({"ok": True, "id": pid, "credentials": creds}), 201
 
 
 @bp.route('/api/patients/<pid>', methods=['DELETE'])
-@require_role('medecin')
+@require_role('medecin', 'admin')
 def delete_patient(pid):
     u = current_user()
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     patient = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     if not patient:
         return jsonify({"error": "Non trouvé"}), 404
@@ -308,17 +344,25 @@ def delete_patient(pid):
 @bp.route('/api/patients/<pid>', methods=['PUT'])
 def update_patient(pid):
     u = current_user()
-    if not u or u['role'] != 'medecin':
+    if not u or u['role'] not in ('medecin', 'admin'):
         return jsonify({"error": "Accès refusé"}), 403
-    data = request.json or {}
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
         return jsonify({"error": "Non trouvé"}), 404
+    data = request.json or {}
+    pii = encrypt_patient_fields({
+        "nom":       sanitize(data.get("nom", ""),       max_len=100),
+        "prenom":    sanitize(data.get("prenom", ""),    max_len=100),
+        "ddn":       sanitize(data.get("ddn", ""),       max_len=20),
+        "telephone": sanitize(data.get("telephone", ""), max_len=30),
+        "email":     sanitize(data.get("email", ""),     max_len=200),
+    })
     db.execute(
         "UPDATE patients SET nom=?, prenom=?, ddn=?, sexe=?, telephone=?, email=?, "
         "antecedents=?, allergies=? WHERE id=?",
-        (data.get("nom",""), data.get("prenom",""), data.get("ddn",""), data.get("sexe",""),
-         data.get("telephone",""), data.get("email",""),
+        (pii["nom"], pii["prenom"], pii["ddn"], sanitize(data.get("sexe",""), max_len=10),
+         pii["telephone"], pii["email"],
          json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])), pid)
     )
     db.commit()
@@ -335,6 +379,7 @@ def assigner_medecin(pid):
     if not new_medecin_id:
         return jsonify({"error": "medecin_id requis"}), 400
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     target = db.execute(
         "SELECT id FROM users WHERE id=? AND role='medecin'", (new_medecin_id,)
     ).fetchone()
@@ -392,9 +437,10 @@ def delete_chirurgie(pid):
 @bp.route('/api/patients/<pid>/export', methods=['GET'])
 def export_patient(pid):
     u = current_user()
-    if not u or u['role'] != 'medecin':
+    if not u or u['role'] not in ('medecin', 'admin'):
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     p = _build_patient(db, pid)
     if not p:
         return jsonify({"error": "Non trouvé"}), 404
@@ -444,14 +490,20 @@ def import_csv():
         added = []
         for pd_data in patients_list:
             pid = _next_patient_id(db)
-            nom    = pd_data.get("nom","")
-            prenom = pd_data.get("prenom","")
-            email  = pd_data.get("email","")
+            nom    = sanitize(pd_data.get("nom",""),       max_len=100)
+            prenom = sanitize(pd_data.get("prenom",""),    max_len=100)
+            email  = sanitize(pd_data.get("email",""),     max_len=200)
+            pii = encrypt_patient_fields({
+                "nom": nom, "prenom": prenom,
+                "ddn":       sanitize(pd_data.get("ddn",""),       max_len=20),
+                "telephone": sanitize(pd_data.get("telephone",""), max_len=30),
+                "email":     email,
+            })
             db.execute(
                 "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (pid, nom, prenom, pd_data.get("ddn",""),
-                 pd_data.get("sexe",""), pd_data.get("telephone",""), email,
+                (pid, pii["nom"], pii["prenom"], pii["ddn"],
+                 pd_data.get("sexe",""), pii["telephone"], pii["email"],
                  json.dumps(pd_data.get("antecedents",[])), json.dumps(pd_data.get("allergies",[])),
                  u['id'])
             )
@@ -553,31 +605,40 @@ def search_global():
     ql  = f"%{q.lower()}%"
     results = []
 
-    # Patients — nom, prénom, téléphone, email
-    rows = db.execute(
-        "SELECT id, nom, prenom, ddn FROM patients "
-        "WHERE lower(nom) LIKE ? OR lower(prenom) LIKE ? OR telephone LIKE ? OR email LIKE ?",
-        (ql, ql, ql, ql)
+    # Patients — search in decrypted PII (fetch scoped rows, decrypt in Python)
+    scope_where = "WHERE p.medecin_id=?" if u['role'] == 'medecin' else ""
+    scope_params = (u['id'],) if u['role'] == 'medecin' else ()
+    pat_rows = db.execute(
+        f"SELECT id, nom, prenom, ddn FROM patients p {scope_where}", scope_params
     ).fetchall()
-    for r in rows:
-        results.append({
-            "type": "patient", "pid": r["id"],
-            "label": f"{r['prenom']} {r['nom']}",
-            "sub":   f"Patient · {r['ddn'] or '—'}"
-        })
+    for r in pat_rows:
+        dec = decrypt_patient(dict(r))
+        nom_l    = (dec['nom']    or '').lower()
+        prenom_l = (dec['prenom'] or '').lower()
+        id_l     = (dec['id']     or '').lower()
+        if q in nom_l or q in prenom_l or q in id_l:
+            results.append({
+                "type": "patient", "pid": dec["id"],
+                "label": f"{dec['prenom']} {dec['nom']}",
+                "sub":   f"Patient · {dec['ddn'] or '—'}"
+            })
 
-    # Consultations — motif, diagnostic, notes
-    rows = db.execute(
-        "SELECT h.id, h.patient_id, h.date, h.motif, h.diagnostic, p.nom, p.prenom "
-        "FROM historique h JOIN patients p ON h.patient_id=p.id "
-        "WHERE lower(h.motif) LIKE ? OR lower(h.diagnostic) LIKE ? OR lower(h.notes) LIKE ?",
-        (ql, ql, ql)
+    # Consultations — motif, diagnostic, notes (non-encrypted fields)
+    scope_join = "JOIN patients p ON h.patient_id=p.id" + (" WHERE p.medecin_id=?" if u['role'] == 'medecin' else "")
+    scope_params2 = (u['id'],) if u['role'] == 'medecin' else ()
+    hist_rows = db.execute(
+        f"SELECT h.id, h.patient_id, h.date, h.motif, h.diagnostic, p.nom, p.prenom "
+        f"FROM historique h {scope_join} "
+        f"{'AND' if u['role'] == 'medecin' else 'WHERE'} "
+        f"(lower(h.motif) LIKE ? OR lower(h.diagnostic) LIKE ? OR lower(h.notes) LIKE ?)",
+        scope_params2 + (ql, ql, ql)
     ).fetchall()
-    for r in rows:
+    for r in hist_rows:
+        dec = decrypt_patient({"nom": r["nom"], "prenom": r["prenom"]})
         results.append({
             "type": "consultation", "pid": r["patient_id"],
             "label": f"{r['motif'] or r['diagnostic'] or 'Consultation'}",
-            "sub":   f"{r['prenom']} {r['nom']} · {r['date']}"
+            "sub":   f"{dec['prenom']} {dec['nom']} · {r['date']}"
         })
 
     return jsonify(results[:12])
@@ -767,12 +828,13 @@ def export_patients_csv():
     writer.writerow(["ID","Nom","Prénom","DDN","Sexe","Téléphone","Email",
                      "Antécédents","Allergies","Date chirurgie","Type chirurgie","Créé le"])
     for r in rows:
-        antecedents = ', '.join(json.loads(r['antecedents'] or '[]'))
-        allergies   = ', '.join(json.loads(r['allergies']   or '[]'))
+        p           = decrypt_patient(dict(r))
+        antecedents = ', '.join(json.loads(p['antecedents'] or '[]'))
+        allergies   = ', '.join(json.loads(p['allergies']   or '[]'))
         writer.writerow([
-            r['id'], r['nom'], r['prenom'], r['ddn'], r['sexe'],
-            r['telephone'], r['email'], antecedents, allergies,
-            r['date_chirurgie'], r['type_chirurgie'], r['created_at']
+            p['id'], p['nom'], p['prenom'], p['ddn'], p['sexe'],
+            p['telephone'], p['email'], antecedents, allergies,
+            p['date_chirurgie'], p['type_chirurgie'], p['created_at']
         ])
     csv_content = output.getvalue()
     return Response(
@@ -816,5 +878,11 @@ def get_postop_gaps():
           AND s.date_prevue < ?
         ORDER BY s.date_prevue ASC
     """, (u['id'], today)).fetchall()
-    return jsonify([dict(r) for r in rows])
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['nom']    = decrypt_field(d.get('nom',    '') or '')
+        d['prenom'] = decrypt_field(d.get('prenom', '') or '')
+        result.append(d)
+    return jsonify(result)
 

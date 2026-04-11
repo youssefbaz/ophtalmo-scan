@@ -2,6 +2,7 @@ import uuid, datetime, json, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
 from llm import call_llm, SYSTEM_RESPONSE_DRAFT
+from security_utils import decrypt_patient
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,10 @@ def add_question(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    if not p:
+    p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not p_row:
         return jsonify({"error": "Non trouvé"}), 404
+    p = decrypt_patient(dict(p_row))
 
     data          = request.json or {}
     question_text = data.get('question', '')
@@ -46,7 +48,7 @@ def add_question(pid):
     ).fetchone()
     antecedents = json.loads(p['antecedents'] or '[]')
     allergies   = json.loads(p['allergies']   or '[]')
-    age         = datetime.datetime.now().year - int(p['ddn'][:4]) if p['ddn'] else 0
+    age         = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
 
     context = f"""Patient : {p['prenom']} {p['nom']}, {age} ans, {p['sexe']}.
 Antécédents : {', '.join(antecedents)}.
@@ -75,7 +77,7 @@ Tonus OD : {derniere['tension_od'] if derniere else 'N/A'} | OG : {derniere['ten
     db.commit()
 
     add_notif(db, "question",
-              f"❓ {p['prenom']} {p['nom']} a posé une question",
+              f"❓ {p.get('prenom','')} {p.get('nom','')} a posé une question",
               "patient", pid, {"question_id": qid})
 
     return jsonify({

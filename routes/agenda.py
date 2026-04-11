@@ -5,6 +5,7 @@ import datetime
 import logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, require_role, add_notif
+from security_utils import decrypt_field
 
 bp = Blueprint('agenda', __name__)
 logger = logging.getLogger(__name__)
@@ -30,7 +31,11 @@ def get_day_agenda():
 
     result = [dict(r) for r in rows]
     for r in result:
-        r['urgent'] = bool(r['urgent'])
+        r['urgent']         = bool(r['urgent'])
+        r['patient_nom']    = decrypt_field(r.get('patient_nom',    '') or '')
+        r['patient_prenom'] = decrypt_field(r.get('patient_prenom', '') or '')
+        r['telephone']      = decrypt_field(r.get('telephone',      '') or '')
+        r['email']          = decrypt_field(r.get('email',          '') or '')
     return jsonify(result)
 
 
@@ -60,7 +65,9 @@ def get_week_agenda():
 
     result = [dict(r) for r in rows]
     for r in result:
-        r['urgent'] = bool(r['urgent'])
+        r['urgent']         = bool(r['urgent'])
+        r['patient_nom']    = decrypt_field(r.get('patient_nom',    '') or '')
+        r['patient_prenom'] = decrypt_field(r.get('patient_prenom', '') or '')
     return jsonify(result)
 
 
@@ -85,11 +92,13 @@ def check_postop_gaps(app):
                          datetime.date.fromisoformat(row['date_prevue'])).days
             # Only notify once every ~7 days to avoid flooding
             if days_late in (1, 7, 14, 30):
+                p_nom    = decrypt_field(row['nom']    or '')
+                p_prenom = decrypt_field(row['prenom'] or '')
                 add_notif(
                     db,
                     "postop_gap",
                     f"⚠️ Suivi post-op {row['etape']} en retard de {days_late}j "
-                    f"— {row['prenom']} {row['nom']}",
+                    f"— {p_prenom} {p_nom}",
                     "system",
                     row['patient_id']
                 )
