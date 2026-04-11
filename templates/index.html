@@ -2,7 +2,11 @@
 <html lang="fr" dir="ltr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#06111a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>OphtalmoScan v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Tajawal:wght@300;400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
@@ -66,6 +70,18 @@ body {
   flex-shrink: 0;
 }
 .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ── PASSWORD TOGGLE ── */
+.pw-wrap { position: relative; display: flex; align-items: center; }
+.pw-wrap input { width: 100%; padding-right: 40px !important; }
+.pw-eye {
+  position: absolute; right: 10px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); padding: 4px; font-size: 15px;
+  line-height: 1; opacity: 0.65; transition: opacity .15s, color .15s;
+  user-select: none; flex-shrink: 0;
+}
+.pw-eye:hover { opacity: 1; color: var(--teal2); }
 
 /* ── LOGIN ── */
 #loginScreen {
@@ -470,6 +486,26 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 /* ── ARABIC SUPPORT ── */
 .ar { font-family: 'Tajawal', sans-serif; }
 
+/* ── AUTH MESSAGES & LINKS ── */
+.auth-msg {
+  font-size: 13px; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+  line-height: 1.5; display: none;
+}
+.auth-msg-error   { background: var(--red-dim);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+.auth-msg-success { background: var(--green-dim); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+.auth-msg-info    { background: var(--teal-dim);  color: var(--teal2); border: 1px solid rgba(14,165,160,0.3); }
+.auth-links {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap; margin-top: 4px;
+}
+.auth-link {
+  font-size: 12px; color: var(--teal2); cursor: pointer;
+  text-decoration: none; transition: color 0.15s;
+}
+.auth-link:hover { color: var(--teal2); text-decoration: underline; }
+.auth-divider { color: var(--text3); font-size: 12px; }
+
 /* ── EXAM TABLE ── */
 .exam-table { width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
 .exam-table th, .exam-table td { padding:7px 12px; border:1px solid var(--border); }
@@ -567,6 +603,223 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 .subtab-btn.active { background: var(--teal-dim); border-color: var(--teal); color: var(--teal2); font-weight: 600; }
 .subtab-content { display: none; }
 .subtab-content.active { display: block; }
+
+/* ── USER MENU ── */
+.user-menu {
+  display: none; position: fixed; top: 66px; right: 16px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 12px; z-index: 300; box-shadow: var(--shadow);
+  min-width: 200px; overflow: hidden;
+}
+.user-menu.open { display: block; }
+.user-menu-item {
+  padding: 11px 16px; cursor: pointer; font-size: 13px;
+  color: var(--text2); transition: background .15s; display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--border); font-family: 'Tajawal', sans-serif;
+}
+.user-menu-item:last-child { border-bottom: none; }
+.user-menu-item:hover { background: var(--teal-dim); color: var(--text); }
+.user-menu-item.danger:hover { background: var(--red-dim); color: #fca5a5; }
+
+/* ── SALLE D'ATTENTE ── */
+.checkin-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px;
+  transition: border-color .15s; margin-bottom: 10px;
+}
+.checkin-card.statut-arrive  { border-color: var(--blue); background: rgba(59,130,246,.04); }
+.checkin-card.statut-en_cours { border-color: var(--amber); background: var(--amber-dim); }
+.checkin-card.statut-termine  { border-color: var(--teal); background: var(--teal-dim); opacity: .7; }
+.checkin-card.statut-annule   { opacity: .4; }
+.checkin-time { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; color: var(--teal2); min-width: 54px; text-align: center; }
+.checkin-time.past { color: var(--text3); }
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE & TABLET
+   ══════════════════════════════════════════════════════════════ */
+
+/* Hamburger button — hidden on desktop */
+.hamburger {
+  display: none;
+  width: 36px; height: 36px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: transparent; color: var(--text2);
+  cursor: pointer; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.hamburger:hover { background: var(--teal-dim); color: var(--teal2); }
+
+/* Sidebar overlay — blocks background when drawer is open */
+.sidebar-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65); z-index: 498;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.sidebar-overlay.open { display: block; }
+
+/* ── TABLET (≤1024px) ────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .patient-header-v2 { grid-template-columns: 1fr; gap: 16px; }
+  .ph-snapshot { min-width: unset; }
+  .ph-actions { flex-direction: row; flex-wrap: wrap; min-width: unset; }
+  .ph-actions .btn { flex: 1; min-width: 130px; justify-content: center; }
+}
+
+/* ── MOBILE (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Show hamburger */
+  .hamburger { display: flex; }
+
+  /* Sidebar → off-canvas drawer */
+  .sidebar {
+    position: fixed;
+    left: -270px; top: 0; bottom: 0;
+    width: 260px; min-width: 260px;
+    z-index: 499;
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+  }
+  .sidebar.mobile-open {
+    left: 0;
+    box-shadow: 6px 0 40px rgba(0,0,0,0.7);
+  }
+
+  /* Topbar */
+  .topbar { padding: 0 12px; gap: 8px; height: 54px; min-height: 54px; }
+  .topbar-title { font-size: 15px; }
+
+  /* Hide search bar on mobile (patient search is in sidebar) */
+  #globalSearchWrap { display: none !important; }
+
+  /* User info — keep dot + name, hide role line */
+  .topbar-user { padding: 5px 10px; gap: 7px; }
+  .topbar-user-role { display: none; }
+
+  /* Content */
+  .content { padding: 14px 12px; }
+
+  /* Grids → single column */
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+
+  /* Login box → full screen card */
+  #loginScreen { align-items: flex-start; padding: 24px 0 0; }
+  .login-box {
+    width: 100%;
+    border-radius: 0;
+    border-left: none; border-right: none; border-bottom: none;
+    padding: 32px 24px 40px;
+    min-height: calc(100vh - 24px);
+  }
+
+  /* Patient header V2 → stacked */
+  .patient-header-v2 {
+    grid-template-columns: 1fr;
+    padding: 16px 14px;
+    gap: 12px;
+  }
+  .ph-identity { gap: 12px; }
+  .patient-avatar-lg { width: 50px; height: 50px; font-size: 18px; border-radius: 14px; }
+  .ph-snapshot { min-width: unset; }
+  .ph-snapshot-grid { grid-template-columns: repeat(2, 1fr); }
+  .ph-actions {
+    flex-direction: row; flex-wrap: wrap;
+    min-width: unset; gap: 6px;
+  }
+  .ph-actions .btn { flex: 1; min-width: 130px; justify-content: center; font-size: 12px; }
+  .ph-actions-row .btn { font-size: 11px; }
+
+  /* Tabs → horizontally scrollable */
+  .tabs {
+    overflow-x: auto; flex-wrap: nowrap; width: 100%;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; padding-bottom: 2px;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; flex-shrink: 0; padding: 7px 12px; font-size: 12px; }
+
+  /* Subtabs → scrollable */
+  .subtabs {
+    overflow-x: auto; flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .subtabs::-webkit-scrollbar { display: none; }
+  .subtab-btn { white-space: nowrap; flex-shrink: 0; }
+
+  /* Post-op milestone track → horizontal scroll */
+  .postop-track {
+    flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .postop-track::-webkit-scrollbar { display: none; }
+  .jalon { flex-shrink: 0; }
+
+  /* Timeline grid → single col */
+  .tl-grid { grid-template-columns: 1fr; }
+
+  /* Modals → bottom sheet */
+  .modal-overlay { align-items: flex-end; }
+  .modal {
+    border-radius: 20px 20px 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh;
+    padding: 20px 18px 28px;
+  }
+
+  /* Notification panel → full width */
+  .notif-panel {
+    left: 8px; right: 8px; width: auto;
+    top: 62px;
+  }
+
+  /* User menu → full width */
+  .user-menu { left: 8px; right: 8px; top: 62px; }
+
+  /* Stat cards */
+  .stat-value { font-size: 26px; }
+
+  /* Cards */
+  .card { padding: 14px 12px; }
+
+  /* Welcome banner → stack */
+  .welcome-banner { flex-direction: column; gap: 10px; padding: 16px 14px; }
+
+  /* RDV card compact */
+  .rdv-card { padding: 10px 12px; gap: 10px; }
+
+  /* Exam table → scroll */
+  .exam-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Ordonnance table → scroll */
+  .ordo-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Document grid → 2 cols on mobile */
+  .docs-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px; }
+
+  /* Section titles → smaller */
+  .section-title { font-size: 15px; }
+
+  /* AI chat area */
+  #aiMessages { min-height: 200px; }
+
+  /* IOS safe area padding at bottom */
+  .content { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
+
+/* ── VERY SMALL (≤400px) ─────────────────────────────────────── */
+@media (max-width: 400px) {
+  .topbar-title { font-size: 13px; }
+  .topbar-user-name { font-size: 12px; }
+  .login-box { padding: 28px 18px 36px; }
+  .docs-grid { grid-template-columns: 1fr !important; }
+  .ph-actions .btn { min-width: 100px; font-size: 11px; }
+  .stat-value { font-size: 22px; }
+}
 </style>
 </head>
 <body>
@@ -574,34 +827,158 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 <!-- LOGIN SCREEN -->
 <div id="loginScreen">
   <div class="login-box">
+
+    <!-- Logo -->
     <div class="login-logo">
       <div class="login-logo-icon">👁</div>
       <div class="login-title">OphtalmoScan</div>
-      <div class="login-sub">Système de gestion ophtalmologique</div>
+      <div class="login-sub" id="loginSubtitle">Système de gestion ophtalmologique</div>
     </div>
-    <div class="role-tabs">
-      <button class="role-tab active" onclick="setLoginRole('medecin',this)">
-        <span class="role-emoji">🩺</span>Médecin
+
+    <!-- ── PANEL: SE CONNECTER ── -->
+    <div id="panelLogin">
+      <div class="role-tabs">
+        <button class="role-tab active" onclick="setLoginRole('medecin',this)">
+          <span class="role-emoji">🩺</span>Médecin
+        </button>
+        <button class="role-tab" onclick="setLoginRole('patient',this)">
+          <span class="role-emoji">🧑</span>Patient
+        </button>
+      </div>
+      <div class="demo-creds" id="demoCreds">
+        <strong>🩺 Médecin:</strong> dr.martin / medecin123
+      </div>
+      <div class="form-group">
+        <label class="form-label">Identifiant</label>
+        <input class="form-input" id="loginUser" placeholder="Votre identifiant" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" type="password" id="loginPass" placeholder="Mot de passe"
+               autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div id="loginError" class="auth-msg auth-msg-error"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="doLogin()">
+        Se connecter →
       </button>
-      <button class="role-tab" onclick="setLoginRole('patient',this)">
-        <span class="role-emoji">🧑</span>Patient
+      <div class="auth-links">
+        <a class="auth-link" onclick="showAuthPanel('forgot')">Mot de passe oublié ?</a>
+        <span class="auth-divider">·</span>
+        <a class="auth-link" onclick="showAuthPanel('register')">Créer un compte</a>
+      </div>
+    </div>
+
+    <!-- ── PANEL: CRÉER UN COMPTE ── -->
+    <div id="panelRegister" style="display:none">
+      <!-- Role toggle -->
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button id="regTabPatient" class="btn btn-primary" style="flex:1;justify-content:center;font-size:13px"
+                onclick="setRegRole('patient')">👤 Patient</button>
+        <button id="regTabMedecin" class="btn btn-ghost" style="flex:1;justify-content:center;font-size:13px"
+                onclick="setRegRole('medecin')">🩺 Médecin</button>
+      </div>
+
+      <!-- Patient fields -->
+      <div id="regPatientFields">
+        <div class="form-group">
+          <label class="form-label">Code patient <span style="color:var(--text3);font-weight:400">(fourni par votre médecin)</span></label>
+          <input class="form-input" id="regPatientId" placeholder="Ex : P001" autocomplete="off"
+                 style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+
+      <!-- Doctor fields -->
+      <div id="regMedecinFields" style="display:none">
+        <div style="display:flex;gap:10px">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Nom</label>
+            <input class="form-input" id="regNom" placeholder="Nom de famille" autocomplete="family-name">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Prénom</label>
+            <input class="form-input" id="regPrenom" placeholder="Prénom" autocomplete="given-name">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="regEmail" placeholder="votre@email.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Établissement / Organisation</label>
+          <input class="form-input" id="regOrganisation" placeholder="Clinique, hôpital..." autocomplete="organization">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de naissance</label>
+          <input class="form-input" type="date" id="regDateNaissance">
+        </div>
+        <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">
+          ⚠️ Votre compte sera soumis à validation par un administrateur avant activation.
+        </div>
+      </div>
+
+      <!-- Common fields -->
+      <div class="form-group">
+        <label class="form-label">Identifiant de connexion</label>
+        <input class="form-input" id="regUsername" placeholder="Choisissez un identifiant" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" type="password" id="regPassword" placeholder="Au moins 8 caractères" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmer le mot de passe</label>
+        <input class="form-input" type="password" id="regPassword2" placeholder="Répéter le mot de passe"
+               autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()">
+      </div>
+      <div id="registerMsg" class="auth-msg"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="doRegister()">
+        Créer mon compte
+      </button>
+      <div class="auth-links">
+        <a class="auth-link" onclick="showAuthPanel('login')">← Retour à la connexion</a>
+      </div>
+    </div>
+
+    <!-- ── PANEL: MOT DE PASSE OUBLIÉ ── -->
+    <div id="panelForgot" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.6">
+        Entrez votre identifiant. Si un email est associé à votre compte, vous recevrez un lien de réinitialisation valable 2 heures.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Identifiant</label>
+        <input class="form-input" id="forgotUsername" placeholder="Votre identifiant"
+               autocomplete="username" onkeydown="if(event.key==='Enter')doForgotPassword()">
+      </div>
+      <div id="forgotMsg" class="auth-msg"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="doForgotPassword()">
+        Envoyer le lien
+      </button>
+      <div class="auth-links">
+        <a class="auth-link" onclick="showAuthPanel('login')">← Retour à la connexion</a>
+      </div>
+    </div>
+
+    <!-- ── PANEL: RÉINITIALISER LE MOT DE PASSE ── -->
+    <div id="panelReset" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.6">
+        Choisissez un nouveau mot de passe sécurisé pour votre compte.
+      </p>
+      <input type="hidden" id="resetToken">
+      <div class="form-group">
+        <label class="form-label">Nouveau mot de passe</label>
+        <input class="form-input" type="password" id="resetPassword" placeholder="Au moins 8 caractères" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmer le mot de passe</label>
+        <input class="form-input" type="password" id="resetPassword2" placeholder="Répéter le mot de passe"
+               autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetPassword()">
+      </div>
+      <div id="resetMsg" class="auth-msg"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="doResetPassword()">
+        Réinitialiser le mot de passe
       </button>
     </div>
-    <div class="demo-creds" id="demoCreds">
-      <strong>🩺 Médecin:</strong> dr.martin / medecin123
-    </div>
-    <div class="form-group">
-      <label class="form-label">Identifiant</label>
-      <input class="form-input" id="loginUser" placeholder="Votre identifiant" value="dr.martin">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Mot de passe</label>
-      <input class="form-input" type="password" id="loginPass" placeholder="Mot de passe" value="medecin123" onkeydown="if(event.key==='Enter')doLogin()">
-    </div>
-    <div id="loginError" style="color:#fca5a5;font-size:13px;margin-bottom:12px;display:none"></div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">
-      Connexion →
-    </button>
+
   </div>
 </div>
 
@@ -617,9 +994,17 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
     <div id="sidebarNav"></div>
   </aside>
 
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
   <!-- MAIN -->
   <main class="main">
     <div class="topbar">
+      <button class="hamburger" id="hamburgerBtn" onclick="toggleMobileSidebar()" aria-label="Ouvrir le menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
       <div class="topbar-title" id="topbarTitle">Tableau de bord</div>
       <div id="globalSearchWrap" style="display:none" class="global-search-wrap">
         <svg class="global-search-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>
@@ -632,7 +1017,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
           <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
           <span class="notif-count" id="notifCount" style="display:none">0</span>
         </button>
-        <div class="topbar-user" onclick="doLogout()">
+        <div class="topbar-user" onclick="toggleUserMenu(event)">
           <div class="role-dot" id="roleDot"></div>
           <div>
             <div class="topbar-user-name" id="topbarUser">—</div>
@@ -645,6 +1030,12 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
     <div class="content" id="mainContent"></div>
   </main>
+</div>
+
+<!-- USER MENU -->
+<div class="user-menu" id="userMenu">
+  <div class="user-menu-item" onclick="openChangePassword()">🔑 Changer le mot de passe</div>
+  <div class="user-menu-item danger" onclick="doLogout()">↩ Se déconnecter</div>
 </div>
 
 <!-- NOTIFICATION PANEL -->
@@ -739,17 +1130,68 @@ const DEMO = {
   patient: {user:'patient.marie', pass:'patient123', hint:'🧑 Patient 1: patient.marie / patient123<br>🧑 Patient 2: patient.jp / patient123'}
 };
 
+// ── Panel switcher ──
+function initPasswordToggles() {
+  document.querySelectorAll('input[type="password"]:not([data-pw-init])').forEach(input => {
+    input.dataset.pwInit = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-eye';
+    btn.title = 'Afficher / masquer le mot de passe';
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = show
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function showAuthPanel(panel) {
+  const panels = ['Login','Register','Forgot','Reset'];
+  panels.forEach(p => {
+    const el = document.getElementById('panel' + p);
+    if (el) el.style.display = (p.toLowerCase() === panel) ? '' : 'none';
+  });
+  const subtitles = {
+    login:    'Système de gestion ophtalmologique',
+    register: 'Créer un compte',
+    forgot:   'Réinitialisation du mot de passe',
+    reset:    'Choisir un nouveau mot de passe'
+  };
+  document.getElementById('loginSubtitle').textContent = subtitles[panel] || '';
+  // Clear all messages when switching
+  document.querySelectorAll('.auth-msg').forEach(el => { el.style.display = 'none'; el.textContent = ''; });
+  // Reset register role tab when opening register panel
+  if (panel === 'register') setRegRole('patient');
+}
+
+function _authMsg(elId, type, text) {
+  const el = document.getElementById(elId);
+  el.className = 'auth-msg auth-msg-' + type;
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
 function setLoginRole(role, btn) {
   document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('demoCreds').innerHTML = DEMO[role].hint;
-  document.getElementById('loginUser').value = DEMO[role].user;
-  document.getElementById('loginPass').value = DEMO[role].pass;
 }
 
 async function doLogin() {
-  const u = document.getElementById('loginUser').value;
-  const p = document.getElementById('loginPass').value;
+  const u   = document.getElementById('loginUser').value.trim();
+  const p   = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  if (!u || !p) { _authMsg('loginError','error','Veuillez remplir tous les champs.'); return; }
   const res = await api('/login','POST',{username:u,password:p});
   if (res.ok) {
     const me = await api('/me');
@@ -758,8 +1200,92 @@ async function doLogin() {
     document.getElementById('mainApp').style.display = 'flex';
     initApp();
   } else {
-    document.getElementById('loginError').textContent = res.error || 'Erreur';
-    document.getElementById('loginError').style.display = 'block';
+    _authMsg('loginError','error', res.error || 'Identifiants incorrects.');
+  }
+}
+
+let _regRole = 'patient';
+
+function setRegRole(role) {
+  _regRole = role;
+  document.getElementById('regPatientFields').style.display  = role === 'patient' ? '' : 'none';
+  document.getElementById('regMedecinFields').style.display  = role === 'medecin' ? '' : 'none';
+  document.getElementById('regTabPatient').className = 'btn ' + (role === 'patient' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('regTabMedecin').className = 'btn ' + (role === 'medecin' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('regTabPatient').style.flex = document.getElementById('regTabMedecin').style.flex = '1';
+  document.getElementById('regTabPatient').style.justifyContent = document.getElementById('regTabMedecin').style.justifyContent = 'center';
+  document.getElementById('regTabPatient').style.fontSize = document.getElementById('regTabMedecin').style.fontSize = '13px';
+  document.getElementById('registerMsg').innerHTML = '';
+}
+
+async function doRegister() {
+  const username  = document.getElementById('regUsername').value.trim();
+  const password  = document.getElementById('regPassword').value;
+  const password2 = document.getElementById('regPassword2').value;
+  if (!username || !password) {
+    _authMsg('registerMsg','error','Tous les champs sont requis.'); return;
+  }
+  if (password.length < 8) {
+    _authMsg('registerMsg','error','Le mot de passe doit contenir au moins 8 caractères.'); return;
+  }
+  if (password !== password2) {
+    _authMsg('registerMsg','error','Les mots de passe ne correspondent pas.'); return;
+  }
+
+  if (_regRole === 'patient') {
+    const patientId = document.getElementById('regPatientId').value.trim().toUpperCase();
+    if (!patientId) { _authMsg('registerMsg','error','Veuillez entrer votre code patient.'); return; }
+    const res = await api('/api/patient-register','POST',{patient_id:patientId,username,password});
+    if (res.ok) {
+      _authMsg('registerMsg','success','Compte créé avec succès ! Vous pouvez vous connecter.');
+      setTimeout(() => showAuthPanel('login'), 2200);
+    } else {
+      _authMsg('registerMsg','error', res.error || 'Erreur lors de la création du compte.');
+    }
+  } else {
+    const nom            = document.getElementById('regNom').value.trim();
+    const prenom         = document.getElementById('regPrenom').value.trim();
+    const email          = document.getElementById('regEmail').value.trim();
+    const organisation   = document.getElementById('regOrganisation').value.trim();
+    const date_naissance = document.getElementById('regDateNaissance').value;
+    if (!nom || !prenom) { _authMsg('registerMsg','error','Nom et prénom sont requis.'); return; }
+    const res = await api('/api/register-medecin','POST',{username,password,nom,prenom,email,organisation,date_naissance});
+    if (res.ok) {
+      _authMsg('registerMsg','success', res.message || 'Demande envoyée ! Un administrateur validera votre compte.');
+      setTimeout(() => showAuthPanel('login'), 3000);
+    } else {
+      _authMsg('registerMsg','error', res.error || 'Erreur lors de la création du compte.');
+    }
+  }
+}
+
+async function doForgotPassword() {
+  const username = document.getElementById('forgotUsername').value.trim();
+  if (!username) { _authMsg('forgotMsg','error','Veuillez entrer votre identifiant.'); return; }
+  const res = await api('/api/forgot-password','POST',{username});
+  _authMsg('forgotMsg', res.ok ? 'success' : 'error',
+    res.message || (res.ok ? 'Email envoyé si le compte existe.' : res.error));
+}
+
+async function doResetPassword() {
+  const token     = document.getElementById('resetToken').value;
+  const password  = document.getElementById('resetPassword').value;
+  const password2 = document.getElementById('resetPassword2').value;
+  if (password.length < 8) {
+    _authMsg('resetMsg','error','Le mot de passe doit contenir au moins 8 caractères.'); return;
+  }
+  if (password !== password2) {
+    _authMsg('resetMsg','error','Les mots de passe ne correspondent pas.'); return;
+  }
+  const res = await api('/api/reset-password','POST',{token, new_password: password});
+  if (res.ok) {
+    _authMsg('resetMsg','success','Mot de passe réinitialisé ! Vous pouvez vous connecter.');
+    setTimeout(() => {
+      window.history.replaceState({},'','/');
+      showAuthPanel('login');
+    }, 2200);
+  } else {
+    _authMsg('resetMsg','error', res.error || 'Lien invalide ou expiré.');
   }
 }
 
@@ -768,16 +1294,17 @@ async function doLogout() {
   USER = null; currentPatientId = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display = 'none';
+  showAuthPanel('login');
 }
 
 // ─── APP INIT ─────────────────────────────────────────────────────────────────
 function initApp() {
-  const roleLabels = {medecin:'Médecin Ophtalmologiste',assistant:'Secrétaire Médicale',patient:'Espace Patient'};
+  const roleLabels = {medecin:'Médecin Ophtalmologiste',assistant:'Secrétaire Médicale',patient:'Espace Patient',admin:'Administrateur'};
   document.getElementById('topbarUser').textContent = USER.prenom + ' ' + USER.nom;
-  document.getElementById('topbarRole').textContent = roleLabels[USER.role];
+  document.getElementById('topbarRole').textContent = roleLabels[USER.role] || USER.role;
   document.getElementById('roleDot').className = 'role-dot ' + USER.role;
-  document.getElementById('sidebarRole').textContent = roleLabels[USER.role];
-  
+  document.getElementById('sidebarRole').textContent = roleLabels[USER.role] || USER.role;
+
   buildSidebar();
   loadNotifications();
   if (USER.role === 'medecin') {
@@ -785,9 +1312,16 @@ function initApp() {
     document.getElementById('globalSearchWrap').style.display = 'block';
   }
 
-  if (USER.role === 'medecin') showView('dashboard-medecin');
-  else { showView('dashboard-patient'); }
-  
+  if (USER.role === 'medecin') {
+    showView('dashboard-medecin');
+    _updateTodayBadge();
+    setInterval(_updateTodayBadge, 60000);
+  } else if (USER.role === 'admin') {
+    showView('admin-dashboard');
+  } else {
+    showView('dashboard-patient');
+  }
+
   setInterval(loadNotifications, 30000);
 }
 
@@ -798,6 +1332,7 @@ function buildSidebar() {
       <div class="nav-section">
         <div class="nav-section-label">Navigation</div>
         <button class="nav-btn" onclick="showView('dashboard-medecin')">📊 Tableau de bord</button>
+        <button class="nav-btn" id="navToday" onclick="showView('today')">🏥 Salle d'attente</button>
         <button class="nav-btn" onclick="showView('agenda')">📅 Agenda & RDV</button>
         <button class="nav-btn" onclick="showView('questions-medecin')">💬 Questions patients</button>
         <button class="nav-btn" onclick="showView('ai-assistant')">🤖 Assistant IA</button>
@@ -808,6 +1343,7 @@ function buildSidebar() {
           <div style="display:flex;gap:4px">
             <button class="btn btn-sm btn-ghost" style="padding:3px 8px;font-size:11px" onclick="openAddPatient()">+ Ajouter</button>
             <button class="btn btn-sm btn-ghost" style="padding:3px 8px;font-size:11px" onclick="openImport()">↑ Importer</button>
+            <button class="btn btn-sm btn-ghost" style="padding:3px 8px;font-size:11px" onclick="exportPatientsCSV()" title="Exporter CSV">⬇ CSV</button>
           </div>
         </div>
       </div>
@@ -821,6 +1357,15 @@ function buildSidebar() {
         </div>
         <div class="patient-list-scroll" id="patientListSidebar"></div>
       </div>`;
+  } else if (USER.role === 'admin') {
+    html = `
+      <div class="nav-section">
+        <div class="nav-section-label">Administration</div>
+        <button class="nav-btn" onclick="showView('admin-dashboard')">📊 Tableau de bord</button>
+        <button class="nav-btn" id="navAdminPending" onclick="showView('admin-pending')">⏳ Comptes en attente <span id="pendingBadge" style="background:var(--amber);color:#000;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none"></span></button>
+        <button class="nav-btn" onclick="showView('admin-users')">👥 Tous les utilisateurs</button>
+        <button class="nav-btn" onclick="showView('admin-create-medecin')">➕ Créer un médecin</button>
+      </div>`;
   } else {
     html = `
       <div class="nav-section">
@@ -833,21 +1378,28 @@ function buildSidebar() {
   }
   document.getElementById('sidebarNav').innerHTML = html;
   if (USER.role === 'medecin') loadPatientsSidebar();
+  if (USER.role === 'admin') _updatePendingBadge();
 }
 
 // ─── VIEWS ROUTER ─────────────────────────────────────────────────────────────
 function showView(viewId, title) {
+  closeMobileSidebar();
   currentView = viewId;
   const titles = {
     'dashboard-medecin':'Tableau de bord',
     'dashboard-patient':'Mon espace santé','agenda':'Agenda & Rendez-vous',
     'questions-medecin':'Questions des patients','ai-assistant':'Assistant IA Ophtalmologie',
     'patient-profile':'Dossier patient','liste-patients-anon':'Liste des patients',
-    'mes-rdv':'Mes rendez-vous','mes-documents':'Mes documents','mes-questions':'Questions au médecin'
+    'mes-rdv':'Mes rendez-vous','mes-documents':'Mes documents','mes-questions':'Questions au médecin',
+    'today': 'Salle d\'attente — Aujourd\'hui',
+    'admin-dashboard':'Tableau de bord — Administration',
+    'admin-pending':'Comptes en attente de validation',
+    'admin-users':'Gestion des utilisateurs',
+    'admin-create-medecin':'Créer un compte médecin'
   };
   document.getElementById('topbarTitle').textContent = title || titles[viewId] || viewId;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  
+
   // Render view
   const c = document.getElementById('mainContent');
   if (viewId === 'dashboard-medecin') renderDashboardMedecin(c);
@@ -860,6 +1412,11 @@ function showView(viewId, title) {
   else if (viewId === 'mes-rdv') renderMesRdv(c);
   else if (viewId === 'mes-documents') renderMesDocuments(c);
   else if (viewId === 'mes-questions') renderMesQuestions(c);
+  else if (viewId === 'today') renderTodayView(c);
+  else if (viewId === 'admin-dashboard') renderAdminDashboard(c);
+  else if (viewId === 'admin-pending') renderAdminPending(c);
+  else if (viewId === 'admin-users') renderAdminUsers(c);
+  else if (viewId === 'admin-create-medecin') renderAdminCreateMedecin(c);
 }
 
 // ─── DASHBOARD MÉDECIN ────────────────────────────────────────────────────────
@@ -929,6 +1486,12 @@ async function renderDashboardMedecin(c) {
       }
     </div>
 
+    <!-- Post-op gaps alert -->
+    <div id="postopGapsPanel" style="margin-bottom:24px;display:none">
+      <div class="section-title">⚠️ Suivis post-opératoires en retard</div>
+      <div id="postopGapsList"></div>
+    </div>
+
     <!-- Notes rapides -->
     <div style="margin-bottom:24px">
       <div class="section-title">📝 Notes rapides</div>
@@ -960,13 +1523,38 @@ async function renderDashboardMedecin(c) {
           ${notifs.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.7" onclick="clearActivite()">🗑 Effacer tout</button>` : ''}
         </div>
         ${notifs.slice(0,6).map(n => `
-          <div class="notif-item ${n.lu?'':'unread'}" style="border-radius:10px;margin-bottom:6px;border:1px solid var(--border)" onclick="markNotifLu('${n.id}')">
+          <div class="notif-item ${n.lu?'':'unread'}" style="border-radius:10px;margin-bottom:6px;border:1px solid var(--border);cursor:pointer" onclick="handleNotifClick('${n.id}','${n.type}','${n.patient_id||''}')">
             <div class="notif-msg">${n.message}</div>
             <div class="notif-time">${n.date}</div>
           </div>
         `).join('') || '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Aucune activité</div>'}
       </div>
     </div>`;
+  // Load post-op gaps asynchronously after render
+  _loadPostopGaps();
+}
+
+async function _loadPostopGaps() {
+  const gaps = await api('/api/postop-gaps');
+  const panel = document.getElementById('postopGapsPanel');
+  const list  = document.getElementById('postopGapsList');
+  if (!panel || !list || !Array.isArray(gaps) || !gaps.length) {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  list.innerHTML = gaps.slice(0, 8).map(g => {
+    const days = Math.round((new Date() - new Date(g.date_prevue)) / 86400000);
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;margin-bottom:6px;cursor:pointer" onclick="loadPatient('${g.patient_id}')">
+      <span style="font-size:20px">⚠️</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${g.prenom} ${g.nom}</div>
+        <div style="font-size:11px;color:var(--text2)">Étape ${g.etape} — prévu le ${new Date(g.date_prevue).toLocaleDateString('fr-FR')} (${days}j de retard)</div>
+      </div>
+      <span class="badge badge-red">${days}j</span>
+    </div>`;
+  }).join('');
 }
 
 // ─── DASHBOARD PATIENT ────────────────────────────────────────────────────────
@@ -1048,14 +1636,268 @@ async function renderDashboardPatient(c) {
     </div>`;
 }
 
+// ─── ADMIN: PENDING BADGE ─────────────────────────────────────────────────────
+async function _updatePendingBadge() {
+  const stats = await api('/api/admin/stats');
+  const badge = document.getElementById('pendingBadge');
+  if (!badge) return;
+  if (stats && stats.pending > 0) {
+    badge.textContent = stats.pending;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ─── ADMIN: DASHBOARD ─────────────────────────────────────────────────────────
+async function renderAdminDashboard(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const stats = await api('/api/admin/stats');
+  c.innerHTML = `
+    <div class="welcome-banner">
+      <div class="welcome-avatar">🛡</div>
+      <div>
+        <div class="welcome-name">Administration — OphtalmoScan</div>
+        <div class="welcome-sub">Gestion des comptes et des accès</div>
+      </div>
+    </div>
+    <div class="grid-4" style="margin-bottom:28px">
+      <div class="stat-card amber" style="cursor:pointer" onclick="showView('admin-pending')">
+        <div class="stat-label">En attente</div>
+        <div class="stat-value">${stats.pending}</div>
+      </div>
+      <div class="stat-card teal" style="cursor:pointer" onclick="showView('admin-users')">
+        <div class="stat-label">Médecins actifs</div>
+        <div class="stat-value">${stats.medecins}</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Patients</div>
+        <div class="stat-value">${stats.patients}</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Refusés</div>
+        <div class="stat-value">${stats.rejected}</div>
+      </div>
+    </div>
+    ${stats.pending > 0 ? `
+    <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:var(--radius);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-weight:600;color:var(--amber);margin-bottom:2px">⏳ ${stats.pending} compte${stats.pending>1?'s':''} en attente de validation</div>
+        <div style="font-size:13px;color:var(--text2)">Des médecins ont fait une demande de création de compte.</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="showView('admin-pending')">Voir les demandes</button>
+    </div>` : ''}
+    <div class="section-title" style="margin-bottom:14px">Actions rapides</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="showView('admin-pending')">⏳ Valider des comptes</button>
+      <button class="btn btn-ghost" onclick="showView('admin-users')">👥 Gérer les utilisateurs</button>
+      <button class="btn btn-ghost" onclick="showView('admin-create-medecin')">➕ Créer un médecin</button>
+    </div>`;
+}
+
+// ─── ADMIN: PENDING ACCOUNTS ──────────────────────────────────────────────────
+async function renderAdminPending(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const users = await api('/api/admin/users/pending');
+  if (!users || users.length === 0) {
+    c.innerHTML = `
+      <div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-size:18px;color:var(--text);margin-bottom:8px">Aucun compte en attente</div>
+        <div style="color:var(--text3);font-size:14px">Toutes les demandes ont été traitées.</div>
+      </div>`;
+    return;
+  }
+  c.innerHTML = `
+    <div id="pendingList">
+      ${users.map(u => _renderAdminUserCard(u, true)).join('')}
+    </div>`;
+}
+
+function _renderAdminUserCard(u, withActions) {
+  const statusColor = {active:'badge-teal',pending:'badge-amber',rejected:'badge-red'}[u.status] || 'badge-amber';
+  return `
+    <div class="card" style="margin-bottom:14px;padding:18px 20px" id="userCard_${u.id}">
+      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+        <div style="width:44px;height:44px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
+          ${u.role === 'medecin' ? '🩺' : '👤'}
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <strong style="font-size:15px">${u.prenom || ''} ${u.nom || ''}</strong>
+            <span class="badge ${statusColor}">${u.status}</span>
+            <span class="badge badge-teal" style="background:var(--teal-dim);color:var(--teal2)">${u.role}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text2);display:flex;flex-wrap:wrap;gap:12px">
+            <span>👤 ${u.username}</span>
+            ${u.email ? `<span>✉️ ${u.email}</span>` : ''}
+            ${u.organisation ? `<span>🏥 ${u.organisation}</span>` : ''}
+            ${u.date_naissance ? `<span>🎂 ${u.date_naissance}</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Créé le ${u.created_at ? u.created_at.slice(0,10) : '—'}</div>
+        </div>
+        ${withActions ? `
+        <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
+          <button class="btn btn-primary btn-sm" onclick="adminValidate('${u.id}')">✅ Valider</button>
+          <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="adminReject('${u.id}')">❌ Refuser</button>
+        </div>` : `
+        <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
+          ${u.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="adminValidate('${u.id}')">✅ Valider</button>` : ''}
+          ${u.status !== 'rejected' ? `<button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="adminReject('${u.id}')">❌ Refuser</button>` : ''}
+          ${u.status !== 'active' ? `<button class="btn btn-ghost btn-sm" onclick="adminValidate('${u.id}')">🔓 Réactiver</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="adminDeleteUser('${u.id}','${u.prenom} ${u.nom}')">🗑</button>
+        </div>`}
+      </div>
+    </div>`;
+}
+
+async function adminValidate(uid) {
+  const res = await api(`/api/admin/users/${uid}/validate`, 'POST');
+  if (res.ok) { _updatePendingBadge(); showView(currentView); }
+  else alert(res.error || 'Erreur');
+}
+
+async function adminReject(uid) {
+  if (!confirm('Refuser ce compte ?')) return;
+  const res = await api(`/api/admin/users/${uid}/reject`, 'POST');
+  if (res.ok) { _updatePendingBadge(); showView(currentView); }
+  else alert(res.error || 'Erreur');
+}
+
+async function adminDeleteUser(uid, name) {
+  if (!confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
+  const res = await api(`/api/admin/users/${uid}`, 'DELETE');
+  if (res.ok) { _updatePendingBadge(); showView(currentView); }
+  else alert(res.error || 'Erreur');
+}
+
+// ─── ADMIN: ALL USERS ─────────────────────────────────────────────────────────
+async function renderAdminUsers(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const users = await api('/api/admin/users');
+  if (!users || users.length === 0) {
+    c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Aucun utilisateur.</div>';
+    return;
+  }
+  // Filter tabs
+  const roles = ['tous','medecin','patient'];
+  const roleLabels = {tous:'Tous',medecin:'Médecins',patient:'Patients'};
+  c.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      ${roles.map(r => `
+        <button class="btn ${r==='tous'?'btn-primary':'btn-ghost'} btn-sm" id="filterBtn_${r}"
+                onclick="filterAdminUsers('${r}')" style="font-size:12px">${roleLabels[r]}</button>
+      `).join('')}
+      <input class="form-input" id="adminUserSearch" placeholder="Rechercher…"
+             style="flex:1;min-width:180px;max-width:280px;padding:6px 12px;font-size:13px"
+             oninput="filterAdminUsers(window._adminFilter||'tous')">
+    </div>
+    <div id="adminUserList">
+      ${users.map(u => _renderAdminUserCard(u, false)).join('')}
+    </div>`;
+  window._adminUsers = users;
+  window._adminFilter = 'tous';
+}
+
+function filterAdminUsers(role) {
+  window._adminFilter = role;
+  const q = (document.getElementById('adminUserSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('[id^="filterBtn_"]').forEach(b => {
+    b.className = 'btn btn-sm ' + (b.id === 'filterBtn_' + role ? 'btn-primary' : 'btn-ghost');
+    b.style.fontSize = '12px';
+  });
+  const filtered = (window._adminUsers || []).filter(u =>
+    (role === 'tous' || u.role === role) &&
+    (!q || `${u.nom} ${u.prenom} ${u.username} ${u.email||''} ${u.organisation||''}`.toLowerCase().includes(q))
+  );
+  document.getElementById('adminUserList').innerHTML =
+    filtered.length ? filtered.map(u => _renderAdminUserCard(u, false)).join('') :
+    '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
+}
+
+// ─── ADMIN: CREATE MÉDECIN ────────────────────────────────────────────────────
+function renderAdminCreateMedecin(c) {
+  c.innerHTML = `
+    <div class="card" style="max-width:580px;padding:28px 32px">
+      <div class="section-title" style="margin-bottom:20px">➕ Créer un compte médecin</div>
+      <div style="display:flex;gap:14px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Nom *</label>
+          <input class="form-input" id="cmNom" placeholder="Nom de famille" autocomplete="family-name">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Prénom *</label>
+          <input class="form-input" id="cmPrenom" placeholder="Prénom" autocomplete="given-name">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Identifiant de connexion *</label>
+        <input class="form-input" id="cmUsername" placeholder="Ex : dr.dupont" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe * <span style="color:var(--text3);font-weight:400">(min. 8 caractères)</span></label>
+        <input class="form-input" type="password" id="cmPassword" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="cmEmail" placeholder="medecin@clinique.fr" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Établissement / Organisation</label>
+        <input class="form-input" id="cmOrganisation" placeholder="Clinique, hôpital, cabinet..." autocomplete="organization">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date de naissance</label>
+        <input class="form-input" type="date" id="cmDateNaissance">
+      </div>
+      <div id="cmMsg" style="margin-bottom:14px"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="adminSubmitCreateMedecin()">Créer le compte médecin</button>
+        <button class="btn btn-ghost" onclick="showView('admin-dashboard')">Annuler</button>
+      </div>
+    </div>`;
+  initPasswordToggles();
+}
+
+async function adminSubmitCreateMedecin() {
+  const nom            = document.getElementById('cmNom').value.trim();
+  const prenom         = document.getElementById('cmPrenom').value.trim();
+  const username       = document.getElementById('cmUsername').value.trim();
+  const password       = document.getElementById('cmPassword').value;
+  const email          = document.getElementById('cmEmail').value.trim();
+  const organisation   = document.getElementById('cmOrganisation').value.trim();
+  const date_naissance = document.getElementById('cmDateNaissance').value;
+  const msgEl = document.getElementById('cmMsg');
+
+  if (!nom || !prenom || !username || !password) {
+    msgEl.innerHTML = '<div class="auth-msg auth-msg-error">Nom, prénom, identifiant et mot de passe sont requis.</div>'; return;
+  }
+  if (password.length < 8) {
+    msgEl.innerHTML = '<div class="auth-msg auth-msg-error">Le mot de passe doit contenir au moins 8 caractères.</div>'; return;
+  }
+  const res = await api('/api/admin/medecins','POST',{nom,prenom,username,password,email,organisation,date_naissance});
+  if (res.ok) {
+    msgEl.innerHTML = '<div class="auth-msg auth-msg-success">Compte médecin créé avec succès !</div>';
+    ['cmNom','cmPrenom','cmUsername','cmPassword','cmEmail','cmOrganisation','cmDateNaissance'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+  } else {
+    msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur lors de la création.'}</div>`;
+  }
+}
+
 // ─── PATIENT PROFILE (MÉDECIN) ────────────────────────────────────────────────
 async function renderPatientProfile(c, pid) {
-  const [patient, docs, questions] = await Promise.all([
+  const [patient, docs, questions, suivi, ivtData, accountInfo] = await Promise.all([
     api(`/api/patients/${pid}`),
     api(`/api/patients/${pid}/documents`),
-    api(`/api/patients/${pid}/questions`)
+    api(`/api/patients/${pid}/questions`),
+    api(`/api/patients/${pid}/suivi`),
+    api(`/api/patients/${pid}/ivt`),
+    USER.role === 'medecin' ? api(`/api/patients/${pid}/has-account`) : Promise.resolve({has_account: false})
   ]);
   window._currentPatient = patient;
+  window._currentIVT = ivtData || [];
 
   const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
   const lastConsult = patient.historique?.[0] || null;
@@ -1088,7 +1930,10 @@ async function renderPatientProfile(c, pid) {
             <span class="ph-meta-chip">🎂 ${age} ans · ${fmtDate(patient.ddn)}</span>
             <span class="ph-meta-chip">⚧ ${patient.sexe==='F'?'Féminin':'Masculin'}</span>
             ${medecinName ? `<span class="ph-meta-chip">🩺 ${medecinName}</span>` : ''}
-            ${patient.date_chirurgie ? `<span class="ph-meta-chip amber">✂ Post-op ${fmtDate(patient.date_chirurgie)}</span>` : ''}
+            ${patient.date_chirurgie ? `
+              <span class="ph-meta-chip amber" style="cursor:pointer" onclick="editChirurgie('${pid}','${patient.date_chirurgie}','${escJ(patient.type_chirurgie||'')}')">✂ Post-op ${fmtDate(patient.date_chirurgie)} ✏</span>
+              <span class="ph-meta-chip" style="cursor:pointer;border-color:rgba(239,68,68,.4);color:var(--red)" onclick="deleteChirurgie('${pid}')">🗑</span>
+            ` : ''}
           </div>
           <div class="ph-contact-row">
             <span class="ph-contact-item">📱 ${patient.telephone || '—'}</span>
@@ -1130,6 +1975,21 @@ async function renderPatientProfile(c, pid) {
           </span>
           <span style="font-size:11px;color:var(--text3)">${patient.historique.length} consul.</span>
         </div>
+        ${(() => {
+          const ivtList = ivtData || [];
+          if (!ivtList.length) return '';
+          const countOD = ivtList.filter(i=>i.oeil==='OD').length;
+          const countOG = ivtList.filter(i=>i.oeil==='OG').length;
+          const last = ivtList[0];
+          return `<div style="margin-top:10px;padding:8px 10px;background:rgba(14,165,160,.08);border:1px solid rgba(14,165,160,.2);border-radius:8px;font-size:11px">
+            <div style="font-weight:700;color:var(--teal2);margin-bottom:4px">💉 Injections IVT</div>
+            <div style="display:flex;gap:12px;color:var(--text2)">
+              ${countOD?`<span>OD × ${countOD}</span>`:''}
+              ${countOG?`<span>OG × ${countOG}</span>`:''}
+              ${last?`<span style="color:var(--text3)">↳ ${last.medicament} ${fmtDate(last.date)}</span>`:''}
+            </div>
+          </div>`;
+        })()}
       </div>
 
       <!-- RIGHT: Actions -->
@@ -1137,13 +1997,21 @@ async function renderPatientProfile(c, pid) {
         <button class="btn btn-primary btn-sm" onclick="openAddConsultation('${pid}')">+ Consultation</button>
         <button class="btn btn-ghost btn-sm" onclick="openAddRdv('${pid}')">📅 Rendez-vous</button>
         <button class="btn btn-ghost btn-sm" onclick="startAiContext('${pid}')">🤖 Assistant IA</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateConsultationSummary('${pid}')" title="Générer compte-rendu IA">📝 Compte-rendu</button>
         <div class="ph-actions-row" style="margin-top:2px">
           <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${pid}')" title="Modifier">✏ Modifier</button>
           <button class="btn btn-ghost btn-sm" onclick="openAssignerMedecin('${pid}')" title="Médecin">👨‍⚕️</button>
           <button class="btn btn-export btn-sm" onclick="exportPatientAnon('${pid}')" title="Exporter">⬇</button>
           <button class="btn btn-sm" style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);color:var(--red)" onclick="deletePatient('${pid}','${patient.prenom} ${patient.nom}')" title="Supprimer">🗑</button>
         </div>
-        ${!patient.date_chirurgie ? `<button class="btn btn-ghost btn-sm" onclick="setDateChirurgie('${pid}')">✂ Déf. chirurgie</button>` : ''}
+        ${!patient.date_chirurgie ? `<button class="btn btn-ghost btn-sm" onclick="setDateChirurgie('${pid}')">✂ Déf. chirurgie</button>` : `<button class="btn btn-ghost btn-sm" onclick="editChirurgie('${pid}','${patient.date_chirurgie}','${escJ(patient.type_chirurgie||'')}')">✂ Modifier chirurgie</button>`}
+        <div class="ph-actions-row" style="margin-top:2px">
+          <button class="btn btn-ghost btn-sm" onclick="printPatientSummary('${pid}')">🖨 Résumé</button>
+          ${accountInfo.has_account
+            ? `<button class="btn btn-ghost btn-sm" style="opacity:.6;cursor:default" disabled title="Compte: ${accountInfo.username}">👤 ${accountInfo.username}</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="openCreateAccount('${pid}','${escJ(patient.prenom)} ${escJ(patient.nom)}')">👤 Créer compte</button>`
+          }
+        </div>
       </div>
     </div>
 
@@ -1163,6 +2031,19 @@ async function renderPatientProfile(c, pid) {
       </button>
       <button class="tab-btn" onclick="switchTab('qst','${pid}',this)">
         💬 Questions${pendingQ ? `<span class="tab-count tab-count-amber">${pendingQ}</span>` : ''}
+      </button>
+      <button class="tab-btn" onclick="switchTab('suivi','${pid}',this)">
+        🗓 Suivi Post-Op${(() => {
+          const today = new Date().toISOString().slice(0,10);
+          const overdue = (suivi||[]).filter(s => s.statut==='a_faire' && s.date_prevue < today).length;
+          const soon    = (suivi||[]).filter(s => s.statut==='a_faire' && s.date_prevue >= today).length;
+          if (overdue) return `<span class="tab-count" style="background:var(--red)">${overdue}</span>`;
+          if (soon)    return `<span class="tab-count tab-count-amber">${soon}</span>`;
+          return '';
+        })()}
+      </button>
+      <button class="tab-btn" onclick="switchTab('ivt','${pid}',this)">
+        💉 IVT${(ivtData||[]).length ? `<span class="tab-count">${(ivtData||[]).length}</span>` : ''}
       </button>
     </div>
 
@@ -1261,35 +2142,42 @@ async function renderPatientProfile(c, pid) {
           <button class="btn btn-primary btn-sm" onclick="openUploadImagerie('${pid}')">+ Ajouter imagerie</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
-          ${patient.imagerie.map(img=>`
-            <div class="doc-card" onclick="openImageViewer('${img.id}','${pid}','${escJ(img.type)}','${escJ(img.notes)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
-              <div class="doc-preview">
-                <div style="color:var(--text3);font-size:32px;text-align:center">🔬</div>
-              </div>
-              <div class="doc-info">
-                <div class="doc-type">${img.type}</div>
-                <div class="doc-date">${fmtDate(img.date)}</div>
-                ${img.notes ? `<div class="doc-uploader" style="margin-top:4px">${img.notes}</div>` : ''}
-                <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center"
-                  onclick="event.stopPropagation();analyzeImageAI('${img.id}','${pid}','${escJ(img.type)}','${escJ(patient.prenom+' '+patient.nom)}','${escJ(patient.antecedents.join(', '))}')">
-                  🤖 Analyser IA
-                </button>
-              </div>
-            </div>
-          `).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucune imagerie enregistrée</div>'}
+          ${patient.imagerie.map(img=>_imgCard(img, pid, patient)).join('')
+            || '<div style="color:var(--text3);text-align:center;padding:40px">Aucune imagerie enregistrée</div>'}
         </div>
+
+        ${(() => {
+          const patImgs = (docs||[]).filter(d => d.has_image);
+          if (!patImgs.length) return '';
+          return `
+            <div style="margin-top:24px">
+              <div style="font-size:12px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
+                📤 Radios & scanners transmis par le patient (${patImgs.length})
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+                ${patImgs.map(d=>_imgCard(d, pid, patient, true)).join('')}
+              </div>
+            </div>`;
+        })()}
       </div>
 
       <div id="stab-docs" class="subtab-content">
-        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Radios, scanners et documents transmis par le patient</div>
-        <div id="docs-grid-${pid}">${renderDocsGrid(docs, pid)}</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Documents transmis par le patient</div>
+        <div id="docs-grid-${pid}">${renderDocsGrid((docs||[]).filter(d=>!d.has_image), pid)}</div>
+        <div style="margin-top:24px">
+          <button class="btn btn-ghost btn-sm" onclick="toggleDeletedDocs('${pid}',this)" style="opacity:.6">
+            🗂 Voir l'historique des documents supprimés
+          </button>
+          <div id="deleted-docs-${pid}" style="display:none;margin-top:12px"></div>
+        </div>
       </div>
     </div>
 
     <!-- ── TAB: RDV ── -->
     <div class="tab-content" id="tab-rdvp">
-      <div style="margin-bottom:14px">
+      <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-primary btn-sm" onclick="openAddRdv('${pid}')">+ Nouveau RDV</button>
+        ${USER.role==='medecin' ? `<button class="btn btn-ghost btn-sm" onclick="triggerEmailReminders()" title="Envoyer rappels email pour demain">📧 Rappels email</button>` : ''}
       </div>
       ${patient.rdv.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>{
         const isPast = r.date < new Date().toISOString().slice(0,10);
@@ -1317,6 +2205,7 @@ async function renderPatientProfile(c, pid) {
             <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
             <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="toggleRdvDetail('${r.id}')">+ infos</button>
             ${r.statut==='en_attente'&&USER.role==='medecin'?`<button class="btn btn-primary btn-sm" onclick="validerRdv('${r.id}','confirmé')">Confirmer</button>`:''}
+            ${USER.role==='medecin'?`<button class="btn btn-ghost btn-sm" onclick="openEditRdvModal('${r.id}')">✏</button>`:''}
             ${USER.role==='medecin'?`<button class="btn btn-red btn-sm" onclick="deleteRdv('${r.id}')">🗑</button>`:''}
           </div>
         </div>`; }).join('') || '<div style="color:var(--text3);text-align:center;padding:40px">Aucun rendez-vous</div>'}
@@ -1325,11 +2214,25 @@ async function renderPatientProfile(c, pid) {
     <!-- ── TAB: Questions ── -->
     <div class="tab-content" id="tab-qst">
       ${renderQuestionsPanel(questions, pid)}
+    </div>
+
+    <!-- ── TAB: Suivi Post-Op ── -->
+    <div class="tab-content" id="tab-suivi">
+      ${renderSuiviTab(suivi, patient, pid)}
+    </div>
+
+    <!-- ── TAB: IVT ── -->
+    <div class="tab-content" id="tab-ivt">
+      ${renderIVTTab(ivtData||[], patient, pid)}
     </div>`;
 
   if (patient.historique.length >= 2) {
     setTimeout(() => renderEvolutionCharts(patient, pid), 50);
   }
+  if ((ivtData||[]).length >= 2) {
+    setTimeout(() => renderIVTChart(ivtData, pid), 80);
+  }
+  setTimeout(_applyPendingTab, 100);
 }
 
 function togglePostOp() {
@@ -1369,23 +2272,55 @@ function openUploadImagerie(pid) {
   input.click();
 }
 
+function _imgCard(img, pid, patient, isPatientDoc = false) {
+  const patName    = escJ(patient.prenom + ' ' + patient.nom);
+  const antecedents = escJ(patient.antecedents.join(', '));
+  const imgNotes   = escJ(img.notes || img.description || '');
+  const imgType    = escJ(img.type);
+  const hasImg     = img.has_image;
+  const analyzed   = img.analyse_ia;
+
+  return `
+    <div class="doc-card" style="${isPatientDoc ? 'border-color:rgba(245,158,11,.3)' : ''}"
+         onclick="openImageViewer('${img.id}','${pid}','${imgType}','${imgNotes}','${patName}','${antecedents}')">
+      <div class="doc-preview" style="position:relative;background:var(--bg2);min-height:90px;display:flex;align-items:center;justify-content:center">
+        <div style="font-size:32px">${hasImg ? '🖼️' : '🔬'}</div>
+        ${isPatientDoc ? `<span style="position:absolute;top:6px;right:6px;background:var(--amber);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px">PATIENT</span>` : ''}
+        ${analyzed    ? `<span style="position:absolute;bottom:6px;right:6px;background:var(--teal);color:#fff;font-size:9px;padding:2px 5px;border-radius:4px">✓ IA</span>` : ''}
+      </div>
+      <div class="doc-info">
+        <div class="doc-type">${img.type}</div>
+        <div class="doc-date">${fmtDate(img.date)}</div>
+        ${img.notes ? `<div class="doc-uploader">${img.notes}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center"
+            onclick="event.stopPropagation();analyzeDocAI('${pid}','${img.id}','${imgType}')">
+            🤖 ${analyzed ? 'Ré-analyser' : 'Analyser IA'}
+          </button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:0 8px"
+            onclick="event.stopPropagation();softDeleteDoc('${pid}','${img.id}','${imgType}')"
+            title="Supprimer (conservé en historique)">🗑</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderDocsGrid(docs, pid) {
-  if (!docs.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucun document uploadé par le patient</div>';
+  if (!docs.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucun document non-image uploadé par le patient</div>';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
     ${docs.map(d=>`
-      <div class="doc-card">
-        <div class="doc-preview" style="cursor:pointer" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">
-          <div style="font-size:40px;text-align:center">📎</div>
-          <div style="font-size:11px;color:var(--teal2);text-align:center;margin-top:4px">Cliquer pour voir</div>
+      <div class="doc-card" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">
+        <div class="doc-preview" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:80px">
+          <div style="font-size:36px;text-align:center">📎</div>
         </div>
         <div class="doc-info">
           <div class="doc-type">${d.type}</div>
           <div class="doc-date">${fmtDate(d.date)}</div>
-          <div class="doc-uploader">Uploadé par: ${d.uploaded_by}</div>
-          ${d.analyse_ia?`<div style="margin-top:6px;font-size:11px;color:var(--teal2)">✓ Analysé par IA</div>`:''}
+          ${d.analyse_ia ? `<div style="margin-top:4px;font-size:11px;color:var(--teal2)">✓ Analysé par IA</div>` : ''}
           <div style="display:flex;gap:6px;margin-top:8px">
-            <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">👁 Voir</button>
-            <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="analyzeDocAI('${pid}','${d.id}','${d.type}')">🤖 IA</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="event.stopPropagation();viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">👁 Voir</button>
+            <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="event.stopPropagation();analyzeDocAI('${pid}','${d.id}','${escJ(d.type)}')">🤖 IA</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:0 8px" onclick="event.stopPropagation();softDeleteDoc('${pid}','${d.id}','${escJ(d.type)}')" title="Supprimer">🗑</button>
           </div>
         </div>
       </div>
@@ -1434,9 +2369,18 @@ function renderQuestionsPanel(questions, pid) {
             <button class="btn btn-ghost btn-sm" onclick="sendReponseIA('${pid}','${q.id}')">✓ Valider réponse IA</button>
           </div>
         </div>` :
-        q.reponse?`<div style="margin-top:10px;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text2)">✅ Répondu: ${q.reponse}</div>`:''}
+        `<div style="margin-top:10px;display:flex;align-items:flex-start;gap:8px">
+          <div style="flex:1;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text2)">✅ ${q.reponse||'—'}</div>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red);flex-shrink:0" title="Archiver (conservé en historique)" onclick="softDeleteQuestion('${pid}','${q.id}',this)">🗑</button>
+        </div>`}
     </div>
-  `).join('');
+  `).join('')
+  + `<div style="margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleDeletedQuestions('${pid}',this)" style="opacity:.6">
+        🗂 Voir l'historique des questions archivées
+      </button>
+      <div id="deleted-questions-${pid}" style="display:none;margin-top:12px"></div>
+    </div>`;
 }
 
 // ─── AGENDA ───────────────────────────────────────────────────────────────────
@@ -1514,6 +2458,13 @@ function _renderCalendar(c) {
       .cal-day-num { font-size:12px; font-weight:600; color:var(--text2); }
       .cal-cell.cal-today .cal-day-num { color:var(--teal2); }
       .cal-day-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+      .cal-month-btn { font-size:15px;font-weight:700;color:var(--text);background:none;border:none;cursor:pointer;padding:4px 10px;border-radius:6px;transition:background .15s; }
+      .cal-month-btn:hover { background:var(--bg2); }
+      .cal-picker { position:absolute;z-index:100;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:14px;min-width:240px; }
+      .cal-picker-months { display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px; }
+      .cal-picker-month { padding:6px 4px;border-radius:6px;border:1px solid transparent;cursor:pointer;font-size:12px;text-align:center;color:var(--text2);transition:all .15s; }
+      .cal-picker-month:hover { border-color:var(--teal);color:var(--teal2); }
+      .cal-picker-month.active { background:var(--teal);color:#fff;border-color:var(--teal); }
     </style>
 
     <!-- Header stats -->
@@ -1530,9 +2481,21 @@ function _renderCalendar(c) {
       <!-- Calendar -->
       <div>
         <!-- Month nav -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;position:relative">
           <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">‹ Précédent</button>
-          <div style="font-size:15px;font-weight:700;color:var(--text)">${months[_calMonth]} ${_calYear}</div>
+          <div style="position:relative">
+            <button class="cal-month-btn" onclick="calTogglePicker(event)">${months[_calMonth]} ${_calYear} ▾</button>
+            <div id="calPicker" class="cal-picker" style="display:none;top:calc(100% + 6px);left:50%;transform:translateX(-50%)">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <button class="btn btn-ghost btn-sm" onclick="calPickerYear(-1)">‹</button>
+                <span id="calPickerYear" style="font-size:14px;font-weight:700;color:var(--text)">${_calYear}</span>
+                <button class="btn btn-ghost btn-sm" onclick="calPickerYear(1)">›</button>
+              </div>
+              <div class="cal-picker-months">
+                ${months.map((m,i)=>`<div class="cal-picker-month${i===_calMonth?' active':''}" onclick="calPickerSelect(${i})">${m.slice(0,3)}</div>`).join('')}
+              </div>
+            </div>
+          </div>
           <button class="btn btn-ghost btn-sm" onclick="calNav(1)">Suivant ›</button>
         </div>
         <!-- Day headers -->
@@ -1577,6 +2540,38 @@ function calNav(dir) {
   _calMonth += dir;
   if (_calMonth > 11) { _calMonth = 0; _calYear++; }
   if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+  _renderCalendar(document.getElementById('mainContent'));
+}
+
+let _calPickerYear = null;
+function calTogglePicker(e) {
+  e.stopPropagation();
+  const p = document.getElementById('calPicker');
+  if (!p) return;
+  const open = p.style.display !== 'none';
+  p.style.display = open ? 'none' : 'block';
+  if (!open) {
+    _calPickerYear = _calYear;
+    document.getElementById('calPickerYear').textContent = _calPickerYear;
+    if (!_calPickerCloseHandler) {
+      _calPickerCloseHandler = () => { const pp = document.getElementById('calPicker'); if (pp) pp.style.display = 'none'; };
+      document.addEventListener('click', _calPickerCloseHandler);
+    }
+  }
+}
+let _calPickerCloseHandler = null;
+
+function calPickerYear(dir) {
+  _calPickerYear = (_calPickerYear || _calYear) + dir;
+  const el = document.getElementById('calPickerYear');
+  if (el) el.textContent = _calPickerYear;
+}
+
+function calPickerSelect(monthIdx) {
+  _calMonth = monthIdx;
+  _calYear = _calPickerYear || _calYear;
+  const p = document.getElementById('calPicker');
+  if (p) p.style.display = 'none';
   _renderCalendar(document.getElementById('mainContent'));
 }
 
@@ -1630,7 +2625,10 @@ async function renderQuestionsMedecin(c) {
                 <button class="btn btn-ghost btn-sm" onclick="sendReponseIA('${q.patient_id}','${q.id}')">✓ Valider IA</button>
               </div>
             </div>` :
-            `<div style="margin-top:8px;background:var(--green-dim);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)">✅ ${q.reponse}</div>`}
+            `<div style="margin-top:8px;display:flex;align-items:flex-start;gap:8px">
+              <div style="flex:1;background:var(--green-dim);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)">✅ ${q.reponse}</div>
+              <button class="btn btn-ghost btn-sm" style="color:var(--red);flex-shrink:0" title="Archiver" onclick="softDeleteQuestion('${q.patient_id}','${q.id}',this)">🗑</button>
+            </div>`}
         </div>
       `).join('')}`;
 }
@@ -1826,30 +2824,99 @@ async function analyzeImageAI(imgId, pid, type, patientName, antecedents) {
   el.textContent='🤖 Analyser IA'; el.disabled=false;
 }
 
-async function analyzeDocAI(pid, docId, type) {
-  const el = event.target; el.textContent='⏳...'; el.disabled=true;
-  const res = await api(`/api/patients/${pid}/documents/${docId}/analyze`,'POST',{});
-  if(res.ok) {
-    alert('Analyse IA:\n\n'+res.analysis);
-    showView('patient-profile');
-  }
-  el.textContent='🤖 Analyser'; el.disabled=false;
+async function softDeleteDoc(pid, docId, type) {
+  if (!confirm(`Supprimer "${type}" de la vue active ?\nL'image reste conservée dans l'historique.`)) return;
+  const res = await api(`/api/patients/${pid}/documents/${docId}`, 'DELETE');
+  if (res.ok) loadPatient(pid);
+  else alert(res.error || 'Erreur');
 }
 
-function openImageViewer(imgId, pid, type, notes, patientName, antecedents) {
+async function restoreDoc(pid, docId, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/documents/${docId}/restore`, 'POST');
+  if (res.ok) loadPatient(pid);
+  else { alert(res.error || 'Erreur'); btn.disabled = false; }
+}
+
+async function toggleDeletedDocs(pid, btn) {
+  const panel = document.getElementById(`deleted-docs-${pid}`);
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    btn.textContent = '🗂 Voir l\'historique des documents supprimés';
+    return;
+  }
+  btn.textContent = '⏳ Chargement…';
+  const deleted = await api(`/api/patients/${pid}/documents/deleted`);
+  if (!deleted.length) {
+    panel.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:10px 0">Aucun document supprimé.</div>';
+  } else {
+    panel.innerHTML = `
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+        Historique — ${deleted.length} document(s) supprimé(s)
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${deleted.map(d => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;opacity:.75">
+            <span style="font-size:22px">${d.has_image ? '🖼️' : '📎'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${d.type}</div>
+              <div style="font-size:11px;color:var(--text3)">Uploadé le ${fmtDate(d.date)} · Supprimé le ${fmtDate(d.deleted_at)}</div>
+              ${d.analyse_ia ? `<div style="font-size:11px;color:var(--teal2);margin-top:2px">✓ Analyse IA disponible</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              ${d.has_image ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openImageViewer('${d.id}','${pid}','${escJ(d.type)}','','','')">👁</button>` : ''}
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--teal2)" onclick="restoreDoc('${pid}','${d.id}',this)">↩ Restaurer</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }
+  panel.style.display = 'block';
+  btn.textContent = '🗂 Masquer l\'historique';
+}
+
+async function analyzeDocAI(pid, docId, type) {
+  const el = event.target;
+  const origText = el.textContent;
+  el.textContent = '⏳…'; el.disabled = true;
+  const res = await api(`/api/patients/${pid}/documents/${docId}/analyze`, 'POST', {});
+  el.textContent = origText; el.disabled = false;
+  if (res.ok) {
+    // Show result in the image viewer
+    window._pendingTab = 'media';
+    await loadPatient(pid);
+    openImageViewer(docId, pid, type, '', '', '');
+  } else {
+    alert('Erreur analyse IA : ' + (res.error || 'inconnue'));
+  }
+}
+
+async function openImageViewer(imgId, pid, type, notes, patientName, antecedents) {
   document.getElementById('modalImageTitle').textContent = type;
   document.getElementById('modalImageContent').innerHTML = `
-    <div style="background:#000;border-radius:12px;min-height:200px;display:flex;align-items:center;justify-content:center;font-size:60px;margin-bottom:16px">🔬</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">${notes}</div>
-    <div class="ai-analysis-box" style="background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:12px;padding:16px;display:none" id="aiAnalysisBox">
-      <div style="font-size:11px;color:var(--teal2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">🤖 Analyse IA</div>
+    <div style="text-align:center;padding:30px;color:var(--text3)">⏳ Chargement…</div>`;
+  openModal('modalImage');
+
+  const doc = await api(`/api/patients/${pid}/documents/${imgId}`);
+  const imgHtml = doc.image_b64
+    ? `<img src="data:image/jpeg;base64,${doc.image_b64}" style="max-width:100%;max-height:62vh;border-radius:10px;object-fit:contain;display:block;margin:0 auto">`
+    : `<div style="background:var(--bg2);border-radius:12px;min-height:160px;display:flex;align-items:center;justify-content:center;font-size:48px">🔬</div>`;
+
+  const existingAnalysis = doc.analyse_ia
+    ? `<div style="margin-top:12px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:14px;font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6"><div style="font-size:11px;color:var(--teal2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🤖 Analyse IA</div>${doc.analyse_ia}</div>`
+    : '';
+
+  document.getElementById('modalImageContent').innerHTML = `
+    ${imgHtml}
+    ${notes ? `<div style="margin-top:10px;font-size:12px;color:var(--text3)">${notes}</div>` : ''}
+    <div id="aiAnalysisBox" style="margin-top:12px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:14px;display:none">
+      <div style="font-size:11px;color:var(--teal2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🤖 Analyse IA</div>
       <div id="aiAnalysisText" style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6"></div>
     </div>
-    <div style="margin-top:14px;display:flex;gap:10px">
-      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(imgId)}','${escJ(pid)}','${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 Analyser avec IA</button>
+    ${existingAnalysis}
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(imgId)}','${escJ(pid)}','${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 ${doc.analyse_ia ? 'Ré-analyser' : 'Analyser avec IA'}</button>
       <button class="btn btn-ghost" onclick="closeModal('modalImage')">Fermer</button>
     </div>`;
-  openModal('modalImage');
 }
 
 async function runImageAnalysis(imgId, pid, type, patientName, antecedents) {
@@ -1984,7 +3051,11 @@ async function submitAddPatient() {
     medecin_id: document.getElementById('pMedecinId')?.value || USER.id
   };
   const res = await api('/api/patients','POST',payload);
-  if(res.ok) { closeModal('modalAddPatient'); loadPatientsSidebar(); }
+  if(res.ok) {
+    closeModal('modalAddPatient');
+    loadPatientsSidebar();
+    if (res.credentials) _showCredentialsModal(payload.prenom + ' ' + payload.nom, res.credentials, res.id);
+  }
 }
 
 // ─── IMPORT MODAL ─────────────────────────────────────────────────────────────
@@ -2014,7 +3085,17 @@ async function submitImportCsv() {
   res_el.innerHTML = '<div style="color:var(--teal2)"><span class="loading-dots"><span></span><span></span><span></span></span> Import en cours par IA...</div>';
   const res = await api('/api/import/csv','POST',{content});
   if(res.ok) {
-    res_el.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px">✅ ${res.count} patient(s) importé(s):<br>${res.added.map(p=>`<strong>${p.prenom} ${p.nom}</strong> (${p.id})`).join(', ')}</div>`;
+    const credLines = res.added.map(p => {
+      const c = p.credentials;
+      const sent = c?.email_sent ? ' <span style="color:var(--teal2);font-size:11px">✉️ email envoyé</span>' : '';
+      const cred = c ? ` — <span style="font-family:monospace;font-size:11px">${c.username} / ${c.password}</span>${sent}` : '';
+      return `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,.07)"><strong>${p.prenom} ${p.nom}</strong> (${p.id})${cred}</div>`;
+    }).join('');
+    res_el.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px">
+      <div style="font-weight:600;margin-bottom:10px">✅ ${res.count} patient(s) importé(s) — comptes créés</div>
+      <div style="font-size:12px;color:var(--text2)">${credLines}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px">⚠️ Notez les mots de passe — ils ne seront plus affichés.</div>
+    </div>`;
     loadPatientsSidebar();
   } else {
     res_el.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px">❌ Erreur: ${res.error}<br><small>${res.raw||''}</small></div>`;
@@ -2049,6 +3130,50 @@ async function uploadFile(file) {
 }
 
 // ─── QUESTIONS ────────────────────────────────────────────────────────────────
+async function softDeleteQuestion(pid, qid, btn) {
+  btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/questions/${qid}`, 'DELETE');
+  if (res.ok) {
+    // Remove card from view, keep history toggle visible
+    const card = btn.closest('.question-card');
+    if (card) card.remove();
+  } else {
+    alert(res.error || 'Erreur');
+    btn.disabled = false;
+  }
+}
+
+async function toggleDeletedQuestions(pid, btn) {
+  const panel = document.getElementById(`deleted-questions-${pid}`);
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    btn.textContent = '🗂 Voir l\'historique des questions archivées';
+    return;
+  }
+  btn.textContent = '⏳ Chargement…';
+  const deleted = await api(`/api/patients/${pid}/questions/deleted`);
+  if (!deleted.length) {
+    panel.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:10px 0">Aucune question archivée.</div>';
+  } else {
+    panel.innerHTML = `
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+        Historique — ${deleted.length} question(s) archivée(s)
+      </div>
+      ${deleted.map(q => `
+        <div style="padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;opacity:.75">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--text3)">${q.date} · archivé le ${fmtDate(q.deleted_at)}</span>
+            <span class="badge badge-green" style="font-size:10px">répondu</span>
+          </div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:6px">❓ ${q.question}</div>
+          <div style="font-size:12px;color:var(--text2);background:var(--green-dim);border-radius:8px;padding:8px 10px">✅ ${q.reponse}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Répondu par ${q.repondu_par} · ${q.date_reponse}</div>
+        </div>`).join('')}`;
+  }
+  panel.style.display = 'block';
+  btn.textContent = '🗂 Masquer l\'historique';
+}
+
 async function submitQuestion() {
   const text = document.getElementById('newQuestion').value.trim();
   if(!text) return;
@@ -2079,6 +3204,127 @@ async function sendReponseIA(pid, qid) {
 }
 
 // ─── POST-OP TIMELINE ─────────────────────────────────────────────────────────
+function renderSuiviTab(suivi, patient, pid) {
+  if (!patient.date_chirurgie) {
+    return `
+      <div style="text-align:center;padding:48px 24px;color:var(--text3)">
+        <div style="font-size:40px;margin-bottom:12px">✂️</div>
+        <div style="font-size:14px;margin-bottom:16px">Aucune chirurgie enregistrée pour ce patient.</div>
+        <button class="btn btn-primary btn-sm" onclick="setDateChirurgie('${pid}')">Définir la date de chirurgie</button>
+      </div>`;
+  }
+
+  const today    = new Date().toISOString().slice(0,10);
+  const steps    = suivi || [];
+  const total    = steps.length;
+  const done     = steps.filter(s => s.statut === 'fait').length;
+  const overdue  = steps.filter(s => s.statut === 'a_faire' && s.date_prevue < today).length;
+
+  const statusBadge = s => {
+    if (s.statut === 'fait')     return `<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">✓ FAIT</span>`;
+    if (s.statut === 'manque')   return `<span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">✗ MANQUÉ</span>`;
+    if (s.statut === 'reporte')  return `<span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">↩ REPORTÉ</span>`;
+    if (s.date_prevue < today)   return `<span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">⚠ EN RETARD</span>`;
+    const days = Math.round((new Date(s.date_prevue) - new Date(today)) / 86400000);
+    if (days <= 14) return `<span style="background:var(--amber);color:#000;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">⏰ dans ${days}j</span>`;
+    return `<span style="background:var(--bg2);color:var(--text3);border:1px solid var(--border);padding:2px 8px;border-radius:10px;font-size:10px">dans ${days}j</span>`;
+  };
+
+  const cardBorder = s => {
+    if (s.statut === 'fait')   return 'border-color:var(--green)';
+    if (s.statut === 'manque') return 'border-color:rgba(239,68,68,.6)';
+    if (s.statut === 'a_faire' && s.date_prevue < today) return 'border-color:rgba(239,68,68,.4)';
+    return '';
+  };
+
+  const stepCards = steps.map(s => `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;${cardBorder(s)}">
+      <div style="width:48px;height:48px;border-radius:12px;background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:var(--teal2);border:1px solid var(--border)">
+        ${s.etape}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${_suiviLabel(s.etape)}</span>
+          ${statusBadge(s)}
+        </div>
+        <div style="font-size:11px;color:var(--text3)">Prévu : ${new Date(s.date_prevue).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>
+        ${s.date_reelle ? `<div style="font-size:11px;color:var(--green)">Réalisé : ${new Date(s.date_reelle).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>` : ''}
+        ${s.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:3px;font-style:italic">📝 ${s.notes}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        ${s.statut !== 'fait' ? `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="markSuiviDone('${s.id}','${pid}','${s.etape}',this)">✓ Fait</button>` : ''}
+        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="editSuivi('${s.id}','${pid}','${s.etape}','${s.date_prevue}','${s.heure||'09:00'}')">✏</button>
+        ${s.statut !== 'manque' && s.statut !== 'fait' ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--amber)" onclick="markSuiviStatut('${s.id}','${pid}','manque')">✗</button>` : ''}
+        ${s.statut !== 'a_faire' ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.6" onclick="markSuiviStatut('${s.id}','${pid}','reset')">↩</button>` : ''}
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="deleteSuivi('${s.id}','${pid}','${s.etape}')">🗑</button>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">✂️ ${patient.type_chirurgie || 'Chirurgie ophtalmologique'}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">Opéré le ${new Date(patient.date_chirurgie).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="badge badge-teal">✓ ${done}/${total} effectués</span>
+        ${overdue ? `<span class="badge badge-red">⚠ ${overdue} en retard</span>` : ''}
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="background:var(--bg2);border-radius:8px;height:8px;margin-bottom:20px;overflow:hidden">
+      <div style="height:100%;border-radius:8px;background:var(--teal);width:${total ? Math.round(done/total*100) : 0}%;transition:width .4s"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${stepCards || '<div style="color:var(--text3);text-align:center;padding:30px">Aucun suivi généré — définissez d\'abord la date de chirurgie.</div>'}
+    </div>`;
+}
+
+function _suiviLabel(etape) {
+  const labels = { J7:'Contrôle J7', J30:'Contrôle J30', J2Mois:'Contrôle 2 mois', J3Mois:'Contrôle 3 mois', J6Mois:'Contrôle 6 mois', J12M:'Bilan 1 an', J18Mois:'Contrôle 18 mois', A2:'Bilan 2 ans' };
+  return labels[etape] || etape;
+}
+
+async function markSuiviDone(sid, pid, etape, btn) {
+  const dateReelle = prompt(`Date de réalisation du ${etape} (YYYY-MM-DD) :`, new Date().toISOString().slice(0,10));
+  if (!dateReelle) return;
+  const notes = prompt('Notes (optionnel) :', '') || '';
+  btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/suivi/${sid}`, 'PUT', { statut:'fait', date_reelle: dateReelle, notes });
+  if (res.ok) loadPatient(pid);
+  else { alert(res.error || 'Erreur'); btn.disabled = false; }
+}
+
+async function markSuiviStatut(sid, pid, statut) {
+  if (statut === 'reset') {
+    const res = await api(`/api/patients/${pid}/suivi/${sid}/reset`, 'POST');
+    if (res.ok) loadPatient(pid);
+    return;
+  }
+  const res = await api(`/api/patients/${pid}/suivi/${sid}`, 'PUT', { statut, date_reelle: '' });
+  if (res.ok) loadPatient(pid);
+  else alert(res.error || 'Erreur');
+}
+
+async function editSuivi(sid, pid, etape, datePrevue, heure) {
+  const newDate = prompt(`Nouvelle date pour ${etape} (YYYY-MM-DD) :`, datePrevue);
+  if (!newDate) return;
+  const newHeure = prompt(`Heure du RDV (HH:MM) :`, heure || '09:00');
+  if (newHeure === null) return;
+  const res = await api(`/api/patients/${pid}/suivi/${sid}`, 'PUT', { date_prevue: newDate, heure: newHeure });
+  if (res.ok) loadPatient(pid);
+  else alert(res.error || 'Erreur');
+}
+
+async function deleteSuivi(sid, pid, etape) {
+  if (!confirm(`Supprimer le suivi ${etape} et son RDV associé dans l'agenda ?`)) return;
+  const res = await api(`/api/patients/${pid}/suivi/${sid}`, 'DELETE');
+  if (res.ok) loadPatient(pid);
+  else alert(res.error || 'Erreur');
+}
+
 function renderPostOpTimeline(patient) {
   const JALONS = [7, 14, 21, 30, 60, 90, 120, 180, 247];
   const dateChir = new Date(patient.date_chirurgie);
@@ -2159,6 +3405,23 @@ async function setDateChirurgie(pid) {
   else alert('Erreur: ' + (res.error || 'inconnue'));
 }
 
+async function editChirurgie(pid, currentDate, currentType) {
+  const date = prompt('Nouvelle date de chirurgie (YYYY-MM-DD) :', currentDate);
+  if (!date) return;
+  const type = prompt('Type de chirurgie :', currentType || 'Greffe de cornée (kératoplastie)');
+  if (type === null) return;
+  const res = await api(`/api/patients/${pid}/chirurgie`, 'POST', {date_chirurgie: date, type_chirurgie: type});
+  if (res.ok) loadPatient(pid);
+  else alert('Erreur: ' + (res.error || 'inconnue'));
+}
+
+async function deleteChirurgie(pid) {
+  if (!confirm('Supprimer la chirurgie et tous les RDV post-op associés dans l\'agenda ?')) return;
+  const res = await api(`/api/patients/${pid}/chirurgie`, 'DELETE');
+  if (res.ok) loadPatient(pid);
+  else alert('Erreur: ' + (res.error || 'inconnue'));
+}
+
 async function deletePatient(pid, name) {
   if (!confirm(`Supprimer définitivement le patient ${name} ?\n\nToutes ses consultations, rendez-vous, documents et ordonnances seront supprimés. Cette action est irréversible.`)) return;
   const res = await api(`/api/patients/${pid}`, 'DELETE');
@@ -2224,13 +3487,58 @@ async function loadPatient(pid) {
 
 // ─── RDV ACTIONS ─────────────────────────────────────────────────────────────
 async function modifierRdv(rdvId, dateActuelle, heureActuelle) {
-  const date = prompt('Nouvelle date (YYYY-MM-DD) :', dateActuelle);
-  if (!date) return;
-  const heure = prompt('Nouvelle heure (HH:MM) :', heureActuelle);
-  if (!heure) return;
-  await api(`/api/rdv/${rdvId}/valider`, 'POST', {statut: 'confirmé', date, heure});
-  showView(currentView);
-  loadNotifications();
+  openEditRdvModal(rdvId);
+}
+
+async function openEditRdvModal(rdvId) {
+  // Fetch current RDV data
+  const rdvs = await api('/api/rdv');
+  const r = rdvs.find(x => x.id === rdvId);
+  if (!r) { alert('RDV introuvable'); return; }
+
+  const statutOptions = ['programmé','confirmé','en_attente','arrivé','en_cours','terminé','annulé']
+    .map(s => `<option value="${s}" ${s === r.statut ? 'selected' : ''}>${s}</option>`).join('');
+
+  document.getElementById('modalRdvTitle').textContent = 'Modifier le rendez-vous';
+  document.getElementById('modalRdvContent').innerHTML = `
+    <div class="form-row">
+      <div><label class="lbl">Patient</label>
+        <input class="input" value="${escH((r.patient_prenom||'') + ' ' + (r.patient_nom||''))} (${r.patient_id})" disabled style="opacity:.6">
+      </div>
+      <div><label class="lbl">Type</label>
+        <input class="input" id="editRdvType" value="${escH(r.type)}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Date</label><input type="date" class="input" id="editRdvDate" value="${r.date}"></div>
+      <div><label class="lbl">Heure</label><input type="time" class="input" id="editRdvHeure" value="${r.heure}"></div>
+    </div>
+    <div class="form-row">
+      <div><label class="lbl">Médecin</label><input class="input" id="editRdvMedecin" value="${escH(r.medecin)}"></div>
+      <div><label class="lbl">Statut</label><select class="input" id="editRdvStatut">${statutOptions}</select></div>
+    </div>
+    <div class="form-full"><label class="lbl">Notes</label>
+      <textarea class="input" id="editRdvNotes" rows="2">${escH(r.notes||'')}</textarea>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="submitEditRdv('${rdvId}')">Enregistrer</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalRdv')">Annuler</button>
+    </div>`;
+  openModal('modalRdv');
+}
+
+async function submitEditRdv(rdvId) {
+  const payload = {
+    date:   document.getElementById('editRdvDate').value,
+    heure:  document.getElementById('editRdvHeure').value,
+    type:   document.getElementById('editRdvType').value,
+    statut: document.getElementById('editRdvStatut').value,
+    medecin:document.getElementById('editRdvMedecin').value,
+    notes:  document.getElementById('editRdvNotes').value,
+  };
+  const res = await api(`/api/rdv/${rdvId}`, 'PUT', payload);
+  if (res.ok) { closeModal('modalRdv'); showView(currentView); loadNotifications(); }
+  else alert(res.error || 'Erreur');
 }
 
 async function validerRdv(rdvId, statut) {
@@ -2316,10 +3624,50 @@ function toggleNotifs() { notifOpen=!notifOpen; document.getElementById('notifPa
 document.addEventListener('click', e=>{ if(!e.target.closest('.notif-panel')&&!e.target.closest('.notif-btn')){ notifOpen=false; document.getElementById('notifPanel').classList.remove('open'); }});
 
 async function handleNotifClick(nid, type, pid) {
-  await api(`/api/notifications/${nid}/lu`,'POST');
+  await api(`/api/notifications/${nid}/lu`, 'POST');
   toggleNotifs();
-  if(pid && USER.role==='medecin') loadPatient(pid);
   loadNotifications();
+
+  // Navigate to the relevant page/tab
+  if (USER.role === 'medecin') {
+    const TAB = {
+      'document_uploaded': 'media',
+      'question':          'qst',
+      'chirurgie':         'suivi',
+      'rdv_urgent':        'rdvp',
+      'rdv_demande':       'rdvp',
+      'rdv_validé':        'rdvp',
+    };
+    const tab = TAB[type] || null;
+
+    if (type === 'rdv_urgent' || type === 'rdv_demande') {
+      // Go to agenda so the doctor can act on it directly
+      if (pid) {
+        window._pendingTab = 'rdvp';
+        await loadPatient(pid);
+      } else {
+        showView('agenda');
+      }
+    } else if (type === 'import') {
+      // Nothing specific — stay on current view
+    } else if (pid) {
+      window._pendingTab = tab;
+      await loadPatient(pid);
+    }
+  } else {
+    // Patient side
+    if (type === 'reponse' || type === 'question') showView('mes-questions');
+    else if (type === 'rdv_validé')               showView('mes-rdv');
+    else if (type === 'document_uploaded')         showView('mes-documents');
+  }
+}
+
+function _applyPendingTab() {
+  if (!window._pendingTab) return;
+  const tab = window._pendingTab;
+  window._pendingTab = null;
+  const btn = document.querySelector(`.tab-btn[onclick*="switchTab('${tab}'"]`);
+  if (btn) { btn.click(); }
 }
 
 async function markNotifLu(nid) { await api(`/api/notifications/${nid}/lu`,'POST'); loadNotifications(); }
@@ -2429,8 +3777,45 @@ function switchTab(tab, pid, btn) {
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
 function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  if (id) { document.getElementById(id)?.classList.remove('open'); }
+  else { document.getElementById('modalDynamic')?.classList.remove('open'); }
+}
 document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+/** Dynamic modal — showModal(title, bodyHTML, onConfirm, confirmOnly=false) */
+function showModal(title, bodyHTML, onConfirm, confirmOnly=false) {
+  let el = document.getElementById('modalDynamic');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.id = 'modalDynamic';
+    el.innerHTML = `<div class="modal" style="max-width:520px;width:90%">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <h3 id="modalDynTitle" style="margin:0;font-size:15px"></h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">×</button>
+      </div>
+      <div id="modalDynBody" style="padding:20px"></div>
+      <div id="modalDynFooter" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border)"></div>
+    </div>`;
+    el.addEventListener('click', e => { if(e.target===el) closeModal(); });
+    document.body.appendChild(el);
+  }
+  document.getElementById('modalDynTitle').textContent = title;
+  document.getElementById('modalDynBody').innerHTML = bodyHTML;
+  initPasswordToggles();
+  const footer = document.getElementById('modalDynFooter');
+  if (confirmOnly) {
+    footer.innerHTML = `<button class="btn btn-primary btn-sm" onclick="if(window._dynConfirm)window._dynConfirm()">OK</button>`;
+  } else {
+    footer.innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary btn-sm" id="modalDynConfirmBtn">Confirmer</button>`;
+    document.getElementById('modalDynConfirmBtn').onclick = onConfirm;
+  }
+  window._dynConfirm = onConfirm;
+  el.classList.add('open');
+}
 
 // ─── API HELPER ───────────────────────────────────────────────────────────────
 async function api(url, method='GET', body=null) {
@@ -2438,8 +3823,22 @@ async function api(url, method='GET', body=null) {
   if(body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(url, opts);
+    if (r.status === 429) return {error: 'Trop de tentatives. Réessayez dans une minute.'};
     return await r.json();
   } catch(e) { return {error:e.message}; }
+}
+
+// ─── MOBILE SIDEBAR ───────────────────────────────────────────────────────────
+function toggleMobileSidebar() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebarOverlay');
+  const isOpen   = sidebar.classList.contains('mobile-open');
+  sidebar.classList.toggle('mobile-open', !isOpen);
+  overlay.classList.toggle('open', !isOpen);
+}
+function closeMobileSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -2780,6 +4179,7 @@ function renderOrdonnancesList(ordonnances, pid) {
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-ghost btn-sm" onclick="printOrdonnance('${o.id}','${pid}')">🖨 Imprimer</button>
+            <button class="btn btn-ghost btn-sm" onclick="downloadOrdonnancePDF('${pid}','${o.id}')" title="Télécharger PDF">📄 PDF</button>
             <button class="btn btn-ghost btn-sm" style="opacity:.6" onclick="deleteOrdonnance('${pid}','${o.id}')">🗑</button>
           </div>
         </div>
@@ -2937,31 +4337,642 @@ async function printOrdonnance(oid, pid) {
   if (ordo.type === 'lunettes') {
     const c = ordo.contenu;
     body = `<table border="1" cellpadding="8" style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><th></th><th>Sphère</th><th>Cylindre</th><th>Axe</th><th>Addition</th></tr>
-      <tr><td><b>OD</b></td><td>${c.od_sph||''}</td><td>${c.od_cyl||''}</td><td>${c.od_axe||''}</td><td>${c.od_add||''}</td></tr>
-      <tr><td><b>OG</b></td><td>${c.og_sph||''}</td><td>${c.og_cyl||''}</td><td>${c.og_axe||''}</td><td>${c.og_add||''}</td></tr>
+      <tr style="background:#f5f5f5"><th></th><th>Sphère</th><th>Cylindre</th><th>Axe</th><th>Addition</th></tr>
+      <tr><td><b>Œil Droit (OD)</b></td><td>${c.od_sph||''}</td><td>${c.od_cyl||''}</td><td>${c.od_axe||''}</td><td>${c.od_add||''}</td></tr>
+      <tr><td><b>Œil Gauche (OG)</b></td><td>${c.og_sph||''}</td><td>${c.og_cyl||''}</td><td>${c.og_axe||''}</td><td>${c.og_add||''}</td></tr>
     </table>
-    ${c.type_verre ? `<p>Verres : <b>${c.type_verre}</b></p>` : ''}`;
+    ${c.type_verre ? `<p>Type de verres : <b>${c.type_verre}</b></p>` : ''}`;
   } else if (ordo.type === 'medicaments') {
-    body = (ordo.contenu.medicaments||[]).map(m=>`<p><b>${m.nom}</b> — ${m.posologie}${m.duree?` (${m.duree})`:''}</p>`).join('');
+    const meds = ordo.contenu.medicaments || [];
+    body = meds.map((m,i)=>`<div style="margin:10px 0;padding:8px 12px;border-left:3px solid #333">
+      <b>${i+1}. ${m.nom}</b><br>
+      <span style="color:#333">${m.posologie}${m.duree?` — Durée : ${m.duree}`:''}</span>
+    </div>`).join('');
   } else if (ordo.type === 'bilan') {
-    body = (ordo.contenu.examens||[]).map(e=>`<p>• ${e}</p>`).join('');
+    body = `<ul style="margin:10px 0">${(ordo.contenu.examens||[]).map(e=>`<li style="margin:6px 0">${e}</li>`).join('')}</ul>`;
   }
   const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
-  const w = window.open('', '_blank', 'width=700,height=900');
-  w.document.write(`<!DOCTYPE html><html><head><title>Ordonnance</title>
-  <style>body{font-family:serif;padding:40px;color:#000}h1{font-size:18px}h2{font-size:15px}p{margin:6px 0}table{width:100%}th,td{border:1px solid #000;padding:6px;text-align:center}hr{margin:20px 0}.footer{margin-top:40px;font-size:12px;color:#666}</style>
+  const medecinName = ordo.medecin || 'Dr. —';
+  const clinique = 'Cabinet d\'Ophtalmologie';
+  const w = window.open('', '_blank', 'width=760,height=1000');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Ordonnance — ${patient.prenom} ${patient.nom}</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:'Times New Roman',serif;padding:0;margin:0;color:#000;background:#fff}
+    .page{width:210mm;min-height:297mm;margin:0 auto;padding:20mm 20mm 15mm 20mm}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:14px}
+    .clinic-name{font-size:20px;font-weight:bold;letter-spacing:1px}
+    .clinic-info{font-size:11px;color:#333;margin-top:4px;line-height:1.6}
+    .doc-title{font-size:22px;font-weight:bold;text-align:center;margin:14px 0;text-transform:uppercase;letter-spacing:3px;color:#000}
+    .patient-box{background:#f9f9f9;border:1px solid #ccc;border-radius:4px;padding:10px 14px;margin-bottom:16px;font-size:13px;line-height:1.7}
+    .body-section{margin:18px 0;font-size:13px;line-height:1.8}
+    .notes{font-style:italic;margin-top:16px;font-size:12px;color:#444;border-top:1px dashed #ccc;padding-top:10px}
+    .footer{margin-top:40px;display:flex;justify-content:space-between;font-size:12px}
+    .signature-box{border:1px solid #999;width:180px;height:70px;display:flex;align-items:flex-end;padding:6px;font-size:11px;color:#666}
+    .stamp-box{border:1px solid #999;width:100px;height:70px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa}
+    @media print{body{margin:0}.page{padding:15mm 15mm 10mm 15mm}}
+  </style>
   </head><body>
-  <h1>${ordo.medecin}</h1><hr>
-  <p><b>Patient :</b> ${patient.prenom} ${patient.nom} — ${age} ans — ${patient.sexe==='F'?'F':'M'}</p>
-  <p><b>Date :</b> ${fmtDate(ordo.date)}</p><hr>
-  ${body}
-  ${ordo.notes ? `<p><i>${ordo.notes}</i></p>` : ''}
-  <div class="footer">Signature du médecin :</div>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="clinic-name">${clinique}</div>
+        <div class="clinic-info">
+          Médecin : <b>${medecinName}</b><br>
+          Spécialité : Ophtalmologie
+        </div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:#333">
+        <div>Date : <b>${fmtDate(ordo.date)}</b></div>
+        <div>Réf : <b>${ordo.id}</b></div>
+      </div>
+    </div>
+
+    <div class="doc-title">Ordonnance${ordo.type==='lunettes'?' — Correction Optique':ordo.type==='bilan'?' — Bilan':''}</div>
+
+    <div class="patient-box">
+      <b>Patient :</b> ${patient.prenom} ${patient.nom} &nbsp;|&nbsp;
+      <b>Âge :</b> ${age} ans &nbsp;|&nbsp;
+      <b>Sexe :</b> ${patient.sexe==='F'?'Féminin':'Masculin'}<br>
+      ${patient.ddn ? `<b>Né(e) le :</b> ${fmtDate(patient.ddn)} &nbsp;` : ''}
+      ${patient.telephone ? `&nbsp;| <b>Tél :</b> ${patient.telephone}` : ''}
+    </div>
+
+    <div class="body-section">${body}</div>
+    ${ordo.notes ? `<div class="notes">📝 ${ordo.notes}</div>` : ''}
+
+    <div class="footer">
+      <div>
+        <div style="margin-bottom:6px;font-size:12px">Signature &amp; Cachet du médecin :</div>
+        <div class="signature-box">${medecinName}</div>
+      </div>
+      <div>
+        <div style="margin-bottom:6px;font-size:12px">Cachet :</div>
+        <div class="stamp-box">Cachet<br>médecin</div>
+      </div>
+    </div>
+  </div>
   </body></html>`);
   w.document.close();
-  w.print();
+  setTimeout(() => w.print(), 300);
 }
+
+// ─── PRINT PATIENT SUMMARY ─────────────────────────────────────────────────
+
+function printPatientSummary(pid) {
+  const patient = window._currentPatient;
+  if (!patient) return;
+  const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
+  const ivtList = window._currentIVT || [];
+  const lastConsult = patient.historique?.[0] || null;
+  const today = new Date().toISOString().slice(0,10);
+  const nextRdv = (patient.rdv||[]).filter(r=>r.date>=today && r.statut!=='annulé').sort((a,b)=>a.date.localeCompare(b.date))[0];
+  const ordos = (patient.ordonnances||[]).slice(0,3);
+
+  const ivtSummary = ivtList.length
+    ? `OD×${ivtList.filter(i=>i.oeil==='OD').length} OG×${ivtList.filter(i=>i.oeil==='OG').length} (dernier : ${ivtList[0]?.medicament} ${fmtDate(ivtList[0]?.date)})`
+    : 'Aucune';
+
+  const w = window.open('', '_blank', 'width=760,height=1000');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Résumé — ${patient.prenom} ${patient.nom}</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:30px 40px;color:#000;font-size:13px}
+    h1{font-size:20px;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:18px}
+    h2{font-size:14px;text-transform:uppercase;letter-spacing:1px;color:#555;margin:18px 0 8px}
+    table{width:100%;border-collapse:collapse;margin:8px 0}
+    td,th{border:1px solid #ccc;padding:6px 8px}
+    th{background:#f0f0f0;text-align:left}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;margin:2px;background:#eee}
+    .badge-red{background:#fee2e2;color:#b91c1c}
+    .badge-teal{background:#e0f2fe;color:#0369a1}
+    .footer{margin-top:30px;font-size:11px;color:#888;border-top:1px solid #ddd;padding-top:10px}
+    @media print{body{padding:15mm}}
+  </style>
+  </head><body>
+  <h1>Résumé Clinique — ${patient.prenom} ${patient.nom}</h1>
+  <table>
+    <tr><th>Date de naissance</th><td>${fmtDate(patient.ddn)} (${age} ans)</td><th>Sexe</th><td>${patient.sexe==='F'?'Féminin':'Masculin'}</td></tr>
+    <tr><th>Téléphone</th><td>${patient.telephone||'—'}</td><th>Email</th><td>${patient.email||'—'}</td></tr>
+    ${patient.date_chirurgie?`<tr><th>Chirurgie</th><td>${patient.type_chirurgie||'—'}</td><th>Date</th><td>${fmtDate(patient.date_chirurgie)}</td></tr>`:''}
+  </table>
+
+  <h2>Antécédents & Allergies</h2>
+  <div>${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')||'Aucun'}</div>
+  <div style="margin-top:6px">${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')||'Aucune allergie connue'}</div>
+
+  ${lastConsult ? `
+  <h2>Dernière consultation (${fmtDate(lastConsult.date)})</h2>
+  <table>
+    <tr><th>Motif</th><td>${lastConsult.motif||'—'}</td><th>Diagnostic</th><td>${lastConsult.diagnostic||'—'}</td></tr>
+    <tr><th>Acuité OD</th><td>${lastConsult.acuite_od||'—'}</td><th>Acuité OG</th><td>${lastConsult.acuite_og||'—'}</td></tr>
+    <tr><th>Tonus OD</th><td>${lastConsult.tension_od?lastConsult.tension_od+' mmHg':'—'}</td><th>Tonus OG</th><td>${lastConsult.tension_og?lastConsult.tension_og+' mmHg':'—'}</td></tr>
+    ${lastConsult.traitement?`<tr><th>Traitement</th><td colspan="3">${lastConsult.traitement}</td></tr>`:''}
+  </table>` : ''}
+
+  <h2>Injections IVT</h2>
+  <p>${ivtSummary}</p>
+  ${ivtList.length ? `<table><tr><th>#</th><th>Œil</th><th>Médicament</th><th>Dose</th><th>Date</th><th>Médecin</th></tr>
+  ${ivtList.slice(0,10).map(i=>`<tr><td>${i.numero}</td><td>${i.oeil}</td><td>${i.medicament}</td><td>${i.dose}</td><td>${fmtDate(i.date)}</td><td>${i.medecin}</td></tr>`).join('')}
+  ${ivtList.length>10?`<tr><td colspan="6" style="text-align:center;color:#888">…et ${ivtList.length-10} autres</td></tr>`:''}
+  </table>` : ''}
+
+  ${nextRdv ? `<h2>Prochain RDV</h2><p>${fmtDate(nextRdv.date)} à ${nextRdv.heure} — ${nextRdv.type} (${nextRdv.medecin})</p>` : ''}
+
+  ${ordos.length ? `<h2>Dernières ordonnances</h2><ul>
+  ${ordos.map(o=>`<li>${fmtDate(o.date)} — ${o.type} — ${o.medecin}</li>`).join('')}
+  </ul>` : ''}
+
+  <div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} — OphtalmoScan</div>
+  </body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 300);
+}
+
+// ─── IVT TAB ───────────────────────────────────────────────────────────────
+
+function renderIVTTab(ivtList, patient, pid) {
+  const countOD = ivtList.filter(i=>i.oeil==='OD').length;
+  const countOG = ivtList.filter(i=>i.oeil==='OG').length;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;gap:16px">
+        <div style="text-align:center;padding:12px 20px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+          <div style="font-size:24px;font-weight:700;color:var(--teal2)">${countOD}</div>
+          <div style="font-size:11px;color:var(--text3)">Injections OD</div>
+        </div>
+        <div style="text-align:center;padding:12px 20px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+          <div style="font-size:24px;font-weight:700;color:var(--teal2)">${countOG}</div>
+          <div style="font-size:11px;color:var(--text3)">Injections OG</div>
+        </div>
+        <div style="text-align:center;padding:12px 20px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+          <div style="font-size:24px;font-weight:700;color:var(--text2)">${ivtList.length}</div>
+          <div style="font-size:11px;color:var(--text3)">Total</div>
+        </div>
+      </div>
+      ${USER.role==='medecin' ? `<button class="btn btn-primary btn-sm" onclick="openAddIVT('${pid}')">+ Ajouter injection</button>` : ''}
+    </div>
+    ${ivtList.length >= 2 ? `
+    <div class="card card-sm" style="margin-bottom:16px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal2);margin-bottom:8px">Chronologie des injections IVT</div>
+      <canvas id="chart-ivt-${pid}" style="max-height:140px"></canvas>
+    </div>` : ''}
+    ${ivtList.length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">#</th>
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">Œil</th>
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">Médicament</th>
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">Dose</th>
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">Date</th>
+          <th style="text-align:left;padding:8px;color:var(--text3);font-weight:600">Médecin</th>
+          ${USER.role==='medecin'?'<th></th>':''}
+        </tr>
+      </thead>
+      <tbody>
+        ${ivtList.map(i=>`
+        <tr style="border-bottom:1px solid var(--border);${i.oeil==='OD'?'':'background:var(--bg2)'}">
+          <td style="padding:8px;font-weight:700;color:var(--teal2)">${i.numero}</td>
+          <td style="padding:8px"><span class="badge ${i.oeil==='OD'?'badge-teal':'badge-amber'}">${i.oeil}</span></td>
+          <td style="padding:8px">${i.medicament}</td>
+          <td style="padding:8px;color:var(--text3)">${i.dose}</td>
+          <td style="padding:8px">${fmtDate(i.date)}</td>
+          <td style="padding:8px;color:var(--text3)">${i.medecin}</td>
+          ${USER.role==='medecin'?`<td style="padding:8px"><button class="btn btn-ghost btn-sm" style="font-size:10px;opacity:.6" onclick="deleteIVT('${pid}','${i.id}')">🗑</button></td>`:''}
+        </tr>`).join('')}
+      </tbody>
+    </table>` : `<div style="color:var(--text3);text-align:center;padding:40px">Aucune injection IVT enregistrée</div>`}
+  `;
+}
+
+async function openAddIVT(pid) {
+  const medicaments = ['Ranibizumab','Aflibercept','Bevacizumab','Faricimab','Brolucizumab'];
+  showModal('Ajouter une injection IVT', `
+    <div class="form-group">
+      <label>Œil</label>
+      <select id="ivt-oeil" class="form-control">
+        <option value="OG">OG (Gauche)</option>
+        <option value="OD">OD (Droit)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Médicament</label>
+      <select id="ivt-med" class="form-control" onchange="
+        const autres = document.getElementById('ivt-med-autre-wrap');
+        autres.style.display = this.value === '__autre__' ? 'block' : 'none';
+      ">
+        ${medicaments.map(m=>`<option value="${m}">${m}</option>`).join('')}
+        <option value="__autre__">Autre…</option>
+      </select>
+    </div>
+    <div class="form-group" id="ivt-med-autre-wrap" style="display:none">
+      <label>Précisez le médicament</label>
+      <input id="ivt-med-autre" class="form-control" placeholder="Ex : Conbercept, Pegaptanib…">
+    </div>
+    <div class="form-group">
+      <label>Dose</label>
+      <input id="ivt-dose" class="form-control" value="0.5mg">
+    </div>
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="ivt-date" class="form-control" value="${new Date().toISOString().slice(0,10)}">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <input id="ivt-notes" class="form-control" placeholder="Observations (optionnel)">
+    </div>
+  `, async () => {
+    const medSelect = document.getElementById('ivt-med').value;
+    const medAutre  = document.getElementById('ivt-med-autre').value.trim();
+    if (medSelect === '__autre__' && !medAutre) {
+      alert('Veuillez préciser le nom du médicament.'); return false;
+    }
+    const data = {
+      oeil:       document.getElementById('ivt-oeil').value,
+      medicament: medSelect === '__autre__' ? medAutre : medSelect,
+      dose:       document.getElementById('ivt-dose').value,
+      date:       document.getElementById('ivt-date').value,
+      notes:      document.getElementById('ivt-notes').value
+    };
+    const res = await api(`/api/patients/${pid}/ivt`, 'POST', data);
+    if (res.ok) { closeModal(); loadPatient(pid); }
+    else alert(res.error || 'Erreur');
+  });
+}
+
+async function deleteIVT(pid, iid) {
+  if (!confirm('Supprimer cette injection ?')) return;
+  await api(`/api/patients/${pid}/ivt/${iid}`, 'DELETE');
+  loadPatient(pid);
+}
+
+// ─── CREDENTIALS DISPLAY HELPER ──────────────────────────────────────────────
+function _showCredentialsModal(fullName, creds, pid) {
+  const emailNote = creds.email_sent
+    ? '<div style="background:var(--teal-dim);border:1px solid var(--teal);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--teal2);margin-top:12px">✉️ Les identifiants ont été envoyés par email au patient.</div>'
+    : '<div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-top:12px">⚠️ Aucun email envoyé (pas d\'adresse email ou SMTP non configuré). Communiquez ces identifiants manuellement.</div>';
+  showModal('Compte patient créé ✓', `
+    <div style="text-align:center;padding:8px 0 14px">
+      <div style="font-size:40px;margin-bottom:8px">✅</div>
+      <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Compte créé pour <b>${fullName}</b></p>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="color:var(--text3)">Identifiant</span>
+        <span style="font-family:monospace;font-weight:600">${creds.username}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span style="color:var(--text3)">Mot de passe</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:monospace;font-weight:600" id="credPwDisplay">${creds.password}</span>
+          <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px"
+            onclick="navigator.clipboard.writeText('${creds.password}');this.textContent='✓'">📋</button>
+        </div>
+      </div>
+    </div>
+    ${emailNote}
+  `, () => { closeModal(); if(pid) loadPatient(pid); }, true);
+}
+
+// ─── PATIENT ACCOUNT CREATION ──────────────────────────────────────────────
+
+async function openCreateAccount(pid, fullName) {
+  const sugUser = 'patient.' + fullName.toLowerCase().replace(/\s+/g,'.').replace(/[^a-z0-9.]/g,'');
+  const sugPass = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,6);
+  showModal('Créer un compte patient', `
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Un compte permettra à <b>${fullName}</b> de consulter ses données et poser des questions depuis l'application.
+    </p>
+    <div class="form-group">
+      <label>Nom d'utilisateur</label>
+      <input id="acc-user" class="form-control" value="${sugUser}">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <div style="display:flex;gap:8px">
+        <input id="acc-pass" class="form-control" value="${sugPass}">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('acc-pass').select();document.execCommand('copy');this.textContent='✓ Copié'" style="white-space:nowrap">📋 Copier</button>
+      </div>
+    </div>
+  `, async () => {
+    const res = await api(`/api/patients/${pid}/create-account`, 'POST', {
+      username: document.getElementById('acc-user').value.trim(),
+      password: document.getElementById('acc-pass').value.trim()
+    });
+    if (res.ok) {
+      closeModal();
+      _showCredentialsModal(fullName, res, pid);
+    } else {
+      alert(res.error || 'Erreur création compte');
+    }
+  });
+}
+
+// ─── SMS REMINDERS ─────────────────────────────────────────────────────────
+
+
+async function triggerEmailReminders() {
+  if (!confirm('Envoyer les rappels email pour les RDV de demain ?')) return;
+  const res = await api('/api/email/send-reminders', 'POST');
+  if (res.ok) alert(`${res.sent} rappel(s) email envoyé(s).`);
+  else alert(res.error || 'Erreur envoi email');
+}
+
+// ─── TODAY / SALLE D'ATTENTE ──────────────────────────────────────────────────
+
+async function _updateTodayBadge() {
+  const rdvs = await api('/api/rdv');
+  const today = new Date().toISOString().slice(0,10);
+  const count = rdvs.filter(r => r.date === today && r.statut !== 'annulé').length;
+  const btn   = document.getElementById('navToday');
+  if (!btn) return;
+  const existing = btn.querySelector('.nb');
+  if (existing) existing.remove();
+  if (count > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'nb amber';
+    badge.textContent = count;
+    btn.appendChild(badge);
+  }
+}
+
+async function renderTodayView(c) {
+  const rdvs = await api('/api/rdv');
+  const today = new Date().toISOString().slice(0,10);
+  const now   = new Date().toTimeString().slice(0,5);
+  const todayRdvs = rdvs.filter(r => r.date === today).sort((a,b) => a.heure.localeCompare(b.heure));
+
+  const done      = todayRdvs.filter(r => r.statut === 'terminé').length;
+  const enCours   = todayRdvs.filter(r => r.statut === 'en_cours').length;
+  const arrive    = todayRdvs.filter(r => r.statut === 'arrivé').length;
+  const restants  = todayRdvs.filter(r => !['terminé','annulé'].includes(r.statut)).length;
+
+  const statutBadge = s => {
+    const map = {
+      'confirmé':  ['badge-teal',  'Confirmé'],
+      'programmé': ['badge-teal',  'Programmé'],
+      'en_attente':['badge-amber', 'En attente'],
+      'arrivé':    ['', 'Arrivé'],
+      'en_cours':  ['badge-amber', 'En consultation'],
+      'terminé':   ['badge-green', 'Terminé'],
+      'annulé':    ['badge-red',   'Annulé'],
+    };
+    const [cls, label] = map[s] || ['', s];
+    return `<span class="badge ${cls}" style="${s==='arrivé'?'background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)':''}">${label}</span>`;
+  };
+
+  const checkinButtons = r => {
+    const btns = [];
+    if (!['terminé','annulé'].includes(r.statut)) {
+      if (r.statut !== 'arrivé'   && r.statut !== 'en_cours') btns.push(`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#93c5fd" onclick="setCheckin('${r.id}','arrivé')">✓ Arrivé</button>`);
+      if (r.statut !== 'en_cours' && r.statut !== 'terminé')   btns.push(`<button class="btn btn-amber btn-sm" style="font-size:11px" onclick="setCheckin('${r.id}','en_cours')">▶ En cours</button>`);
+      btns.push(`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="setCheckin('${r.id}','terminé')">✓ Terminé</button>`);
+    }
+    btns.push(`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openEditRdvModal('${r.id}')">✏</button>`);
+    btns.push(`<button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.5" onclick="deleteRdv('${r.id}')">🗑</button>`);
+    return btns.join('');
+  };
+
+  const cardClass = r => {
+    if (r.statut === 'terminé') return 'checkin-card statut-termine';
+    if (r.statut === 'en_cours') return 'checkin-card statut-en_cours';
+    if (r.statut === 'arrivé') return 'checkin-card statut-arrive';
+    if (r.statut === 'annulé') return 'checkin-card statut-annule';
+    return 'checkin-card';
+  };
+
+  c.innerHTML = `
+    <div style="margin-bottom:18px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase()}
+      </div>
+      <div class="grid-4" style="margin-bottom:0">
+        <div class="stat-card teal"><div class="stat-label">Total aujourd'hui</div><div class="stat-value">${todayRdvs.length}</div></div>
+        <div class="stat-card blue"><div class="stat-label">Restants</div><div class="stat-value">${restants}</div></div>
+        <div class="stat-card amber"><div class="stat-label">En cours</div><div class="stat-value">${enCours + arrive}</div></div>
+        <div class="stat-card" style="--teal:var(--green)"><div class="stat-label">Terminés</div><div class="stat-value" style="color:var(--green)">${done}</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="openAddRdv(null)">+ Nouveau RDV</button>
+      <button class="btn btn-ghost btn-sm" onclick="triggerEmailReminders()" title="Rappels email demain">📧 Email demain</button>
+      <button class="btn btn-ghost btn-sm" onclick="renderTodayView(document.getElementById('mainContent'))" title="Actualiser">↺ Actualiser</button>
+    </div>
+
+    ${todayRdvs.length === 0 ?
+      '<div style="color:var(--text3);text-align:center;padding:60px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:40px;margin-bottom:12px">🏥</div><div>Aucun rendez-vous aujourd\'hui</div></div>' :
+      todayRdvs.map(r => {
+        const isPast = r.heure < now && !['terminé','en_cours'].includes(r.statut);
+        return `
+        <div class="${cardClass(r)}">
+          <div class="checkin-time ${r.heure < now ? 'past' : ''}">${r.heure}</div>
+          <div style="flex:1;min-width:0;cursor:pointer" onclick="loadPatient('${r.patient_id}')">
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${r.urgent?'🚨 ':''}${r.patient_prenom||''} ${r.patient_nom||''}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">${r.type} · ${r.medecin}</div>
+            ${r.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">📝 ${escH(r.notes)}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            ${statutBadge(r.statut)}
+            ${isPast && r.statut !== 'terminé' ? '<span style="font-size:10px;color:var(--amber)">⚠ En retard</span>' : ''}
+            <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${checkinButtons(r)}</div>
+          </div>
+        </div>`;
+      }).join('')
+    }`;
+}
+
+async function setCheckin(rdvId, statut) {
+  const res = await api(`/api/rdv/${rdvId}`, 'PUT', {statut});
+  if (res.ok) {
+    renderTodayView(document.getElementById('mainContent'));
+    _updateTodayBadge();
+  }
+}
+
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+
+function openChangePassword() {
+  closeUserMenu();
+  showModal('Changer le mot de passe', `
+    <div style="margin-bottom:12px">
+      <label class="lbl">Mot de passe actuel</label>
+      <input type="password" class="input" id="cpCurrent" placeholder="Votre mot de passe actuel">
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="lbl">Nouveau mot de passe</label>
+      <input type="password" class="input" id="cpNew" placeholder="Au moins 6 caractères">
+    </div>
+    <div>
+      <label class="lbl">Confirmer le nouveau mot de passe</label>
+      <input type="password" class="input" id="cpConfirm" placeholder="Répétez le nouveau mot de passe">
+    </div>
+    <div id="cpError" style="color:#fca5a5;font-size:13px;margin-top:10px;display:none"></div>
+  `, async () => {
+    const current  = document.getElementById('cpCurrent').value;
+    const newPw    = document.getElementById('cpNew').value;
+    const confirm2 = document.getElementById('cpConfirm').value;
+    const errEl    = document.getElementById('cpError');
+    errEl.style.display = 'none';
+    if (newPw !== confirm2) {
+      errEl.textContent = 'Les deux mots de passe ne correspondent pas.';
+      errEl.style.display = 'block'; return;
+    }
+    if (newPw.length < 6) {
+      errEl.textContent = 'Le mot de passe doit faire au moins 6 caractères.';
+      errEl.style.display = 'block'; return;
+    }
+    const res = await api('/api/change-password', 'POST', {current_password: current, new_password: newPw});
+    if (res.ok) {
+      closeModal();
+      showModal('Mot de passe modifié ✓',
+        '<div style="text-align:center;padding:10px"><div style="font-size:36px;margin-bottom:12px">✅</div><p style="color:var(--text2)">Votre mot de passe a été mis à jour avec succès.</p></div>',
+        () => closeModal(), true
+      );
+    } else {
+      errEl.textContent = res.error || 'Erreur';
+      errEl.style.display = 'block';
+    }
+  });
+}
+
+// ─── USER MENU ────────────────────────────────────────────────────────────────
+
+let _userMenuOpen = false;
+
+function toggleUserMenu(e) {
+  e.stopPropagation();
+  _userMenuOpen = !_userMenuOpen;
+  document.getElementById('userMenu').classList.toggle('open', _userMenuOpen);
+}
+
+function closeUserMenu() {
+  _userMenuOpen = false;
+  document.getElementById('userMenu').classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.user-menu') && !e.target.closest('.topbar-user')) closeUserMenu();
+});
+
+// ─── PDF ORDONNANCE DOWNLOAD ──────────────────────────────────────────────────
+
+function downloadOrdonnancePDF(pid, oid) {
+  const a = document.createElement('a');
+  a.href = `/api/patients/${pid}/ordonnances/${oid}/pdf`;
+  a.download = `ordonnance_${oid}.pdf`;
+  a.click();
+}
+
+// ─── AI CONSULTATION SUMMARY ──────────────────────────────────────────────────
+
+async function generateConsultationSummary(pid) {
+  const hid = currentPatientId === pid && document.querySelector('.tl-item') ? null : null;
+  showModal('Générer un compte-rendu IA', `
+    <div style="text-align:center;padding:20px">
+      <div style="font-size:36px;margin-bottom:12px">🤖</div>
+      <div style="color:var(--text2);margin-bottom:16px">Génération du compte-rendu à partir de la dernière consultation…</div>
+      <div id="summaryResult" style="text-align:left;display:none;background:var(--bg2);border-radius:10px;padding:16px;font-size:13px;color:var(--text);white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
+    </div>`, null, true);
+
+  const res = await api(`/api/patients/${pid}/consultation-summary`, 'POST', {});
+  const el  = document.getElementById('summaryResult');
+  if (!el) return;
+  if (res.ok && res.summary) {
+    el.textContent = res.summary;
+    el.style.display = 'block';
+    // Add copy button
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.style.marginTop = '10px';
+    btn.textContent = '📋 Copier le texte';
+    btn.onclick = () => { navigator.clipboard.writeText(res.summary); btn.textContent = '✓ Copié !'; };
+    el.parentElement.appendChild(btn);
+  } else {
+    el.textContent = res.error || 'Erreur lors de la génération.';
+    el.style.color = 'var(--red)';
+    el.style.display = 'block';
+  }
+}
+
+// ─── CSV EXPORT ───────────────────────────────────────────────────────────────
+
+function exportPatientsCSV() {
+  const a = document.createElement('a');
+  a.href = '/api/patients/export-csv';
+  a.download = `patients_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─── IVT TIMELINE CHART ───────────────────────────────────────────────────────
+
+function renderIVTChart(ivtList, pid) {
+  const canvas = document.getElementById(`chart-ivt-${pid}`);
+  if (!canvas || !ivtList.length) return;
+  const ctx = canvas.getContext('2d');
+  const sorted = [...ivtList].sort((a,b) => a.date.localeCompare(b.date));
+  const odData = sorted.filter(i => i.oeil === 'OD');
+  const ogData = sorted.filter(i => i.oeil === 'OG');
+  const allDates = [...new Set(sorted.map(i => i.date))];
+
+  if (window[`_ivtChart_${pid}`]) window[`_ivtChart_${pid}`].destroy();
+  window[`_ivtChart_${pid}`] = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'OD', data: odData.map(i => ({x: i.date, y: 1, num: i.numero, med: i.medicament})),
+          backgroundColor: 'rgba(14,165,160,0.8)', pointRadius: 8, pointHoverRadius: 10
+        },
+        {
+          label: 'OG', data: ogData.map(i => ({x: i.date, y: 0, num: i.numero, med: i.medicament})),
+          backgroundColor: 'rgba(245,158,11,0.8)', pointRadius: 8, pointHoverRadius: 10
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#7fa8be', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = ctx.raw;
+              return `${ctx.dataset.label} #${d.num} — ${d.med} (${d.x})`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { type: 'category', labels: allDates, ticks: { color: '#3d6a82', font: { size: 9 } }, grid: { color: 'rgba(21,48,69,0.5)' } },
+        y: {
+          ticks: { color: '#3d6a82', callback: v => v === 1 ? 'OD' : 'OG', font: { size: 10 } },
+          grid: { color: 'rgba(21,48,69,0.5)' }, min: -0.5, max: 1.5, stepSize: 1
+        }
+      }
+    }
+  });
+}
+
+// ─── PAGE LOAD: check for password reset token in URL ─────────────────────────
+(async function checkResetToken() {
+  initPasswordToggles(); // wire up eye-toggles on all static auth panels
+  const params = new URLSearchParams(window.location.search);
+  const token  = params.get('token');
+  if (token) {
+    document.getElementById('resetToken').value = token;
+    showAuthPanel('reset');
+    return; // don't attempt auto-login
+  }
+  // Auto-restore session if already logged in
+  const me = await api('/me');
+  if (me && me.authenticated) {
+    USER = me;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    initApp();
+  }
+})();
 </script>
 </body>
 </html>

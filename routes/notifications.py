@@ -13,9 +13,16 @@ def get_notifications():
     db = get_db()
 
     if u['role'] == 'medecin':
-        rows = db.execute(
-            "SELECT * FROM notifications ORDER BY date DESC LIMIT 20"
-        ).fetchall()
+        # Only show notifications for this doctor's own patients (+ system-wide ones)
+        rows = db.execute("""
+            SELECT n.* FROM notifications n
+            WHERE n.patient_id IS NULL
+               OR n.patient_id = ''
+               OR n.patient_id IN (
+                   SELECT id FROM patients WHERE medecin_id = ?
+               )
+            ORDER BY n.date DESC LIMIT 30
+        """, (u['id'],)).fetchall()
     else:
         rows = db.execute(
             "SELECT * FROM notifications WHERE patient_id=? AND from_role='medecin' "
@@ -37,6 +44,9 @@ def get_notifications():
 
 @bp.route('/api/notifications/<nid>/lu', methods=['POST'])
 def mark_lu(nid):
+    u = current_user()
+    if not u:
+        return jsonify({"error": "Non connecté"}), 401
     db = get_db()
     db.execute("UPDATE notifications SET lu=1 WHERE id=?", (nid,))
     db.commit()

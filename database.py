@@ -1,5 +1,6 @@
 import sqlite3, json, uuid, datetime, os
-from flask import g, session
+from functools import wraps
+from flask import g, session, jsonify
 from werkzeug.security import generate_password_hash
 
 DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ophtalmo.db')
@@ -12,6 +13,8 @@ def get_db():
         g.db = sqlite3.connect(DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA journal_mode = WAL")
+        g.db.execute("PRAGMA synchronous = NORMAL")
     return g.db
 
 
@@ -36,6 +39,40 @@ def current_user():
     return g.current_user
 
 
+# ─── ROLE DECORATOR ──────────────────────────────────────────────────────────
+
+def require_role(*roles):
+    """Decorator that enforces role-based access on route functions."""
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            u = current_user()
+            if not u or u['role'] not in roles:
+                return jsonify({"error": "Accès refusé"}), 403
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+# ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+def log_audit(db, action, table, record_id, user_id='', patient_id='', detail=''):
+    """Write one audit-log row. Silently skips if audit_log table doesn't exist yet."""
+    try:
+        db.execute(
+            "INSERT INTO audit_log (id, action, table_name, record_id, user_id, patient_id, detail, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (
+                str(uuid.uuid4())[:8],
+                action, table, record_id,
+                user_id, patient_id, detail,
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+        )
+    except Exception:
+        pass  # audit must never break normal flow
+
+
 # ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 def add_notif(db, type_, message, from_role, patient_id=None, data=None):
@@ -57,6 +94,180 @@ def add_notif(db, type_, message, from_role, patient_id=None, data=None):
 
 def _migrate(db):
     """Add columns/tables introduced after initial schema."""
+    # Create suivi_postop table if missing (added after initial deploy)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS suivi_postop (
+            id            TEXT PRIMARY KEY,
+            patient_id    TEXT NOT NULL,
+            etape         TEXT NOT NULL,
+            date_prevue   TEXT DEFAULT '',
+            date_reelle   TEXT DEFAULT '',
+            statut        TEXT DEFAULT 'a_faire',
+            historique_id TEXT DEFAULT '',
+            notes         TEXT DEFAULT '',
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_suivi_patient ON suivi_postop(patient_id)")
+    try:
+        db.execute("ALTER TABLE suivi_postop ADD COLUMN rdv_id TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE documents ADD COLUMN deleted INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE documents ADD COLUMN deleted_at TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE questions ADD COLUMN deleted INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE questions ADD COLUMN deleted_at TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE rdv ADD COLUMN sms_envoye INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE rdv ADD COLUMN email_envoye INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    # ordonnances: soft-delete columns
+    try:
+        db.execute("ALTER TABLE ordonnances ADD COLUMN deleted INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE ordonnances ADD COLUMN deleted_at TEXT DEFAULT ''")
+    except Exception:
+        pass
+    # ivt: soft-delete columns
+    try:
+        db.execute("ALTER TABLE ivt ADD COLUMN deleted INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE ivt ADD COLUMN deleted_at TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # audit_log table
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id          TEXT PRIMARY KEY,
+            action      TEXT NOT NULL,
+            table_name  TEXT NOT NULL,
+            record_id   TEXT NOT NULL,
+            user_id     TEXT DEFAULT '',
+            patient_id  TEXT DEFAULT '',
+            detail      TEXT DEFAULT '',
+            created_at  TEXT NOT NULL
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_log(patient_id, created_at)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_log(user_id, created_at)")
+    db.commit()
+
+    # ivt table (may already exist from _create_tables)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS ivt (
+            id          TEXT PRIMARY KEY,
+            patient_id  TEXT NOT NULL,
+            oeil        TEXT DEFAULT 'OG',
+            medicament  TEXT DEFAULT 'Ranibizumab',
+            dose        TEXT DEFAULT '0.5mg',
+            date        TEXT DEFAULT '',
+            numero      INTEGER DEFAULT 1,
+            notes       TEXT DEFAULT '',
+            medecin     TEXT DEFAULT '',
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_ivt_patient ON ivt(patient_id, date)")
+    db.commit()
+
+    # ── users table: add admin role + new columns (v2.2) ────────────────────────
+    # SQLite cannot ALTER a CHECK constraint, so we recreate the table if needed.
+    try:
+        db.execute("INSERT INTO users(id,username,password_hash,role,nom) VALUES('_t','_t','_t','admin','_t')")
+        db.execute("DELETE FROM users WHERE id='_t'")
+        db.commit()
+    except Exception:
+        # Recreate with updated schema
+        db.execute("ALTER TABLE users RENAME TO _users_old")
+        db.execute("""
+            CREATE TABLE users (
+                id             TEXT PRIMARY KEY,
+                username       TEXT UNIQUE NOT NULL,
+                password_hash  TEXT NOT NULL,
+                role           TEXT NOT NULL CHECK(role IN ('medecin','patient','admin')),
+                nom            TEXT NOT NULL,
+                prenom         TEXT DEFAULT '',
+                email          TEXT DEFAULT '',
+                date_naissance TEXT DEFAULT '',
+                organisation   TEXT DEFAULT '',
+                status         TEXT DEFAULT 'active',
+                patient_id     TEXT,
+                created_at     TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        db.execute("""
+            INSERT INTO users(id,username,password_hash,role,nom,prenom,email,patient_id,created_at)
+            SELECT id,username,password_hash,role,nom,prenom,COALESCE(email,''),patient_id,created_at
+            FROM _users_old
+        """)
+        db.execute("DROP TABLE _users_old")
+        db.commit()
+    # Add new user columns if missing
+    for col, typedef in [
+        ("date_naissance", "TEXT DEFAULT ''"),
+        ("organisation",   "TEXT DEFAULT ''"),
+        ("status",         "TEXT DEFAULT 'active'"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass
+    # Ensure admin exists — only applies to existing DBs that were upgraded
+    # (fresh DBs are seeded by _seed_data which runs before _migrate)
+    has_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if has_users > 0 and not db.execute("SELECT id FROM users WHERE role='admin'").fetchone():
+        import secrets as _s
+        _pw = _s.token_urlsafe(16)
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"\n{'='*60}\n  ADMIN CRÉÉ (migration) — mot de passe: {_pw}\n{'='*60}"
+        )
+        db.execute(
+            "INSERT INTO users(id,username,password_hash,role,nom,prenom,email,organisation,status) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            ("U000","admin",generate_password_hash(_pw),
+             "admin","Administrateur","Système","admin@ophtalmo.local","OphtalmoScan","active")
+        )
+    db.commit()
+
+    # ── password_resets table (added v2.1) ────────────────────────────────────
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS password_resets (
+            token       TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            used        INTEGER DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    try:
+        db.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+    except Exception:
+        pass
+    db.commit()
+
     new_cols = [
         ("historique", "refraction_od_sph",  "TEXT DEFAULT ''"),
         ("historique", "refraction_od_cyl",  "TEXT DEFAULT ''"),
@@ -82,22 +293,35 @@ def init_db(app):
         db = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
         _create_tables(db)
+        _seed_data(db)   # must run before _migrate so admin-check in migrate sees real data
         _migrate(db)
-        _seed_data(db)
         db.close()
 
 
 def _create_tables(db):
     db.executescript("""
     CREATE TABLE IF NOT EXISTS users (
-        id           TEXT PRIMARY KEY,
-        username     TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role         TEXT NOT NULL CHECK(role IN ('medecin','patient')),
-        nom          TEXT NOT NULL,
-        prenom       TEXT DEFAULT '',
-        patient_id   TEXT,
-        created_at   TEXT DEFAULT (datetime('now'))
+        id             TEXT PRIMARY KEY,
+        username       TEXT UNIQUE NOT NULL,
+        password_hash  TEXT NOT NULL,
+        role           TEXT NOT NULL CHECK(role IN ('medecin','patient','admin')),
+        nom            TEXT NOT NULL,
+        prenom         TEXT DEFAULT '',
+        email          TEXT DEFAULT '',
+        date_naissance TEXT DEFAULT '',
+        organisation   TEXT DEFAULT '',
+        status         TEXT DEFAULT 'active' CHECK(status IN ('active','pending','rejected')),
+        patient_id     TEXT,
+        created_at     TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS password_resets (
+        token       TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        expires_at  TEXT NOT NULL,
+        used        INTEGER DEFAULT 0,
+        created_at  TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS patients (
@@ -176,6 +400,8 @@ def _create_tables(db):
         notes       TEXT DEFAULT '',
         analyse_ia  TEXT DEFAULT '',
         source      TEXT DEFAULT 'document',
+        deleted     INTEGER DEFAULT 0,
+        deleted_at  TEXT DEFAULT '',
         FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
     );
 
@@ -190,6 +416,8 @@ def _create_tables(db):
         reponse_validee  INTEGER DEFAULT 0,
         repondu_par      TEXT DEFAULT '',
         date_reponse     TEXT DEFAULT '',
+        deleted          INTEGER DEFAULT 0,
+        deleted_at       TEXT DEFAULT '',
         FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
     );
 
@@ -204,6 +432,34 @@ def _create_tables(db):
         data        TEXT DEFAULT '{}'
     );
 
+    CREATE TABLE IF NOT EXISTS suivi_postop (
+        id            TEXT PRIMARY KEY,
+        patient_id    TEXT NOT NULL,
+        etape         TEXT NOT NULL,
+        date_prevue   TEXT DEFAULT '',
+        date_reelle   TEXT DEFAULT '',
+        statut        TEXT DEFAULT 'a_faire',
+        historique_id TEXT DEFAULT '',
+        rdv_id        TEXT DEFAULT '',
+        notes         TEXT DEFAULT '',
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS ivt (
+        id          TEXT PRIMARY KEY,
+        patient_id  TEXT NOT NULL,
+        oeil        TEXT DEFAULT 'OG',
+        medicament  TEXT DEFAULT 'Ranibizumab',
+        dose        TEXT DEFAULT '0.5mg',
+        date        TEXT DEFAULT '',
+        numero      INTEGER DEFAULT 1,
+        notes       TEXT DEFAULT '',
+        medecin     TEXT DEFAULT '',
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ivt_patient ON ivt(patient_id, date);
+
     CREATE INDEX IF NOT EXISTS idx_patients_medecin    ON patients(medecin_id);
     CREATE INDEX IF NOT EXISTS idx_historique_patient  ON historique(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_rdv_patient         ON rdv(patient_id, date);
@@ -211,6 +467,20 @@ def _create_tables(db):
     CREATE INDEX IF NOT EXISTS idx_documents_patient   ON documents(patient_id, source);
     CREATE INDEX IF NOT EXISTS idx_questions_patient   ON questions(patient_id, statut);
     CREATE INDEX IF NOT EXISTS idx_notifs_lu           ON notifications(lu, date);
+    CREATE INDEX IF NOT EXISTS idx_suivi_patient       ON suivi_postop(patient_id);
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id          TEXT PRIMARY KEY,
+        action      TEXT NOT NULL,
+        table_name  TEXT NOT NULL,
+        record_id   TEXT NOT NULL,
+        user_id     TEXT DEFAULT '',
+        patient_id  TEXT DEFAULT '',
+        detail      TEXT DEFAULT '',
+        created_at  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_log(patient_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_log(user_id, created_at);
     """)
     db.commit()
 
@@ -219,13 +489,37 @@ def _seed_data(db):
     if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0:
         return
 
+    import secrets as _secrets
+    _admin_pw   = _secrets.token_urlsafe(16)
+    _medecin_pw = _secrets.token_urlsafe(16)
+    _patient_pw = _secrets.token_urlsafe(16)
+
+    import logging as _log
+    _log.getLogger(__name__).warning(
+        "\n" + "="*60 +
+        "\n  COMPTES DE DÉMONSTRATION CRÉÉS — CHANGEZ CES MOTS DE PASSE" +
+        f"\n  admin      / {_admin_pw}" +
+        f"\n  dr.martin  / {_medecin_pw}" +
+        f"\n  patient.*  / {_patient_pw}" +
+        "\n" + "="*60
+    )
+
     db.executemany(
-        "INSERT INTO users (id, username, password_hash, role, nom, prenom, patient_id) "
-        "VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO users (id,username,password_hash,role,nom,prenom,email,organisation,status,patient_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
         [
-            ("U001", "dr.martin",     generate_password_hash("medecin123"), "medecin",   "Dr. Martin", "Jean",      None),
-            ("U003", "patient.marie", generate_password_hash("patient123"), "patient",   "Dupont",     "Marie",     "P001"),
-            ("U004", "patient.jp",    generate_password_hash("patient123"), "patient",   "Bernard",    "Jean-Paul", "P002"),
+            ("U000", "admin",
+             generate_password_hash(_admin_pw),
+             "admin", "Administrateur", "Système", "admin@ophtalmo.local", "OphtalmoScan", "active", None),
+            ("U001", "dr.martin",
+             generate_password_hash(_medecin_pw),
+             "medecin", "Martin", "Jean", "dr.martin@clinique.com", "Clinique de la Vision", "active", None),
+            ("U003", "patient.marie",
+             generate_password_hash(_patient_pw),
+             "patient", "Dupont", "Marie", "marie.dupont@email.com", "", "active", "P001"),
+            ("U004", "patient.jp",
+             generate_password_hash(_patient_pw),
+             "patient", "Bernard", "Jean-Paul", "jp.bernard@email.com", "", "active", "P002"),
         ]
     )
 
