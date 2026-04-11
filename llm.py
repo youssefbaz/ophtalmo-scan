@@ -1,10 +1,27 @@
 import os
+import time
 import requests as http_requests
 
 GROQ_API_KEY    = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL      = "llama-3.3-70b-versatile"
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL    = "gemini-2.0-flash"
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+
+# Gemini fallback chain (same key, different model quotas)
+GEMINI_FALLBACK_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite",
+]
+
+# OpenRouter free models — text and vision
+OPENROUTER_TEXT_MODEL   = "meta-llama/llama-3.3-70b-instruct:free"
+# Vision fallback chain: Qwen2.5-VL (best free vision) → Llama vision
+OPENROUTER_VISION_MODELS = [
+    "qwen/qwen2.5-vl-7b-instruct:free",       # best free vision model for medical images
+    "meta-llama/llama-3.2-11b-vision-instruct:free",
+]
 
 # ─── SYSTEM PROMPTS ───────────────────────────────────────────────────────────
 
@@ -45,25 +62,26 @@ def _call_groq(prompt, system, max_tokens):
     return r.json()['choices'][0]['message']['content']
 
 
-def _call_gemini(prompt, system, max_tokens, image_b64=None):
+def _detect_mime(image_b64):
+    try:
+        import base64 as _b64
+        hdr = _b64.b64decode(image_b64[:16])
+        if hdr[:8] == b'\x89PNG\r\n\x1a\n':
+            return "image/png"
+        if hdr[:3] == b'\xff\xd8\xff':
+            return "image/jpeg"
+    except Exception:
+        pass
+    return "image/jpeg"
+
+
+def _call_gemini_model(model, prompt, system, max_tokens, image_b64=None):
     parts = []
     if image_b64:
-        # Detect mime type from magic bytes
-        try:
-            import base64 as _b64
-            hdr = _b64.b64decode(image_b64[:16])
-            if hdr[:8] == b'\x89PNG\r\n\x1a\n':
-                mime = "image/png"
-            elif hdr[:3] == b'\xff\xd8\xff':
-                mime = "image/jpeg"
-            else:
-                mime = "image/jpeg"
-        except Exception:
-            mime = "image/jpeg"
-        parts.append({"inline_data": {"mime_type": mime, "data": image_b64}})
+        parts.append({"inline_data": {"mime_type": _detect_mime(image_b64), "data": image_b64}})
     parts.append({"text": f"{system}\n\n{prompt}"})
     r = http_requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         params={"key": GEMINI_API_KEY},
         json={
             "contents": [{"parts": parts}],
@@ -75,22 +93,115 @@ def _call_gemini(prompt, system, max_tokens, image_b64=None):
     return r.json()['candidates'][0]['content']['parts'][0]['text']
 
 
+def _call_gemini(prompt, system, max_tokens, image_b64=None):
+    """Try each Gemini model in sequence, with retry on 429."""
+    last_error = None
+    for model in GEMINI_FALLBACK_MODELS:
+        for attempt in range(2):
+            try:
+                result = _call_gemini_model(model, prompt, system, max_tokens, image_b64)
+                print(f"[LLM] Réponse via Gemini ({model})")
+                return result
+            except http_requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    wait = 10 * (attempt + 1)   # 10s, then 20s
+                    print(f"[LLM] Gemini {model} rate-limited (429), attente {wait}s…")
+                    time.sleep(wait)
+                    last_error = e
+                    continue
+                print(f"[LLM] Gemini {model} erreur HTTP ({e}), modèle suivant…")
+                last_error = e
+                break
+            except Exception as e:
+                print(f"[LLM] Gemini {model} échoué ({e}), modèle suivant…")
+                last_error = e
+                break
+    raise last_error or Exception("Tous les modèles Gemini sont indisponibles")
+
+
+def _call_openrouter_model(model, prompt, system, max_tokens, image_b64=None):
+    content = [
+        {"type": "image_url", "image_url": {"url": f"data:{_detect_mime(image_b64)};base64,{image_b64}"}},
+        {"type": "text", "text": prompt},
+    ] if image_b64 else prompt
+    r = http_requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "https://ophtalmo-scan.local",
+        },
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": content},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()['choices'][0]['message']['content']
+
+
+def _call_openrouter(prompt, system, max_tokens, image_b64=None):
+    models = OPENROUTER_VISION_MODELS if image_b64 else [OPENROUTER_TEXT_MODEL]
+    last_error = None
+    for model in models:
+        try:
+            result = _call_openrouter_model(model, prompt, system, max_tokens, image_b64)
+            print(f"[LLM] Réponse via OpenRouter ({model})")
+            return result
+        except http_requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else 0
+            if status == 429:
+                print(f"[LLM] OpenRouter {model} rate-limited, modèle suivant…")
+            else:
+                print(f"[LLM] OpenRouter {model} erreur {status}, modèle suivant…")
+            last_error = e
+        except Exception as e:
+            print(f"[LLM] OpenRouter {model} échoué ({e}), modèle suivant…")
+            last_error = e
+    raise last_error or Exception("OpenRouter indisponible")
+
+
 def call_llm(prompt, system, image_b64=None, max_tokens=800):
+    # 1. Text-only → Groq first (generous free tier, no vision needed)
     if GROQ_API_KEY and not image_b64:
         try:
-            result = _call_groq(prompt, system, max_tokens)
             print("[LLM] Réponse via Groq")
-            return result
+            return _call_groq(prompt, system, max_tokens)
         except Exception as e:
-            print(f"[LLM] Groq échoué ({e}), bascule sur Gemini…")
+            print(f"[LLM] Groq échoué ({e}), bascule…")
 
+    # 2. Gemini (handles both text and vision)
     if GEMINI_API_KEY:
         try:
-            result = _call_gemini(prompt, system, max_tokens, image_b64)
-            print("[LLM] Réponse via Gemini (fallback)")
+            return _call_gemini(prompt, system, max_tokens, image_b64)
+        except Exception as e:
+            print(f"[LLM] Gemini indisponible ({e}), bascule sur OpenRouter…")
+
+    # 3. OpenRouter free models (text + vision)
+    if OPENROUTER_API_KEY:
+        try:
+            result = _call_openrouter(prompt, system, max_tokens, image_b64)
+            print(f"[LLM] Réponse via OpenRouter ({'vision' if image_b64 else 'text'})")
             return result
         except Exception as e:
-            print(f"[LLM] Gemini échoué ({e})")
-            return f"⚠️ Les deux APIs IA sont indisponibles. Dernière erreur : {e}"
+            print(f"[LLM] OpenRouter échoué ({e})")
 
-    return "⚠️ Aucune clé API configurée (GROQ_API_KEY ou GEMINI_API_KEY)."
+    # 4. Last resort: Groq text-only even for image requests
+    if image_b64 and GROQ_API_KEY:
+        try:
+            degraded = (
+                f"[Image non analysable visuellement — tous les modèles vision sont indisponibles. "
+                f"Analyse contextuelle uniquement.]\n\n{prompt}"
+            )
+            result = _call_groq(degraded, system, max_tokens)
+            print("[LLM] Analyse dégradée via Groq (sans vision)")
+            return f"⚠️ Analyse visuelle indisponible. Analyse contextuelle :\n\n{result}"
+        except Exception as e:
+            print(f"[LLM] Groq dégradé échoué ({e})")
+
+    return "⚠️ Tous les services IA sont indisponibles. Vérifiez vos clés API ou réessayez dans quelques minutes."

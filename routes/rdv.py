@@ -1,6 +1,8 @@
-import uuid
+import uuid, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('rdv', __name__)
 
@@ -22,8 +24,9 @@ def get_rdv():
         rows = db.execute("""
             SELECT r.*, p.nom AS patient_nom, p.prenom AS patient_prenom
             FROM rdv r JOIN patients p ON r.patient_id = p.id
+            WHERE p.medecin_id = ?
             ORDER BY r.date, r.heure
-        """).fetchall()
+        """, (u['id'],)).fetchall()
     result = [dict(r) for r in rows]
     for r in result:
         r['urgent'] = bool(r['urgent'])
@@ -44,16 +47,30 @@ def add_rdv():
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
 
+    rdv_date  = data.get('date', '')
+    rdv_heure = data.get('heure', '')
     urgent = bool(data.get('urgent', False))
     statut = 'en_attente' if urgent or u['role'] == 'patient' else data.get('statut', 'programmé')
+
+    # ── Conflict detection (same patient + date + heure already booked) ────────
+    if rdv_date and rdv_heure:
+        conflict = db.execute(
+            "SELECT id FROM rdv WHERE patient_id=? AND date=? AND heure=? AND statut NOT IN ('annulé','refusé')",
+            (pid, rdv_date, rdv_heure)
+        ).fetchone()
+        if conflict:
+            return jsonify({"error": f"Un rendez-vous existe déjà pour ce patient le {rdv_date} à {rdv_heure}."}), 409
+
     rdv_id = "RDV" + str(uuid.uuid4())[:6].upper()
+    rdv_type   = data.get('type', 'Consultation')
+    rdv_medecin = data.get('medecin', u['nom'])
 
     db.execute(
         "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,notes,urgent,demande_par) "
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (rdv_id, pid, data.get('date',''), data.get('heure',''),
-         data.get('type','Consultation'), statut,
-         data.get('medecin', u['nom']), data.get('notes',''),
+        (rdv_id, pid, rdv_date, rdv_heure,
+         rdv_type, statut,
+         rdv_medecin, data.get('notes',''),
          1 if urgent else 0, u['role'])
     )
     db.commit()
@@ -62,14 +79,52 @@ def add_rdv():
         msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}"
         add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid, {"rdv_id": rdv_id})
 
+    # ── Send confirmation email/SMS when doctor books a confirmed RDV ──────────
+    if u['role'] == 'medecin' and statut == 'confirmé':
+        _send_rdv_confirmation(p, rdv_date, rdv_heure, rdv_type, rdv_medecin)
+
     return jsonify({
         "ok": True,
         "rdv": {
-            "id": rdv_id, "date": data.get('date',''), "heure": data.get('heure',''),
-            "type": data.get('type','Consultation'), "statut": statut,
-            "medecin": data.get('medecin','Dr. Martin'), "urgent": urgent
+            "id": rdv_id, "date": rdv_date, "heure": rdv_heure,
+            "type": rdv_type, "statut": statut,
+            "medecin": rdv_medecin, "urgent": urgent
         }
     })
+
+
+def _send_rdv_confirmation(p, date_str, heure, type_rdv, medecin):
+    """Fire-and-forget confirmation email after a confirmed RDV is created."""
+    import threading
+
+    def _send():
+        if not p.get('email') or '@' not in p['email']:
+            return
+        try:
+            from email_notif import send_email
+            body = f"""<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:#0e7a76;padding:22px 28px"><div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div></div>
+  <div style="padding:28px">
+    <h2 style="color:#0e7a76;margin-top:0">Confirmation de rendez-vous</h2>
+    <p>Bonjour <strong>{p['prenom']} {p['nom']}</strong>,</p>
+    <p>Votre rendez-vous a été confirmé :</p>
+    <table style="width:100%;background:#f0faf9;border-radius:8px;border:1px solid #b2dfdb;border-collapse:collapse;margin:18px 0">
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">📅 Date</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{date_str}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">⏰ Heure</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{heure}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">🔬 Type</td><td style="padding:10px 14px;border-bottom:1px solid #b2dfdb">{type_rdv}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555">👨‍⚕️ Médecin</td><td style="padding:10px 14px">{medecin}</td></tr>
+    </table>
+    <p style="color:#6b7280;font-size:13px">En cas d'empêchement, merci de nous contacter dès que possible.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <p style="color:#9ca3af;font-size:11px;margin:0">— OphtalmoScan · Ce message est généré automatiquement</p>
+  </div>
+</div></body></html>"""
+            send_email(p['email'], f"Confirmation RDV — {date_str} à {heure}", body)
+        except Exception as e:
+            logger.warning(f"RDV confirmation email failed: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 @bp.route('/api/rdv/<rdv_id>', methods=['DELETE'])
@@ -81,7 +136,49 @@ def delete_rdv(rdv_id):
     row = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
+    # Orphan-safe: cancel linked post-op steps before removing the RDV
+    db.execute("UPDATE suivi_postop SET statut='annulé' WHERE rdv_id=?", (rdv_id,))
     db.execute("DELETE FROM rdv WHERE id=?", (rdv_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/rdv/<rdv_id>', methods=['PUT'])
+def update_rdv(rdv_id):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    db = get_db()
+    row = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "RDV non trouvé"}), 404
+
+    new_date  = data.get('date',  row['date'])
+    new_heure = data.get('heure', row['heure'])
+
+    # Conflict check when date or time changes
+    if (new_date != row['date'] or new_heure != row['heure']) and new_date and new_heure:
+        conflict = db.execute(
+            "SELECT id FROM rdv WHERE patient_id=? AND date=? AND heure=? "
+            "AND statut NOT IN ('annulé','refusé') AND id != ?",
+            (row['patient_id'], new_date, new_heure, rdv_id)
+        ).fetchone()
+        if conflict:
+            return jsonify({"error": f"Un rendez-vous existe déjà pour ce patient le {new_date} à {new_heure}."}), 409
+
+    db.execute(
+        "UPDATE rdv SET date=?, heure=?, type=?, statut=?, medecin=?, notes=? WHERE id=?",
+        (
+            new_date,
+            new_heure,
+            data.get('type',   row['type']),
+            data.get('statut', row['statut']),
+            data.get('medecin',row['medecin']),
+            data.get('notes',  row['notes']),
+            rdv_id
+        )
+    )
     db.commit()
     return jsonify({"ok": True})
 
@@ -113,4 +210,11 @@ def valider_rdv(rdv_id):
     add_notif(db, "rdv_validé",
               f"RDV confirmé pour {row['prenom']} {row['nom']} le {new_date}",
               u['role'], row['patient_id'])
+
+    # Send confirmation email/SMS when status changes to 'confirmé'
+    if new_statut == 'confirmé':
+        p = db.execute("SELECT * FROM patients WHERE id=?", (row['patient_id'],)).fetchone()
+        if p:
+            _send_rdv_confirmation(dict(p), new_date, new_heure, row['type'], row['medecin'])
+
     return jsonify({"ok": True})

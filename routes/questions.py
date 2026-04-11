@@ -1,7 +1,9 @@
-import uuid, datetime, json
+import uuid, datetime, json, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
 from llm import call_llm, SYSTEM_RESPONSE_DRAFT
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('questions', __name__)
 
@@ -15,7 +17,7 @@ def get_questions(pid):
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
     rows = db.execute(
-        "SELECT * FROM questions WHERE patient_id=? ORDER BY date DESC", (pid,)
+        "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC", (pid,)
     ).fetchall()
     result = [dict(r) for r in rows]
     for q in result:
@@ -54,10 +56,14 @@ Dernière consultation ({derniere['date'] if derniere else 'N/A'}) : {derniere['
 Acuité OD : {derniere['acuite_od'] if derniere else 'N/A'} | OG : {derniere['acuite_og'] if derniere else 'N/A'}.
 Tonus OD : {derniere['tension_od'] if derniere else 'N/A'} | OG : {derniere['tension_og'] if derniere else 'N/A'}."""
 
-    reponse_ia = call_llm(
-        f"Question du patient : {question_text}\nContexte : {context}",
-        SYSTEM_RESPONSE_DRAFT, max_tokens=400
-    )
+    try:
+        reponse_ia = call_llm(
+            f"Question du patient : {question_text}\nContexte : {context}",
+            SYSTEM_RESPONSE_DRAFT, max_tokens=400
+        )
+    except Exception as e:
+        logger.error(f"LLM question draft failed: {e}")
+        reponse_ia = "⚠️ Service IA indisponible. Votre question a été enregistrée et sera traitée par le médecin."
 
     qid = "Q" + str(uuid.uuid4())[:6].upper()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -106,3 +112,40 @@ def repondre_question(pid, qid):
     db.commit()
     add_notif(db, "reponse", "Le médecin a répondu à votre question", "medecin", pid)
     return jsonify({"ok": True})
+
+
+@bp.route('/api/patients/<pid>/questions/<qid>', methods=['DELETE'])
+def delete_question(pid, qid):
+    """Soft-delete an answered question — keeps it in history."""
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    q = db.execute(
+        "SELECT statut FROM questions WHERE id=? AND patient_id=?", (qid, pid)
+    ).fetchone()
+    if not q:
+        return jsonify({"error": "Non trouvé"}), 404
+    if q['statut'] == 'en_attente':
+        return jsonify({"error": "Impossible de supprimer une question sans réponse"}), 400
+    db.execute(
+        "UPDATE questions SET deleted=1, deleted_at=? WHERE id=?",
+        (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), qid)
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/patients/<pid>/questions/deleted', methods=['GET'])
+def get_deleted_questions(pid):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify([]), 403
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM questions WHERE patient_id=? AND deleted=1 ORDER BY deleted_at DESC", (pid,)
+    ).fetchall()
+    result = [dict(r) for r in rows]
+    for q in result:
+        q['reponse_validee'] = bool(q['reponse_validee'])
+    return jsonify(result)
