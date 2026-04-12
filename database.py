@@ -641,6 +641,20 @@ def _migrate(db):
     except Exception:
         pass
 
+    # patient_doctors: many-to-many link so a patient can appear in multiple doctors' lists
+    try:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS patient_doctors (
+                patient_id TEXT NOT NULL,
+                medecin_id TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (patient_id, medecin_id)
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_pd_medecin ON patient_doctors(medecin_id)")
+    except Exception:
+        pass
+
     # Soft-delete columns on various tables
     soft_delete = [
         ("documents","deleted"), ("documents","deleted_at"),

@@ -18,6 +18,12 @@ def _assert_owns_patient(db, u, pid):
             "SELECT id FROM patients WHERE id=? AND medecin_id=?", (pid, u['id'])
         ).fetchone()
         if not row:
+            # Also allow access if linked via patient_doctors (patient booked an RDV with this doctor)
+            row = db.execute(
+                "SELECT 1 FROM patient_doctors WHERE patient_id=? AND medecin_id=?",
+                (pid, u['id'])
+            ).fetchone()
+        if not row:
             abort(403)
     # patients are checked separately at the route level (patient_id match)
 
@@ -210,7 +216,7 @@ def get_patients():
             return jsonify([decrypt_patient(dict(row))])
         return jsonify([])
 
-    # médecin — ses propres patients avec recherche optionnelle (single JOIN, no N+1)
+    # médecin — ses propres patients + patients liés via patient_doctors (RDV cross-doctor)
     mid = u['id'] if u['role'] == 'medecin' else None
     query = """
         SELECT p.*,
@@ -222,9 +228,17 @@ def get_patients():
         ORDER BY p.nom, p.prenom
     """
     if mid:
-        rows = db.execute(query.format(where="WHERE p.medecin_id = ?"), (mid,)).fetchall()
+        rows = db.execute(query.format(where="""
+            WHERE p.medecin_id = ?
+               OR p.id IN (SELECT patient_id FROM patient_doctors WHERE medecin_id = ?)
+        """), (mid, mid)).fetchall()
+        # Build set of cross-linked patients (not primary) for the 'linked' flag
+        linked_ids = {r['patient_id'] for r in db.execute(
+            "SELECT patient_id FROM patient_doctors WHERE medecin_id=?", (mid,)
+        ).fetchall()}
     else:
         rows = db.execute(query.format(where=""), ()).fetchall()
+        linked_ids = set()
 
     result = []
     for row in rows:
@@ -232,11 +246,13 @@ def get_patients():
         p['antecedents'] = json.loads(p['antecedents'] or '[]')
         if q and not (q in p['nom'].lower() or q in p['prenom'].lower() or q in p['id'].lower()):
             continue
+        is_linked = p['id'] in linked_ids and p.get('medecin_id') != mid
         result.append({
             "id": p['id'], "nom": p['nom'], "prenom": p['prenom'],
             "ddn": p['ddn'], "antecedents": p['antecedents'][:2],
             "nb_rdv_urgent": p['nb_rdv_urgent'],
-            "medecin_id": p.get('medecin_id', '')
+            "medecin_id": p.get('medecin_id', ''),
+            "linked": is_linked  # True = patient arrived via cross-doctor RDV
         })
     return jsonify(result)
 
@@ -337,6 +353,7 @@ def delete_patient(pid):
     db.execute("DELETE FROM ordonnances WHERE patient_id=?", (pid,))
     db.execute("DELETE FROM ivt WHERE patient_id=?", (pid,))
     db.execute("DELETE FROM notifications WHERE patient_id=?", (pid,))
+    db.execute("DELETE FROM patient_doctors WHERE patient_id=?", (pid,))
     db.execute("DELETE FROM users WHERE patient_id=?", (pid,))
     db.execute("DELETE FROM patients WHERE id=?", (pid,))
     log_audit(db, 'DELETE', 'patients', pid, u['id'], pid,

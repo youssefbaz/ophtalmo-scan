@@ -94,9 +94,29 @@ def add_rdv():
     )
     db.commit()
 
+    # ── Auto-link patient to the booking doctor if not already in their list ────
+    is_new_patient_for_doctor = False
+    if rdv_medecin_id:
+        already_primary = (p.get('medecin_id') == rdv_medecin_id)
+        already_linked  = db.execute(
+            "SELECT 1 FROM patient_doctors WHERE patient_id=? AND medecin_id=?",
+            (pid, rdv_medecin_id)
+        ).fetchone()
+        if not already_primary and not already_linked:
+            db.execute(
+                "INSERT OR IGNORE INTO patient_doctors (patient_id, medecin_id) VALUES (?,?)",
+                (pid, rdv_medecin_id)
+            )
+            db.commit()
+            is_new_patient_for_doctor = True
+
     if urgent or u['role'] == 'patient':
-        dr_suffix = f" (Dr. {rdv_medecin})" if rdv_medecin else ""
-        msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}{dr_suffix}"
+        if is_new_patient_for_doctor:
+            msg = (f"{'🚨 RDV URGENT' if urgent else '👤 Nouveau patient'} : "
+                   f"{p['prenom']} {p['nom']} a demandé un RDV et a été ajouté à votre liste de patients.")
+        else:
+            dr_suffix = f" (Dr. {rdv_medecin})" if rdv_medecin else ""
+            msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}{dr_suffix}"
         add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid,
                   {"rdv_id": rdv_id, "medecin_id": rdv_medecin_id},
                   medecin_id=rdv_medecin_id or None)
