@@ -994,46 +994,52 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
       <!-- Patient fields -->
       <div id="regPatientFields">
-        <!-- Sub-option tabs -->
-        <div style="display:flex;gap:6px;margin-bottom:16px">
-          <button id="regPatSubInvite" class="btn btn-primary" style="flex:1;justify-content:center;font-size:12px"
-                  onclick="setPatientRegMethod('invite')">📧 Lien invitation</button>
-          <button id="regPatSubCode" class="btn btn-ghost" style="flex:1;justify-content:center;font-size:12px"
-                  onclick="setPatientRegMethod('code')">🩺 Code médecin</button>
+        <!-- Sub-option tabs: free registration / invite -->
+        <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          <button id="regPatSubFree" class="btn btn-primary" style="flex:1;justify-content:center;font-size:12px;border-radius:0;border:none"
+                  onclick="setPatientRegMethod('free')">📝 Inscription</button>
+          <button id="regPatSubInvite" class="btn btn-ghost" style="flex:1;justify-content:center;font-size:12px;border-radius:0;border:none;border-left:1px solid var(--border)"
+                  onclick="setPatientRegMethod('invite')">📧 Invitation</button>
         </div>
 
-        <!-- Option A: invite token -->
-        <div id="regInviteFields">
-          <div id="regInviteInfo" style="display:none;background:var(--teal-dim);border:1px solid var(--teal);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--teal2)"></div>
-          <div class="form-group" id="regInviteTokenGroup">
-            <label class="form-label">Token d'invitation <span style="color:var(--text3);font-weight:400">(depuis le lien reçu)</span></label>
-            <input class="form-input" id="regInviteToken" placeholder="Collez votre token ici" autocomplete="off"
-                   oninput="debounceCheckInvite(this.value)">
-          </div>
-          <div id="regInviteMsg" style="font-size:12px;margin-bottom:10px"></div>
-        </div>
-
-        <!-- Option B: médecin code + identity -->
-        <div id="regCodeFields" style="display:none">
-          <div class="form-group">
-            <label class="form-label">Code de votre médecin <span style="color:var(--text3);font-weight:400">(ex : M001)</span></label>
-            <input class="form-input" id="regMedecinCode" placeholder="Ex : M001" autocomplete="off"
-                   style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
-          </div>
+        <!-- Option A: free registration -->
+        <div id="regFreeFields">
           <div style="display:flex;gap:10px">
             <div class="form-group" style="flex:1">
-              <label class="form-label">Nom</label>
+              <label class="form-label">Nom <span style="color:var(--danger,#ef4444)">*</span></label>
               <input class="form-input" id="regPatNom" placeholder="Votre nom" autocomplete="family-name">
             </div>
             <div class="form-group" style="flex:1">
-              <label class="form-label">Prénom</label>
+              <label class="form-label">Prénom <span style="color:var(--danger,#ef4444)">*</span></label>
               <input class="form-input" id="regPatPrenom" placeholder="Votre prénom" autocomplete="given-name">
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Date de naissance</label>
+            <label class="form-label">Date de naissance <span style="color:var(--danger,#ef4444)">*</span></label>
             <input class="form-input" type="date" id="regPatDdn" autocomplete="bday">
           </div>
+          <div class="form-group" style="position:relative">
+            <label class="form-label">Médecin <span style="color:var(--text3);font-weight:400">(optionnel — recherchez par nom)</span></label>
+            <input class="form-input" id="regDoctorSearch" placeholder="Nom ou prénom du médecin…" autocomplete="off"
+                   oninput="debounceSearchDoctor(this.value)">
+            <div id="regDoctorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-radius:10px;z-index:50;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.3)"></div>
+            <input type="hidden" id="regDoctorId">
+            <div id="regDoctorSelected" style="display:none;margin-top:6px;background:var(--teal-dim);border:1px solid var(--teal);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--teal2);display:flex;align-items:center;justify-content:space-between">
+              <span id="regDoctorSelectedName"></span>
+              <button onclick="clearDoctorSelection()" style="background:none;border:none;color:var(--teal2);cursor:pointer;font-size:16px;line-height:1">×</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option B: invite token -->
+        <div id="regInviteFields" style="display:none">
+          <div id="regInviteInfo" style="display:none;background:var(--teal-dim);border:1px solid var(--teal);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--teal2)"></div>
+          <div class="form-group">
+            <label class="form-label">Token d'invitation <span style="color:var(--text3);font-weight:400">(depuis le lien reçu par email)</span></label>
+            <input class="form-input" id="regInviteToken" placeholder="Collez votre token ici" autocomplete="off"
+                   oninput="debounceCheckInvite(this.value)">
+          </div>
+          <div id="regInviteMsg" style="font-size:12px;margin-bottom:10px"></div>
         </div>
       </div>
 
@@ -1349,7 +1355,7 @@ function showAuthPanel(panel) {
   // Clear all messages when switching
   document.querySelectorAll('.auth-msg').forEach(el => { el.style.display = 'none'; el.textContent = ''; });
   // Reset register role tab when opening register panel
-  if (panel === 'register') { setRegRole('patient'); setPatientRegMethod('invite'); }
+  if (panel === 'register') { setRegRole('patient'); setPatientRegMethod('free'); }
   // Focus TOTP input
   if (panel === 'totp') setTimeout(() => { const el = document.getElementById('totpCode'); if (el) el.focus(); }, 80);
 }
@@ -1436,13 +1442,51 @@ function setRegRole(role) {
 
 function setPatientRegMethod(method) {
   _patientRegMethod = method;
+  document.getElementById('regFreeFields').style.display   = method === 'free'   ? '' : 'none';
   document.getElementById('regInviteFields').style.display = method === 'invite' ? '' : 'none';
-  document.getElementById('regCodeFields').style.display   = method === 'code'   ? '' : 'none';
-  document.getElementById('regPatSubInvite').className = 'btn ' + (method === 'invite' ? 'btn-primary' : 'btn-ghost');
-  document.getElementById('regPatSubCode').className   = 'btn ' + (method === 'code'   ? 'btn-primary' : 'btn-ghost');
-  document.getElementById('regPatSubInvite').style.cssText += ';flex:1;justify-content:center;font-size:12px';
-  document.getElementById('regPatSubCode').style.cssText   += ';flex:1;justify-content:center;font-size:12px';
+  const btnFree   = document.getElementById('regPatSubFree');
+  const btnInvite = document.getElementById('regPatSubInvite');
+  if (btnFree)   { btnFree.className   = 'btn ' + (method === 'free'   ? 'btn-primary' : 'btn-ghost'); btnFree.style.cssText   += ';flex:1;justify-content:center;font-size:12px;border-radius:0;border:none'; }
+  if (btnInvite) { btnInvite.className = 'btn ' + (method === 'invite' ? 'btn-primary' : 'btn-ghost'); btnInvite.style.cssText += ';flex:1;justify-content:center;font-size:12px;border-radius:0;border:none;border-left:1px solid var(--border)'; }
   document.getElementById('registerMsg').innerHTML = '';
+}
+
+// Doctor search for registration
+let _doctorSearchDebounce = null;
+let _selectedDoctorId = null;
+
+function debounceSearchDoctor(val) {
+  clearTimeout(_doctorSearchDebounce);
+  const dd = document.getElementById('regDoctorDropdown');
+  if (!val || val.length < 2) { dd.style.display = 'none'; return; }
+  _doctorSearchDebounce = setTimeout(async () => {
+    const doctors = await api(`/api/doctors/search?q=${encodeURIComponent(val)}`);
+    if (!Array.isArray(doctors) || doctors.length === 0) { dd.style.display = 'none'; return; }
+    dd.innerHTML = doctors.map(d =>
+      `<div onclick="selectDoctor('${d.id}','${(d.prenom+' '+d.nom).replace(/'/g,"\\'")}','${d.medecin_code}')"
+            style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+            onmouseover="this.style.background='var(--teal-dim)'" onmouseout="this.style.background=''">
+        🩺 Dr. ${d.prenom} ${d.nom} <span style="color:var(--teal2);font-size:11px">${d.medecin_code}</span>
+      </div>`
+    ).join('');
+    dd.style.display = '';
+  }, 350);
+}
+
+function selectDoctor(id, name, code) {
+  _selectedDoctorId = id;
+  document.getElementById('regDoctorId').value = id;
+  document.getElementById('regDoctorSearch').value = '';
+  document.getElementById('regDoctorDropdown').style.display = 'none';
+  document.getElementById('regDoctorSelectedName').textContent = `🩺 Dr. ${name} (${code})`;
+  document.getElementById('regDoctorSelected').style.display = 'flex';
+}
+
+function clearDoctorSelection() {
+  _selectedDoctorId = null;
+  document.getElementById('regDoctorId').value = '';
+  document.getElementById('regDoctorSearch').value = '';
+  document.getElementById('regDoctorSelected').style.display = 'none';
 }
 
 let _inviteDebounce = null;
@@ -1489,14 +1533,15 @@ async function doRegister() {
         _authMsg('registerMsg','error', res.error || 'Erreur lors de la création du compte.');
       }
     } else {
-      const medecinCode = document.getElementById('regMedecinCode').value.trim().toUpperCase();
-      const nom         = document.getElementById('regPatNom').value.trim();
-      const prenom      = document.getElementById('regPatPrenom').value.trim();
-      const ddn         = document.getElementById('regPatDdn').value;
-      if (!medecinCode || !nom || !prenom || !ddn) {
-        _authMsg('registerMsg','error','Veuillez remplir tous les champs.'); return;
+      // free registration
+      const nom        = document.getElementById('regPatNom').value.trim();
+      const prenom     = document.getElementById('regPatPrenom').value.trim();
+      const ddn        = document.getElementById('regPatDdn').value;
+      const medecin_id = document.getElementById('regDoctorId').value || '';
+      if (!nom || !prenom || !ddn) {
+        _authMsg('registerMsg','error','Nom, prénom et date de naissance sont requis.'); return;
       }
-      const res = await api('/api/patient-register','POST',{medecin_code:medecinCode,nom,prenom,ddn,username,password});
+      const res = await api('/api/patient-register','POST',{nom,prenom,ddn,medecin_id,username,password});
       if (res.ok) {
         _authMsg('registerMsg','success','Compte créé avec succès ! Vous pouvez vous connecter.');
         setTimeout(() => showAuthPanel('login'), 2200);
@@ -1599,6 +1644,7 @@ function buildSidebar() {
         <button class="nav-btn" onclick="showView('questions-medecin')">💬 ${t('Questions patients')}</button>
         <button class="nav-btn" onclick="showView('ai-assistant')">🤖 ${t('Assistant IA')}</button>
         <button class="nav-btn" onclick="showView('statistiques')">📈 ${t('Statistiques')}</button>
+        <button class="nav-btn" onclick="showView('unassigned-patients')">👥 ${t('Patients sans médecin')}</button>
       </div>
       <div class="nav-section">
         <div class="nav-section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:10px">
@@ -1676,7 +1722,8 @@ function showView(viewId, title, _fromBack) {
     'admin-create-medecin':'Créer un compte médecin',
     'admin-create-patient':'Créer un dossier patient',
     'settings':'Paramètres',
-    'statistiques':'Statistiques'
+    'statistiques':'Statistiques',
+    'unassigned-patients':'Patients sans médecin'
   };
   document.getElementById('topbarTitle').textContent = title || t(titles[viewId] || viewId);
   // Back button
@@ -1704,6 +1751,7 @@ function showView(viewId, title, _fromBack) {
   else if (viewId === 'admin-create-patient') renderAdminCreatePatient(c);
   else if (viewId === 'settings') renderSettings(c);
   else if (viewId === 'statistiques') renderStatistiques(c);
+  else if (viewId === 'unassigned-patients') renderUnassignedPatients(c);
 }
 
 // ─── DASHBOARD MÉDECIN ────────────────────────────────────────────────────────
@@ -5749,6 +5797,58 @@ function _shortMonth(ym) {
   return months[parseInt(m) - 1] + (y !== String(new Date().getFullYear()) ? ' '+y.slice(2) : '');
 }
 
+async function renderUnassignedPatients(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:30px;text-align:center">Chargement…</div>';
+  const patients = await api('/api/patients/unassigned');
+  if (!Array.isArray(patients)) { c.innerHTML = '<div style="color:var(--red);padding:20px">Erreur de chargement.</div>'; return; }
+
+  if (patients.length === 0) {
+    c.innerHTML = `<div style="text-align:center;padding:48px;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:12px">👥</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Aucun patient sans médecin</div>
+      <div style="font-size:13px">Tous les patients inscrits ont déjà un médecin assigné.</div>
+    </div>`;
+    return;
+  }
+
+  c.innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;color:var(--text2)">
+        ${patients.length} patient(s) inscrit(s) sans médecin assigné.
+        Cliquez sur <strong>Ajouter à ma liste</strong> pour les rattacher à votre base.
+      </div>
+    </div>
+    <div id="unassignedList">
+      ${patients.map(p => `
+        <div class="card" style="margin-bottom:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap" id="ucard_${p.id}">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
+          <div style="flex:1;min-width:160px">
+            <div style="font-weight:600;font-size:14px">${p.prenom || ''} ${p.nom || ''}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">
+              ${p.ddn ? '🎂 ' + p.ddn : ''}
+              ${p.has_account ? '<span style="color:var(--teal2);margin-left:8px">✓ Compte actif ('+p.username+')</span>' : '<span style="color:var(--text3);margin-left:8px">Pas encore de compte</span>'}
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="claimPatient('${p.id}')">+ Ajouter à ma liste</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function claimPatient(pid) {
+  const res = await api(`/api/patients/${pid}/claim`, 'POST');
+  if (res.ok) {
+    const card = document.getElementById(`ucard_${pid}`);
+    if (card) {
+      card.style.opacity = '0.5';
+      card.innerHTML += '<span style="color:var(--teal2);font-size:13px;margin-left:8px">✅ Ajouté</span>';
+      setTimeout(() => card.remove(), 1200);
+    }
+    loadPatientsSidebar();
+  } else {
+    alert(res.error || 'Erreur');
+  }
+}
+
 async function renderStatistiques(c) {
   _destroyStatsCharts();
   c.innerHTML = `
@@ -6603,9 +6703,11 @@ function applyTheme(theme) {
     showAuthPanel('register');
     setRegRole('patient');
     setPatientRegMethod('invite');
-    document.getElementById('regInviteToken').value = inviteToken;
-    debounceCheckInvite(inviteToken);
-    window.history.replaceState({}, '', '/'); // clean URL
+    setTimeout(() => {
+      const el = document.getElementById('regInviteToken');
+      if (el) { el.value = inviteToken; debounceCheckInvite(inviteToken); }
+    }, 50);
+    window.history.replaceState({}, '', '/');
     return;
   }
   // Auto-restore session if already logged in
