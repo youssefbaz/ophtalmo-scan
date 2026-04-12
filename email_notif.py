@@ -147,6 +147,7 @@ def send_rdv_email_reminders(app):
     """Send email reminders for tomorrow's RDVs (called by scheduler)."""
     with app.app_context():
         from database import get_db
+        from security_utils import decrypt_field
         db = get_db()
         tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
         rows = db.execute(
@@ -162,10 +163,14 @@ def send_rdv_email_reminders(app):
 
         sent = 0
         for row in rows:
+            email  = decrypt_field(row['email']  or '')
+            prenom = decrypt_field(row['prenom'] or '')
+            nom    = decrypt_field(row['nom']    or '')
+            if not email or '@' not in email:
+                continue
             subject = f"Rappel RDV Ophtalmologie — {tomorrow} à {row['heure']}"
-            body    = _rdv_html(row['prenom'], row['nom'], tomorrow,
-                                row['heure'], row['type'], row['medecin'])
-            if send_email(row['email'], subject, body):
+            body    = _rdv_html(prenom, nom, tomorrow, row['heure'], row['type'], row['medecin'])
+            if send_email(email, subject, body):
                 db.execute("UPDATE rdv SET email_envoye=1 WHERE id=?", (row['id'],))
                 sent += 1
 
