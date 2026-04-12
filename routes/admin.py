@@ -136,6 +136,26 @@ def admin_activate(uid):
     return jsonify({"ok": True})
 
 
+# ─── DELETE USER ─────────────────────────────────────────────────────────────
+
+@bp.route('/api/admin/users/<uid>', methods=['DELETE'])
+def admin_delete_user(uid):
+    _, err = _require_admin()
+    if err: return err
+    db  = get_db()
+    row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not row:
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+    if row['role'] == 'admin':
+        return jsonify({"error": "Impossible de supprimer le compte administrateur"}), 400
+    db.execute("DELETE FROM users WHERE id=?", (uid,))
+    db.commit()
+    add_notif(db, "compte_supprime",
+              f"🗑️ Compte supprimé : {row['prenom']} {row['nom']} ({row['username']})",
+              "admin")
+    return jsonify({"ok": True})
+
+
 # ─── GET SINGLE USER ──────────────────────────────────────────────────────────
 
 @bp.route('/api/admin/users/<uid>', methods=['GET'])

@@ -2075,6 +2075,12 @@ async function adminOpenEditUser(uid) {
       <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-bottom:1px" onclick="adminResetUserPassword()">Appliquer</button>
     </div>
     <div id="adminEditPwMsg" style="margin-top:6px;font-size:12px"></div>
+    <hr style="border-color:var(--border);margin:22px 0">
+    <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:10px">⚠️ Zone de danger</div>
+    <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)"
+            onclick="adminDeleteUser('${esc(u.id)}','${esc(u.prenom)} ${esc(u.nom)}')">
+      🗑️ Supprimer ce compte
+    </button>
   `;
 }
 
@@ -2114,6 +2120,18 @@ async function adminResetUserPassword() {
     document.getElementById('adminEditNewPw').value = '';
   } else {
     msgEl.innerHTML = `<span style="color:var(--red)">${res.error || 'Erreur'}</span>`;
+  }
+}
+
+async function adminDeleteUser(uid, name) {
+  if (!confirm(`Supprimer définitivement le compte de ${name} ?\n\nCette action est irréversible.`)) return;
+  const res = await api(`/api/admin/users/${uid}`, 'DELETE');
+  if (res.ok) {
+    closeModal('modalAdminEditUser');
+    _updatePendingBadge();
+    showView(currentView);
+  } else {
+    alert(res.error || 'Erreur lors de la suppression.');
   }
 }
 
