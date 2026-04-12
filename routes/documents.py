@@ -22,26 +22,32 @@ def upload_document(pid):
         return jsonify({"error": "Patient non trouvé"}), 404
     p = decrypt_patient(dict(_p))
 
-    data     = request.json or {}
-    doc_id   = "DOC" + str(uuid.uuid4())[:6].upper()
-    doc_type = data.get('type', 'Document')
-    source   = 'imagerie' if u['role'] != 'patient' else 'document'
+    data       = request.json or {}
+    doc_id     = "DOC" + str(uuid.uuid4())[:6].upper()
+    doc_type   = data.get('type', 'Document')
+    source     = 'imagerie' if u['role'] != 'patient' else 'document'
+    target_mid = data.get('medecin_id', '') or ''  # doctor this upload is directed to
+
+    # For doctor uploads, always set medecin_id to themselves
+    if u['role'] == 'medecin':
+        target_mid = u['id']
 
     db.execute(
-        "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,source) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,source,medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
         (doc_id, pid, doc_type,
          datetime.datetime.now().strftime("%Y-%m-%d"),
          data.get('description',''), u['role'],
          1 if u['role'] == 'medecin' else 0,
-         data.get('image',''), source)
+         data.get('image',''), source, target_mid)
     )
     db.commit()
 
     if u['role'] == 'patient':
         add_notif(db, "document_uploaded",
                   f"📎 {p['prenom']} {p['nom']} a uploadé : {doc_type}",
-                  "patient", pid, {"doc_id": doc_id})
+                  "patient", pid, {"doc_id": doc_id},
+                  medecin_id=target_mid or None)
 
     return jsonify({"ok": True, "id": doc_id})
 
@@ -54,12 +60,24 @@ def get_documents(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    rows = db.execute(
-        "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,"
-        "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
-        "FROM documents WHERE patient_id=? AND source='document' AND deleted=0",
-        (pid,)
-    ).fetchall()
+
+    if u['role'] == 'medecin':
+        # Show documents explicitly directed to this doctor, plus legacy docs with no medecin_id
+        rows = db.execute(
+            "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
+            "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
+            "FROM documents WHERE patient_id=? AND source='document' AND deleted=0 "
+            "AND (medecin_id=? OR medecin_id='' OR medecin_id IS NULL) "
+            "ORDER BY date DESC",
+            (pid, u['id'])
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
+            "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
+            "FROM documents WHERE patient_id=? AND source='document' AND deleted=0 ORDER BY date DESC",
+            (pid,)
+        ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 

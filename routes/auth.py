@@ -130,6 +130,60 @@ def get_medecins():
     return jsonify([dict(r) for r in rows])
 
 
+@bp.route('/api/my-doctors', methods=['GET'])
+def my_doctors():
+    """Return the list of doctors linked to the current patient, with last-RDV date.
+    Sorted by last RDV descending so the most recent is first.
+    """
+    u = current_user()
+    if not u or u['role'] != 'patient':
+        return jsonify([]), 403
+    pid = u.get('patient_id')
+    if not pid:
+        return jsonify([]), 200
+    db = get_db()
+
+    # Collect all doctor IDs linked to this patient (primary + junction table)
+    primary_row = db.execute("SELECT medecin_id FROM patients WHERE id=?", (pid,)).fetchone()
+    primary_id  = primary_row['medecin_id'] if primary_row else ''
+
+    linked_rows = db.execute(
+        "SELECT medecin_id FROM patient_doctors WHERE patient_id=?", (pid,)
+    ).fetchall()
+    linked_ids = {r['medecin_id'] for r in linked_rows}
+    if primary_id:
+        linked_ids.add(primary_id)
+
+    if not linked_ids:
+        return jsonify([]), 200
+
+    result = []
+    for mid in linked_ids:
+        doc = db.execute(
+            "SELECT id, nom, prenom, organisation FROM users WHERE id=? AND role='medecin' AND status='active'",
+            (mid,)
+        ).fetchone()
+        if not doc:
+            continue
+        # Last confirmed/completed RDV with this doctor
+        last_rdv = db.execute(
+            "SELECT date FROM rdv WHERE patient_id=? AND medecin_id=? AND statut NOT IN ('annule','refusé') ORDER BY date DESC LIMIT 1",
+            (pid, mid)
+        ).fetchone()
+        result.append({
+            "id":           doc['id'],
+            "nom":          doc['nom'],
+            "prenom":       doc['prenom'],
+            "organisation": doc['organisation'] or '',
+            "last_rdv":     last_rdv['date'] if last_rdv else '',
+            "is_primary":   mid == primary_id,
+        })
+
+    # Sort: most recent RDV first; those with no RDV go last
+    result.sort(key=lambda d: d['last_rdv'] or '0000-00-00', reverse=True)
+    return jsonify(result)
+
+
 @bp.route('/api/change-password', methods=['POST'])
 @limiter.limit("5 per hour")
 def change_password():

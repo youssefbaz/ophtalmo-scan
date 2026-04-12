@@ -3438,44 +3438,73 @@ async function renderMesRdv(c) {
 // ─── MES DOCUMENTS (PATIENT) ──────────────────────────────────────────────────
 async function renderMesDocuments(c) {
   const pid = USER.patient_id;
-  const docs = await api(`/api/patients/${pid}/documents`);
+  const [docs, myDoctors] = await Promise.all([
+    api(`/api/patients/${pid}/documents`),
+    api('/api/my-doctors')
+  ]);
+
+  // Build doctor options HTML — first one is pre-selected (most recent RDV)
+  let doctorOptionsHtml = '';
+  if (myDoctors && myDoctors.length) {
+    doctorOptionsHtml = myDoctors.map((d, i) => {
+      const label = `Dr. ${escH(d.prenom)} ${escH(d.nom)}${d.organisation ? ' - ' + escH(d.organisation) : ''}${d.last_rdv ? ' (dernier RDV: ' + fmtDate(d.last_rdv) + ')' : ''}`;
+      return `<option value="${d.id}" ${i===0?'selected':''}>${label}</option>`;
+    }).join('');
+  }
 
   c.innerHTML = `
     <div style="margin-bottom:18px">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Uploadez vos radios, scanners et examens pour que votre médecin puisse les consulter.</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Uploadez vos radios, scanners et examens pour que votre medecin puisse les consulter.</div>
       <div class="import-zone" id="docUploadZone"
         onclick="document.getElementById('docFileInput').click()"
         ondragover="event.preventDefault();this.classList.add('drag')"
         ondragleave="this.classList.remove('drag')"
         ondrop="handleDocDrop(event)">
-        <div class="import-icon">📎</div>
+        <div class="import-icon">&#128206;</div>
         <div id="docUploadStatus" class="import-text">Cliquez ou glissez votre document ici</div>
         <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF</div>
       </div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="uploadPatientDoc(this)">
-      <div id="docTypePickerWrap" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Type de document</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select class="input" id="docTypeSelect" style="flex:1;min-width:160px;font-size:13px">
-            <option value="Radio / Scanner">Radio / Scanner</option>
-            <option value="OCT">OCT</option>
-            <option value="Fond d oeil">Fond d oeil</option>
-            <option value="Ordonnance">Ordonnance</option>
-            <option value="Resultats analyses">Resultats analyses</option>
-            <option value="Autre">Autre</option>
-          </select>
-          <input class="input" id="docTypeCustom" placeholder="Ou type personnalise…" style="flex:1;min-width:140px;font-size:13px">
-          <button class="btn btn-primary btn-sm" onclick="confirmDocUpload()">Envoyer</button>
-          <button class="btn btn-ghost btn-sm" onclick="cancelDocUpload()">Annuler</button>
+
+      <div id="docTypePickerWrap" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px">
+        <div id="docUploadFilename" style="font-size:12px;color:var(--teal2);margin-bottom:12px;font-weight:600"></div>
+
+        <div style="margin-bottom:10px">
+          <label class="lbl">Pour quel medecin ?</label>
+          ${myDoctors && myDoctors.length
+            ? `<select class="input" id="docMedecinSelect" style="font-size:13px">${doctorOptionsHtml}</select>`
+            : `<div style="font-size:13px;color:var(--amber);padding:8px 0">Aucun medecin associe. Prenez d abord un rendez-vous.</div>
+               <input type="hidden" id="docMedecinSelect" value="">`
+          }
         </div>
-        <div id="docUploadFilename" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
+
+        <div style="margin-bottom:12px">
+          <label class="lbl">Type de document</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="input" id="docTypeSelect" style="flex:1;min-width:160px;font-size:13px">
+              <option value="Radio / Scanner">Radio / Scanner</option>
+              <option value="OCT">OCT</option>
+              <option value="Fond d oeil">Fond d oeil</option>
+              <option value="Ordonnance">Ordonnance</option>
+              <option value="Resultats analyses">Resultats analyses</option>
+              <option value="Autre">Autre</option>
+            </select>
+            <input class="input" id="docTypeCustom" placeholder="Ou type personnalise" style="flex:1;min-width:140px;font-size:13px">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="confirmDocUpload()">Envoyer</button>
+          <button class="btn btn-ghost" onclick="cancelDocUpload()">Annuler</button>
+        </div>
       </div>
     </div>
+
     <div class="section-title">Mes documents (${docs.length})</div>
     <div style="display:flex;flex-direction:column;gap:10px" id="patientDocsGrid">
       ${docs.length ? docs.map(d => {
         const isPdf = (d.description||'').toLowerCase().endsWith('.pdf');
-        const icon  = isPdf ? '📄' : '🖼';
+        const icon  = isPdf ? '&#128196;' : '&#128444;';
         const stat  = d.valide
           ? '<span style="font-size:11px;color:var(--teal2)">&#10003; Vu par le medecin</span>'
           : '<span style="font-size:11px;color:var(--amber)">&#8987; En attente</span>';
@@ -3511,10 +3540,11 @@ async function confirmDocUpload() {
   const customVal = (document.getElementById('docTypeCustom')?.value || '').trim();
   const selectVal = document.getElementById('docTypeSelect')?.value || 'Document';
   const type = customVal || selectVal;
+  const medecinId = document.getElementById('docMedecinSelect')?.value || '';
   if (!_pendingUploadFile) return;
   const file = _pendingUploadFile;
   _pendingUploadFile = null;
-  await _doUploadFile(file, type);
+  await _doUploadFile(file, type, medecinId);
 }
 
 async function deletePatientDoc(pid, docId, btn) {
@@ -4012,7 +4042,7 @@ function _prepareUpload(file) {
   if (wrap)   wrap.style.display = 'block';
 }
 
-async function _doUploadFile(file, type) {
+async function _doUploadFile(file, type, medecinId) {
   const status = document.getElementById('docUploadStatus');
   const zone   = document.getElementById('docUploadZone');
   if (status) { status.textContent = '⏳ Envoi en cours…'; zone.style.opacity = '0.5'; }
@@ -4024,7 +4054,7 @@ async function _doUploadFile(file, type) {
       const pid = USER.patient_id;
       try {
         const res = await api(`/api/patients/${pid}/upload`, 'POST',
-          { image: b64, type, description: file.name, source: 'document' });
+          { image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' });
         if (res.ok) {
           showView('mes-documents');
         } else {

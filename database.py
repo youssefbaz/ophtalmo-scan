@@ -641,6 +641,12 @@ def _migrate(db):
     except Exception:
         pass
 
+    # documents medecin_id (which doctor this upload is directed to)
+    try:
+        db.execute("ALTER TABLE documents ADD COLUMN medecin_id TEXT DEFAULT ''")
+    except Exception:
+        pass
+
     # patient_doctors: many-to-many link so a patient can appear in multiple doctors' lists
     try:
         db.execute("""
