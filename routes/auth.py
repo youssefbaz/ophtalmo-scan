@@ -4,9 +4,8 @@ import datetime
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db, current_user, log_audit, record_login_attempt, is_account_locked, add_notif, next_medecin_code
-from security_utils import decrypt_patient
 from extensions import limiter
-from security_utils import validate_password, sanitize, get_client_ip, get_user_agent
+from security_utils import validate_password, sanitize, get_client_ip, get_user_agent, decrypt_patient, encrypt_patient_fields
 
 bp = Blueprint('auth', __name__)
 
@@ -216,12 +215,37 @@ def check_invite(token):
     return jsonify({"ok": True, "prenom": patient['prenom'], "nom": patient['nom']})
 
 
+# ─── PUBLIC: DOCTOR SEARCH (for patient registration) ─────────────────────────
+
+@bp.route('/api/doctors/search', methods=['GET'])
+@limiter.limit("30 per minute")
+def search_doctors():
+    """Search active doctors by name for patient self-registration."""
+    q = sanitize(request.args.get('q', ''), max_len=100).strip().lower()
+    if len(q) < 2:
+        return jsonify([])
+    db   = get_db()
+    rows = db.execute(
+        "SELECT id, nom, prenom, medecin_code FROM users "
+        "WHERE role='medecin' AND status='active' ORDER BY nom",
+    ).fetchall()
+    results = []
+    for r in rows:
+        if q in (r['nom'] or '').lower() or q in (r['prenom'] or '').lower():
+            results.append({"id": r['id'], "nom": r['nom'], "prenom": r['prenom'],
+                            "medecin_code": r['medecin_code'] or ''})
+    return jsonify(results[:10])
+
+
 # ─── PUBLIC: PATIENT SELF-REGISTRATION ────────────────────────────────────────
 
 @bp.route('/api/patient-register', methods=['POST'])
 @limiter.limit("5 per hour")
 def patient_register():
-    """Patient self-registration via invitation token OR médecin code + identity."""
+    """Patient self-registration.
+    Mode A – invite_token : links to existing patient record created by a doctor.
+    Mode B – free         : creates a new patient record (medecin_id optional).
+    """
     data     = request.json or {}
     username = sanitize(data.get('username', ''), max_len=100)
     password = data.get('password', '')
@@ -238,7 +262,7 @@ def patient_register():
     db  = get_db()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # ── Option A : invitation token ────────────────────────────────────────────
+    # ── Mode A : invitation token → existing patient record ───────────────────
     invite_token = data.get('invite_token', '').strip()
     if invite_token:
         inv = db.execute(
@@ -248,64 +272,72 @@ def patient_register():
         if not inv:
             return jsonify({"error": "Lien d'invitation invalide ou expiré."}), 400
         patient_id = inv['patient_id']
+        p = db.execute("SELECT * FROM patients WHERE id=?", (patient_id,)).fetchone()
+        if not p:
+            return jsonify({"error": "Dossier patient introuvable."}), 400
+        if db.execute("SELECT id FROM users WHERE patient_id=?", (patient_id,)).fetchone():
+            return jsonify({"error": "Un compte existe déjà pour ce patient."}), 409
+        if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+            return jsonify({"error": "Cet identifiant est déjà pris, choisissez-en un autre."}), 409
 
-    # ── Option B : médecin code + identity ────────────────────────────────────
-    else:
-        medecin_code = sanitize(data.get('medecin_code', ''), max_len=10).upper()
-        nom_input    = sanitize(data.get('nom',   ''), max_len=100).strip().lower()
-        prenom_input = sanitize(data.get('prenom',''), max_len=100).strip().lower()
-        ddn_input    = sanitize(data.get('ddn',   ''), max_len=20).strip()
+        uid = "U" + str(uuid.uuid4())[:6].upper()
+        db.execute(
+            "INSERT INTO users (id, username, password_hash, role, nom, prenom, patient_id) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (uid, username, generate_password_hash(password), 'patient',
+             p['nom'], p['prenom'], patient_id)
+        )
+        db.execute("UPDATE patient_invitations SET used=1 WHERE token=?", (invite_token,))
+        log_audit(db, 'patient_self_registered', 'users', uid, user_id=uid,
+                  detail=f"patient_id={patient_id} method=invite",
+                  ip_address=get_client_ip(), user_agent=get_user_agent())
+        db.commit()
+        return jsonify({"ok": True}), 201
 
-        if not all([medecin_code, nom_input, prenom_input, ddn_input]):
-            return jsonify({"error": "Code médecin, nom, prénom et date de naissance sont requis"}), 400
+    # ── Mode B : free registration → create new patient record ───────────────
+    nom        = sanitize(data.get('nom',    ''), max_len=100).strip()
+    prenom     = sanitize(data.get('prenom', ''), max_len=100).strip()
+    ddn        = sanitize(data.get('ddn',    ''), max_len=20).strip()
+    medecin_id = sanitize(data.get('medecin_id', ''), max_len=20).strip()
 
-        doctor = db.execute(
-            "SELECT id FROM users WHERE medecin_code=? AND role='medecin' AND status='active'",
-            (medecin_code,)
-        ).fetchone()
-        if not doctor:
-            return jsonify({"error": "Code médecin invalide."}), 400
-
-        all_patients = db.execute(
-            "SELECT * FROM patients WHERE medecin_id=?", (doctor['id'],)
-        ).fetchall()
-
-        patient_id = None
-        for row in all_patients:
-            p = decrypt_patient(dict(row))
-            if (p.get('nom',   '').strip().lower() == nom_input and
-                p.get('prenom','').strip().lower() == prenom_input and
-                p.get('ddn',   '').strip()         == ddn_input):
-                patient_id = p['id']
-                break
-
-        if not patient_id:
-            return jsonify({"error": "Aucun dossier trouvé. Vérifiez vos informations."}), 400
-
-    # ── Common checks ──────────────────────────────────────────────────────────
-    p = db.execute("SELECT * FROM patients WHERE id=?", (patient_id,)).fetchone()
-    if not p:
-        return jsonify({"error": "Dossier patient introuvable."}), 400
-
-    if db.execute("SELECT id FROM users WHERE patient_id=?", (patient_id,)).fetchone():
-        return jsonify({"error": "Un compte existe déjà pour ce patient."}), 409
+    if not all([nom, prenom, ddn]):
+        return jsonify({"error": "Nom, prénom et date de naissance sont requis"}), 400
 
     if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
         return jsonify({"error": "Cet identifiant est déjà pris, choisissez-en un autre."}), 409
+
+    # Validate medecin_id if provided
+    if medecin_id:
+        doc = db.execute(
+            "SELECT id FROM users WHERE id=? AND role='medecin' AND status='active'",
+            (medecin_id,)
+        ).fetchone()
+        if not doc:
+            medecin_id = ''  # silently ignore invalid doctor id
+
+    # Generate patient id
+    row_max = db.execute(
+        "SELECT MAX(CAST(SUBSTR(id,2) AS INTEGER)) FROM patients WHERE id GLOB 'P[0-9]*'"
+    ).fetchone()
+    pid = f"P{((row_max[0] or 0) + 1):03d}"
+
+    # Encrypt PII before storing
+    enc = encrypt_patient_fields({"nom": nom, "prenom": prenom, "ddn": ddn})
+
+    db.execute(
+        "INSERT INTO patients (id, nom, prenom, ddn, medecin_id) VALUES (?,?,?,?,?)",
+        (pid, enc['nom'], enc['prenom'], enc['ddn'], medecin_id)
+    )
 
     uid = "U" + str(uuid.uuid4())[:6].upper()
     db.execute(
         "INSERT INTO users (id, username, password_hash, role, nom, prenom, patient_id) "
         "VALUES (?,?,?,?,?,?,?)",
         (uid, username, generate_password_hash(password), 'patient',
-         p['nom'], p['prenom'], patient_id)
+         enc['nom'], enc['prenom'], pid)
     )
-
-    if invite_token:
-        db.execute("UPDATE patient_invitations SET used=1 WHERE token=?", (invite_token,))
-
     log_audit(db, 'patient_self_registered', 'users', uid, user_id=uid,
-              detail=f"patient_id={patient_id} method={'invite' if invite_token else 'medecin_code'}",
+              detail=f"patient_id={pid} method=free medecin_id={medecin_id or 'none'}",
               ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True}), 201

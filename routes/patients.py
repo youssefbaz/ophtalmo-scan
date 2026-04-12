@@ -791,6 +791,49 @@ def create_patient_account(pid):
     return jsonify({"ok": True, "username": username, "password": password, "email_sent": email_sent})
 
 
+# ─── UNASSIGNED PATIENTS ─────────────────────────────────────────────────────
+
+@bp.route('/api/patients/unassigned', methods=['GET'])
+def get_unassigned_patients():
+    """Return patients with no assigned doctor. Médecin only."""
+    u = current_user()
+    if not u or u['role'] not in ('medecin', 'admin'):
+        return jsonify([]), 403
+    db   = get_db()
+    rows = db.execute(
+        "SELECT * FROM patients WHERE medecin_id IS NULL OR medecin_id = '' "
+        "ORDER BY created_at DESC"
+    ).fetchall()
+    result = []
+    for row in rows:
+        p = decrypt_patient(dict(row))
+        # Check if there's already a user account linked
+        acc = db.execute("SELECT username FROM users WHERE patient_id=?", (p['id'],)).fetchone()
+        p['has_account'] = acc is not None
+        p['username']    = acc['username'] if acc else None
+        result.append(p)
+    return jsonify(result)
+
+
+@bp.route('/api/patients/<pid>/claim', methods=['POST'])
+def claim_patient(pid):
+    """Assign an unassigned patient to the current doctor."""
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db  = get_db()
+    row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not row:
+        return jsonify({"error": "Patient non trouvé"}), 404
+    if row['medecin_id'] and row['medecin_id'] != '':
+        return jsonify({"error": "Ce patient est déjà assigné à un médecin"}), 409
+    db.execute("UPDATE patients SET medecin_id=? WHERE id=?", (u['id'], pid))
+    log_audit(db, 'patient_claimed', 'patients', pid, user_id=u['id'],
+              detail=f"medecin_id={u['id']}")
+    db.commit()
+    return jsonify({"ok": True})
+
+
 # ─── PATIENT INVITATION LINK ──────────────────────────────────────────────────
 
 @bp.route('/api/patients/<pid>/send-invite', methods=['POST'])
