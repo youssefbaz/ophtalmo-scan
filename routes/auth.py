@@ -4,6 +4,7 @@ import datetime
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db, current_user, log_audit, record_login_attempt, is_account_locked, add_notif, next_medecin_code
+from security_utils import decrypt_patient
 from extensions import limiter
 from security_utils import validate_password, sanitize, get_client_ip, get_user_agent
 
@@ -195,31 +196,96 @@ def register():
     return jsonify({"ok": True, "id": uid, "username": username, "role": role}), 201
 
 
+# ─── PUBLIC: VALIDATE INVITATION TOKEN ────────────────────────────────────────
+
+@bp.route('/api/invite/<token>', methods=['GET'])
+def check_invite(token):
+    """Validate an invitation token and return the patient's first name for display."""
+    db  = get_db()
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    row = db.execute(
+        "SELECT * FROM patient_invitations WHERE token=? AND used=0 AND expires_at > ?",
+        (token, now)
+    ).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "Lien invalide ou expiré."}), 400
+    p = db.execute("SELECT nom, prenom FROM patients WHERE id=?", (row['patient_id'],)).fetchone()
+    if not p:
+        return jsonify({"ok": False, "error": "Patient introuvable."}), 400
+    patient = decrypt_patient(dict(p))
+    return jsonify({"ok": True, "prenom": patient['prenom'], "nom": patient['nom']})
+
+
 # ─── PUBLIC: PATIENT SELF-REGISTRATION ────────────────────────────────────────
 
 @bp.route('/api/patient-register', methods=['POST'])
 @limiter.limit("5 per hour")
 def patient_register():
-    """Patient self-registration using their patient ID as an invitation code."""
-    data       = request.json or {}
-    patient_id = sanitize(data.get('patient_id', ''), max_len=20).upper()
-    username   = sanitize(data.get('username', ''), max_len=100)
-    password   = data.get('password', '')
+    """Patient self-registration via invitation token OR médecin code + identity."""
+    data     = request.json or {}
+    username = sanitize(data.get('username', ''), max_len=100)
+    password = data.get('password', '')
 
-    if not all([patient_id, username, password]):
-        return jsonify({"error": "Tous les champs sont requis"}), 400
+    if not username or not password:
+        return jsonify({"error": "Identifiant et mot de passe sont requis"}), 400
     if len(username) < 3:
         return jsonify({"error": "L'identifiant doit contenir au moins 3 caractères"}), 400
 
-    # Enforce password policy
     ok, err = validate_password(password)
     if not ok:
         return jsonify({"error": err}), 400
 
-    db = get_db()
+    db  = get_db()
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # ── Option A : invitation token ────────────────────────────────────────────
+    invite_token = data.get('invite_token', '').strip()
+    if invite_token:
+        inv = db.execute(
+            "SELECT * FROM patient_invitations WHERE token=? AND used=0 AND expires_at > ?",
+            (invite_token, now)
+        ).fetchone()
+        if not inv:
+            return jsonify({"error": "Lien d'invitation invalide ou expiré."}), 400
+        patient_id = inv['patient_id']
+
+    # ── Option B : médecin code + identity ────────────────────────────────────
+    else:
+        medecin_code = sanitize(data.get('medecin_code', ''), max_len=10).upper()
+        nom_input    = sanitize(data.get('nom',   ''), max_len=100).strip().lower()
+        prenom_input = sanitize(data.get('prenom',''), max_len=100).strip().lower()
+        ddn_input    = sanitize(data.get('ddn',   ''), max_len=20).strip()
+
+        if not all([medecin_code, nom_input, prenom_input, ddn_input]):
+            return jsonify({"error": "Code médecin, nom, prénom et date de naissance sont requis"}), 400
+
+        doctor = db.execute(
+            "SELECT id FROM users WHERE medecin_code=? AND role='medecin' AND status='active'",
+            (medecin_code,)
+        ).fetchone()
+        if not doctor:
+            return jsonify({"error": "Code médecin invalide."}), 400
+
+        all_patients = db.execute(
+            "SELECT * FROM patients WHERE medecin_id=?", (doctor['id'],)
+        ).fetchall()
+
+        patient_id = None
+        for row in all_patients:
+            p = decrypt_patient(dict(row))
+            if (p.get('nom',   '').strip().lower() == nom_input and
+                p.get('prenom','').strip().lower() == prenom_input and
+                p.get('ddn',   '').strip()         == ddn_input):
+                patient_id = p['id']
+                break
+
+        if not patient_id:
+            return jsonify({"error": "Aucun dossier trouvé. Vérifiez vos informations."}), 400
+
+    # ── Common checks ──────────────────────────────────────────────────────────
     p = db.execute("SELECT * FROM patients WHERE id=?", (patient_id,)).fetchone()
     if not p:
-        return jsonify({"error": "Code patient invalide. Vérifiez auprès de votre médecin."}), 400
+        return jsonify({"error": "Dossier patient introuvable."}), 400
 
     if db.execute("SELECT id FROM users WHERE patient_id=?", (patient_id,)).fetchone():
         return jsonify({"error": "Un compte existe déjà pour ce patient."}), 409
@@ -234,7 +300,12 @@ def patient_register():
         (uid, username, generate_password_hash(password), 'patient',
          p['nom'], p['prenom'], patient_id)
     )
-    log_audit(db, 'patient_self_registered', 'users', uid, user_id=uid, detail=f"patient_id={patient_id}",
+
+    if invite_token:
+        db.execute("UPDATE patient_invitations SET used=1 WHERE token=?", (invite_token,))
+
+    log_audit(db, 'patient_self_registered', 'users', uid, user_id=uid,
+              detail=f"patient_id={patient_id} method={'invite' if invite_token else 'medecin_code'}",
               ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True}), 201
