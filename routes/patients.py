@@ -36,10 +36,14 @@ def _build_patient(db, pid, strip_images=True):
     p['historique'] = [dict(r) for r in
         db.execute("SELECT * FROM historique WHERE patient_id=? ORDER BY date DESC", (pid,))]
 
+    import re as _re
+    _fernet_re = _re.compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
     rdvs = [dict(r) for r in
         db.execute("SELECT * FROM rdv WHERE patient_id=? ORDER BY date, heure", (pid,))]
     for r in rdvs:
         r['urgent'] = bool(r['urgent'])
+        med = r.get('medecin') or ''
+        r['medecin'] = '' if (med and _fernet_re.match(med.strip())) else med
     p['rdv'] = rdvs
 
     imgs = [dict(r) for r in

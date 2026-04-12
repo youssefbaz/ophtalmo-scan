@@ -28,16 +28,19 @@ def get_notifications():
     db = get_db()
 
     if u['role'] == 'medecin':
-        # Only show notifications for this doctor's own patients (+ system-wide ones)
+        # Show notifications for this doctor's own patients, notifications explicitly
+        # targeted at this doctor (e.g. RDV from a patient with a different assigned doctor),
+        # and system-wide ones (no patient_id)
         rows = db.execute("""
             SELECT n.* FROM notifications n
-            WHERE n.patient_id IS NULL
+            WHERE n.medecin_id = ?
+               OR n.patient_id IS NULL
                OR n.patient_id = ''
                OR n.patient_id IN (
                    SELECT id FROM patients WHERE medecin_id = ?
                )
             ORDER BY n.date DESC LIMIT 30
-        """, (u['id'],)).fetchall()
+        """, (u['id'], u['id'])).fetchall()
     else:
         rows = db.execute(
             "SELECT * FROM notifications WHERE patient_id=? AND from_role='medecin' "

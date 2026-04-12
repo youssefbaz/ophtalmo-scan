@@ -266,15 +266,15 @@ def audit_read(db, table: str, record_id: str, patient_id: str = ""):
 
 # ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
-def add_notif(db, type_, message, from_role, patient_id=None, data=None):
+def add_notif(db, type_, message, from_role, patient_id=None, data=None, medecin_id=None):
     db.execute(
-        "INSERT INTO notifications (id,type,message,from_role,patient_id,date,lu,data) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO notifications (id,type,message,from_role,patient_id,date,lu,data,medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
         (
             str(uuid.uuid4())[:8],
             type_, message, from_role, patient_id,
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            0, json.dumps(data or {}),
+            0, json.dumps(data or {}), medecin_id or '',
         )
     )
     db.commit()
@@ -626,6 +626,18 @@ def _migrate(db):
     # suivi_postop rdv_id
     try:
         db.execute("ALTER TABLE suivi_postop ADD COLUMN rdv_id TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # rdv medecin_id (so a patient can book with any doctor, not just their assigned one)
+    try:
+        db.execute("ALTER TABLE rdv ADD COLUMN medecin_id TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # notifications medecin_id (route notification to a specific doctor)
+    try:
+        db.execute("ALTER TABLE notifications ADD COLUMN medecin_id TEXT DEFAULT ''")
     except Exception:
         pass
 

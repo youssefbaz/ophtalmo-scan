@@ -1,7 +1,16 @@
-import uuid, logging
+import uuid, logging, re
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
 from security_utils import decrypt_field, decrypt_patient
+
+# Detect Fernet tokens accidentally stored in plain-text fields
+_FERNET_RE = re.compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
+
+def _clean_medecin(value: str) -> str:
+    """Return an empty string if value looks like an encrypted Fernet token."""
+    if value and _FERNET_RE.match(value.strip()):
+        return ''
+    return value or ''
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +31,21 @@ def get_rdv():
             ORDER BY r.date, r.heure
         """, (u.get('patient_id'),)).fetchall()
     else:
+        # Show RDVs explicitly assigned to this doctor (medecin_id),
+        # plus legacy RDVs for this doctor's patients (backward compat)
         rows = db.execute("""
             SELECT r.*, p.nom AS patient_nom, p.prenom AS patient_prenom
             FROM rdv r JOIN patients p ON r.patient_id = p.id
-            WHERE p.medecin_id = ?
+            WHERE r.medecin_id = ?
+               OR ((r.medecin_id IS NULL OR r.medecin_id = '') AND p.medecin_id = ?)
             ORDER BY r.date, r.heure
-        """, (u['id'],)).fetchall()
+        """, (u['id'], u['id'])).fetchall()
     result = [dict(r) for r in rows]
     for r in result:
         r['urgent'] = bool(r['urgent'])
         r['patient_nom']    = decrypt_field(r.get('patient_nom', '') or '')
         r['patient_prenom'] = decrypt_field(r.get('patient_prenom', '') or '')
+        r['medecin'] = _clean_medecin(r.get('medecin', '') or '')
     return jsonify(result)
 
 
@@ -68,20 +81,25 @@ def add_rdv():
     rdv_id = "RDV" + str(uuid.uuid4())[:6].upper()
     rdv_type   = data.get('type', 'Consultation')
     rdv_medecin = data.get('medecin', u['nom'])
+    # medecin_id: use from payload (patient picks a doctor), or for doctor bookings use their own id
+    rdv_medecin_id = data.get('medecin_id', '') or (u['id'] if u['role'] == 'medecin' else '')
 
     db.execute(
-        "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,notes,urgent,demande_par) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,medecin_id,notes,urgent,demande_par) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (rdv_id, pid, rdv_date, rdv_heure,
          rdv_type, statut,
-         rdv_medecin, data.get('notes',''),
+         rdv_medecin, rdv_medecin_id, data.get('notes',''),
          1 if urgent else 0, u['role'])
     )
     db.commit()
 
     if urgent or u['role'] == 'patient':
-        msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}"
-        add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid, {"rdv_id": rdv_id})
+        dr_suffix = f" (Dr. {rdv_medecin})" if rdv_medecin else ""
+        msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}{dr_suffix}"
+        add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid,
+                  {"rdv_id": rdv_id, "medecin_id": rdv_medecin_id},
+                  medecin_id=rdv_medecin_id or None)
 
     # ── Send confirmation email/SMS when doctor books a confirmed RDV ──────────
     if u['role'] == 'medecin' and statut == 'confirmé':
