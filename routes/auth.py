@@ -3,7 +3,7 @@ import secrets
 import datetime
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
-from database import get_db, current_user, log_audit, record_login_attempt, is_account_locked
+from database import get_db, current_user, log_audit, record_login_attempt, is_account_locked, add_notif, next_medecin_code
 from extensions import limiter
 from security_utils import validate_password, sanitize, get_client_ip, get_user_agent
 
@@ -470,9 +470,50 @@ def settings_update_profile():
     return jsonify(result)
 
 
-# ─── PUBLIC: MÉDECIN SELF-REGISTRATION (disabled — admin only) ────────────────
+# ─── PUBLIC: MÉDECIN SELF-REGISTRATION ────────────────────────────────────────
 
 @bp.route('/api/register-medecin', methods=['POST'])
+@limiter.limit("5 per hour")
 def register_medecin():
-    """Médecin accounts are created by the admin only."""
-    return jsonify({"error": "La création de comptes médecin est réservée à l'administrateur."}), 403
+    """Médecin self-registration. Account is created with status='pending' until admin validates it."""
+    data           = request.json or {}
+    username       = sanitize(data.get('username',       ''), max_len=100)
+    password       = data.get('password', '').strip()
+    nom            = sanitize(data.get('nom',            ''), max_len=100)
+    prenom         = sanitize(data.get('prenom',         ''), max_len=100)
+    email          = sanitize(data.get('email',          ''), max_len=200)
+    organisation   = sanitize(data.get('organisation',   ''), max_len=200)
+    date_naissance = sanitize(data.get('date_naissance', ''), max_len=20)
+
+    if not all([username, password, nom, prenom]):
+        return jsonify({"error": "Champs requis : identifiant, mot de passe, nom, prénom"}), 400
+    if len(username) < 3:
+        return jsonify({"error": "L'identifiant doit contenir au moins 3 caractères"}), 400
+
+    ok, err = validate_password(password)
+    if not ok:
+        return jsonify({"error": err}), 400
+
+    db = get_db()
+    if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+        return jsonify({"error": "Cet identifiant est déjà utilisé, veuillez en choisir un autre."}), 409
+
+    uid   = "U" + str(uuid.uuid4())[:6].upper()
+    mcode = next_medecin_code(db)
+    db.execute(
+        "INSERT INTO users(id,username,password_hash,role,nom,prenom,email,organisation,date_naissance,status,medecin_code) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (uid, username, generate_password_hash(password),
+         'medecin', nom, prenom, email, organisation, date_naissance, 'pending', mcode)
+    )
+    add_notif(db, "nouveau_medecin_en_attente",
+              f"🩺 Nouvelle demande médecin : Dr. {prenom} {nom} ({username}) — en attente de validation",
+              "medecin")
+    log_audit(db, 'medecin_self_registered', 'users', uid, user_id=uid,
+              detail=f"username={username} status=pending",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    return jsonify({
+        "ok": True,
+        "message": "Votre demande a été envoyée. Un administrateur validera votre compte avant activation."
+    }), 201
