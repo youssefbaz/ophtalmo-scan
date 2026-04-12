@@ -83,6 +83,20 @@ def admin_validate(uid):
               f"✅ Compte validé : {row['prenom']} {row['nom']} ({row['username']})",
               "admin")
     db.commit()
+
+    # Send validation email if the user has an email address
+    email = (row['email'] or '').strip()
+    if email:
+        try:
+            from email_notif import send_account_validated_email
+            send_account_validated_email(
+                email,
+                row['prenom'], row['nom'], row['username'],
+                app_host=request.host_url.rstrip('/')
+            )
+        except Exception:
+            pass  # email failure is silent; account is already activated
+
     return jsonify({"ok": True})
 
 

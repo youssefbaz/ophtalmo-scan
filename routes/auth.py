@@ -485,8 +485,10 @@ def register_medecin():
     organisation   = sanitize(data.get('organisation',   ''), max_len=200)
     date_naissance = sanitize(data.get('date_naissance', ''), max_len=20)
 
-    if not all([username, password, nom, prenom]):
-        return jsonify({"error": "Champs requis : identifiant, mot de passe, nom, prénom"}), 400
+    if not all([username, password, nom, prenom, email]):
+        return jsonify({"error": "Champs requis : identifiant, mot de passe, nom, prénom, email"}), 400
+    if '@' not in email or '.' not in email.split('@')[-1]:
+        return jsonify({"error": "Adresse email invalide"}), 400
     if len(username) < 3:
         return jsonify({"error": "L'identifiant doit contenir au moins 3 caractères"}), 400
 
