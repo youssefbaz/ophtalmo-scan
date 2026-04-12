@@ -115,19 +115,39 @@ body {
 
 /* ── LOGIN ── */
 #loginScreen {
-  position: fixed; inset: 0;
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
   background: radial-gradient(ellipse at 30% 40%, #0a2535 0%, var(--bg) 70%);
-  display: flex; align-items: center; justify-content: center;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
   z-index: 1000;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px 16px;
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
 }
 
 .login-box {
-  width: 420px;
+  width: 100%;
+  max-width: 420px;
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;
   padding: 48px 40px;
-  box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+  -webkit-box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+          box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+  /* prevent box from sticking to screen edges on narrow viewports */
+  margin: auto;
 }
 
 .login-logo { text-align: center; margin-bottom: 36px; }
@@ -748,14 +768,11 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   /* Form rows → single column on mobile */
   .form-row { grid-template-columns: 1fr; }
 
-  /* Login box → full screen card */
-  #loginScreen { align-items: flex-start; padding: 24px 0 0; }
+  /* Login box → tighter padding on small screens */
+  #loginScreen { padding: 16px 12px; align-items: flex-start; }
   .login-box {
-    width: 100%;
-    border-radius: 0;
-    border-left: none; border-right: none; border-bottom: none;
     padding: 32px 20px 40px;
-    min-height: calc(100vh - 24px);
+    border-radius: 16px;
   }
 
   /* Patient header V2 → stacked */
