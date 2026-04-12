@@ -790,6 +790,74 @@ def create_patient_account(pid):
     return jsonify({"ok": True, "username": username, "password": password, "email_sent": email_sent})
 
 
+# ─── PATIENT INVITATION LINK ──────────────────────────────────────────────────
+
+@bp.route('/api/patients/<pid>/send-invite', methods=['POST'])
+def send_patient_invite(pid):
+    """Generate a one-time registration link and send it to the patient's email."""
+    import secrets, datetime as _dt
+    u = current_user()
+    if not u or u['role'] not in ('medecin', 'admin'):
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not p:
+        return jsonify({"error": "Patient non trouvé"}), 404
+
+    patient = decrypt_patient(dict(p))
+
+    email = patient.get('email', '').strip()
+    if not email or '@' not in email:
+        return jsonify({"error": "Ce patient n'a pas d'adresse email enregistrée."}), 400
+
+    existing = db.execute("SELECT id FROM users WHERE patient_id=?", (pid,)).fetchone()
+    if existing:
+        return jsonify({"error": "Ce patient possède déjà un compte."}), 409
+
+    # Invalidate any unused previous token for this patient
+    db.execute("DELETE FROM patient_invitations WHERE patient_id=? AND used=0", (pid,))
+
+    token      = secrets.token_urlsafe(32)
+    expires_at = (_dt.datetime.now() + _dt.timedelta(hours=72)).strftime("%Y-%m-%d %H:%M:%S")
+    db.execute(
+        "INSERT INTO patient_invitations (token, patient_id, expires_at, used) VALUES (?,?,?,0)",
+        (token, pid, expires_at)
+    )
+    db.commit()
+
+    try:
+        from email_notif import send_email
+        host      = request.host_url.rstrip('/')
+        invite_url = f"{host}/?invite={token}"
+        body = f"""
+<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:#0e7a76;padding:22px 28px">
+    <div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">Votre espace patient</div>
+  </div>
+  <div style="padding:28px">
+    <h2 style="color:#0e7a76;margin-top:0">Créez votre compte patient</h2>
+    <p>Bonjour <strong>{patient['prenom']} {patient['nom']}</strong>,</p>
+    <p>Votre médecin vous invite à créer votre compte sur OphtalmoScan pour accéder à votre dossier médical en ligne.</p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="{invite_url}" style="background:#0e7a76;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+        Créer mon compte
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:13px">Ce lien est valable 72 heures et ne peut être utilisé qu'une seule fois.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <p style="color:#9ca3af;font-size:11px;margin:0">— OphtalmoScan · Ce message est généré automatiquement</p>
+  </div>
+</div>
+</body></html>"""
+        send_email(email, "Invitation à créer votre compte OphtalmoScan", body)
+    except Exception:
+        pass
+
+    return jsonify({"ok": True})
+
+
 # ─── CLINICAL TRENDS ──────────────────────────────────────────────────────────
 
 @bp.route('/api/patients/<pid>/trends', methods=['GET'])

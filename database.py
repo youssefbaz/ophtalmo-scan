@@ -373,6 +373,14 @@ def _create_tables(db):
         created_at  TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS patient_invitations (
+        token      TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used       INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS patients (
         id              TEXT PRIMARY KEY,
         nom             TEXT NOT NULL,
@@ -588,6 +596,17 @@ def _migrate(db):
                 ip_address TEXT DEFAULT '', success INTEGER DEFAULT 0, created_at TEXT NOT NULL
             )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts ON login_attempts(user_id, created_at)")
+    except Exception:
+        pass
+
+    # patient_invitations table
+    try:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS patient_invitations (
+                token TEXT PRIMARY KEY, patient_id TEXT NOT NULL,
+                expires_at TEXT NOT NULL, used INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )""")
     except Exception:
         pass
 
