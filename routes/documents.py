@@ -2,6 +2,7 @@ import uuid, datetime, json, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif, require_role
 from llm import call_llm, SYSTEM_OPHTHALMO
+from security_utils import decrypt_patient
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +17,10 @@ def upload_document(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    if not p:
+    _p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not _p:
         return jsonify({"error": "Patient non trouvé"}), 404
+    p = decrypt_patient(dict(_p))
 
     data     = request.json or {}
     doc_id   = "DOC" + str(uuid.uuid4())[:6].upper()

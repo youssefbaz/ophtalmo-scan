@@ -1,7 +1,7 @@
 import uuid, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
-from security_utils import decrypt_field
+from security_utils import decrypt_field, decrypt_patient
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,10 @@ def add_rdv():
     data = request.json or {}
     db = get_db()
     pid = data.get('patient_id') or u.get('patient_id')
-    p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    if not p:
+    _p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not _p:
         return jsonify({"error": "Patient non trouvé"}), 404
+    p = decrypt_patient(dict(_p))
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
 
@@ -220,6 +221,6 @@ def valider_rdv(rdv_id):
     if new_statut == 'confirmé':
         p = db.execute("SELECT * FROM patients WHERE id=?", (row['patient_id'],)).fetchone()
         if p:
-            _send_rdv_confirmation(dict(p), new_date, new_heure, row['type'], row['medecin'])
+            _send_rdv_confirmation(decrypt_patient(dict(p)), new_date, new_heure, row['type'], row['medecin'])
 
     return jsonify({"ok": True})

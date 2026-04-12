@@ -142,14 +142,17 @@ body {
 .login-title { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--text); }
 .login-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
 
-.role-tabs { display: flex; gap: 6px; margin-bottom: 24px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 12px; }
+.role-tabs { display: flex; gap: 0; margin-bottom: 24px; background: var(--bg2); padding: 0; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
 .role-tab {
-  flex: 1; padding: 8px; border-radius: 9px; border: none;
+  flex: 1; padding: 10px 8px; border-radius: 0; border: none;
+  border-right: 1px solid var(--border);
   background: transparent; color: var(--text2);
   font-family: 'Tajawal', sans-serif; font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s; text-align: center;
+  cursor: pointer; transition: background 0.15s, color 0.15s; text-align: center;
 }
-.role-tab.active { background: var(--teal); color: white; }
+.role-tab:last-child { border-right: none; }
+.role-tab:hover:not(.active) { background: var(--bg3); color: var(--text); }
+.role-tab.active { background: var(--teal); color: #fff; font-weight: 600; }
 .role-tab .role-emoji { display: block; font-size: 18px; margin-bottom: 2px; }
 
 .form-group { margin-bottom: 16px; }

@@ -409,8 +409,9 @@ def set_chirurgie(pid):
         _generate_suivi(db, pid, date_chir, medecin_nom=medecin_nom, type_chirurgie=type_chir)
     p = db.execute("SELECT prenom, nom FROM patients WHERE id=?", (pid,)).fetchone()
     if p:
+        p_dec = decrypt_patient(dict(p))
         add_notif(db, "chirurgie",
-                  f"✂️ Chirurgie planifiée pour {p['prenom']} {p['nom']} : {date_chir} — 8 RDV post-op créés",
+                  f"✂️ Chirurgie planifiée pour {p_dec['prenom']} {p_dec['nom']} : {date_chir} — 8 RDV post-op créés",
                   "medecin", pid)
     return jsonify({"ok": True})
 

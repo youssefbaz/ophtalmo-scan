@@ -1,8 +1,23 @@
-import json
+import re, json
 from flask import Blueprint, jsonify
 from database import get_db, current_user
+from security_utils import decrypt_field
 
 bp = Blueprint('notifications', __name__)
+
+# Fernet tokens are base64url strings starting with gAAAAA (version byte 0x80)
+_FERNET_RE = re.compile(r'gAAAAA[A-Za-z0-9_\-]{40,}={0,2}')
+
+
+def _decrypt_message(msg: str) -> str:
+    """Replace any embedded Fernet tokens inside a notification message with their plaintext."""
+    if not msg or 'gAAAAA' not in msg:
+        return msg
+    def _replace(m):
+        decrypted = decrypt_field(m.group(0))
+        # decrypt_field returns the original string on failure, so this is safe
+        return decrypted
+    return _FERNET_RE.sub(_replace, msg)
 
 
 @bp.route('/api/notifications', methods=['GET'])
@@ -34,6 +49,7 @@ def get_notifications():
     for row in rows:
         n = dict(row)
         n['lu'] = bool(n['lu'])
+        n['message'] = _decrypt_message(n.get('message') or '')
         try:
             n['data'] = json.loads(n.get('data') or '{}')
         except Exception:
