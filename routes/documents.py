@@ -132,15 +132,36 @@ def analyze_document(pid, doc_id):
     return jsonify({"ok": True, "analysis": analysis})
 
 
-@bp.route('/api/patients/<pid>/documents/<doc_id>', methods=['DELETE'])
-def delete_document(pid, doc_id):
-    """Soft-delete: marks as deleted, keeps image_b64 in storage."""
+@bp.route('/api/patients/<pid>/documents/<doc_id>/validate', methods=['POST'])
+def validate_document(pid, doc_id):
+    """Mark a patient-uploaded document as reviewed/validated by the doctor."""
     u = current_user()
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
     if not db.execute("SELECT id FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone():
         return jsonify({"error": "Non trouvé"}), 404
+    db.execute("UPDATE documents SET valide=1 WHERE id=?", (doc_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/patients/<pid>/documents/<doc_id>', methods=['DELETE'])
+def delete_document(pid, doc_id):
+    """Soft-delete: marks as deleted, keeps image_b64 in storage."""
+    u = current_user()
+    if not u:
+        return jsonify({"error": "Non connecté"}), 401
+    db = get_db()
+    row = db.execute("SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone()
+    if not row:
+        return jsonify({"error": "Non trouvé"}), 404
+    # Patients can only delete documents they uploaded themselves
+    if u['role'] == 'patient':
+        if u.get('patient_id') != pid or row['uploaded_by'] != 'patient':
+            return jsonify({"error": "Accès refusé"}), 403
+    elif u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
     db.execute(
         "UPDATE documents SET deleted=1, deleted_at=? WHERE id=?",
         (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), doc_id)
