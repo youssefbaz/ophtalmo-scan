@@ -3455,62 +3455,75 @@ async function renderMesDocuments(c) {
       <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="uploadPatientDoc(this)">
       <div id="docTypePickerWrap" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px">Type de document</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-          ${['Radio / Scanner','OCT','Fond d\'œil','Ordonnance','Résultats d\'analyses','Autre'].map(t=>
-            `<button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="selectDocType('${t}')">${t}</button>`
-          ).join('')}
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input class="input" id="docTypeCustom" placeholder="Ou saisissez un type…" style="flex:1;font-size:13px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select class="input" id="docTypeSelect" style="flex:1;min-width:160px;font-size:13px">
+            <option value="Radio / Scanner">Radio / Scanner</option>
+            <option value="OCT">OCT</option>
+            <option value="Fond d oeil">Fond d oeil</option>
+            <option value="Ordonnance">Ordonnance</option>
+            <option value="Resultats analyses">Resultats analyses</option>
+            <option value="Autre">Autre</option>
+          </select>
+          <input class="input" id="docTypeCustom" placeholder="Ou type personnalise…" style="flex:1;min-width:140px;font-size:13px">
           <button class="btn btn-primary btn-sm" onclick="confirmDocUpload()">Envoyer</button>
           <button class="btn btn-ghost btn-sm" onclick="cancelDocUpload()">Annuler</button>
         </div>
+        <div id="docUploadFilename" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
       </div>
     </div>
     <div class="section-title">Mes documents (${docs.length})</div>
     <div style="display:flex;flex-direction:column;gap:10px" id="patientDocsGrid">
-      ${docs.length ? docs.map(d => `
-        <div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px">
-          <div style="font-size:28px;flex-shrink:0">${d.description&&d.description.toLowerCase().endsWith('.pdf')?'📄':'🖼'}</div>
+      ${docs.length ? docs.map(d => {
+        const isPdf = (d.description||'').toLowerCase().endsWith('.pdf');
+        const icon  = isPdf ? '📄' : '🖼';
+        const stat  = d.valide
+          ? '<span style="font-size:11px;color:var(--teal2)">&#10003; Vu par le medecin</span>'
+          : '<span style="font-size:11px;color:var(--amber)">&#8987; En attente</span>';
+        return `<div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px">
+          <div style="font-size:28px;flex-shrink:0">${icon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(d.type)}</div>
             <div style="font-size:12px;color:var(--text2);margin-top:2px">${fmtDate(d.date)} · ${escH(d.description||'')}</div>
-            <div style="margin-top:4px">
-              ${d.valide
-                ? `<span style="font-size:11px;color:var(--teal2)">✓ Vu par le médecin</span>`
-                : `<span style="font-size:11px;color:var(--amber)">⏳ En attente de consultation</span>`}
-            </div>
+            <div style="margin-top:4px">${stat}</div>
           </div>
           <button class="btn btn-ghost btn-sm" style="color:var(--red);flex-shrink:0"
-            onclick="deletePatientDoc('${pid}','${d.id}',this)" title="Supprimer">🗑</button>
-        </div>
-      `).join('') : '<div style="color:var(--text3);text-align:center;padding:30px;background:var(--card);border:1px dashed var(--border);border-radius:12px">Aucun document uploadé</div>'}
+            onclick="deletePatientDoc('${pid}','${d.id}',this)" title="Supprimer">&#128465;</button>
+        </div>`;
+      }).join('') : '<div style="color:var(--text3);text-align:center;padding:30px;background:var(--card);border:1px dashed var(--border);border-radius:12px">Aucun document uploade</div>'}
     </div>`;
 }
 
 let _pendingUploadFile = null;
-function selectDocType(t) {
-  document.getElementById('docTypeCustom').value = t;
-}
+
 function cancelDocUpload() {
   _pendingUploadFile = null;
-  document.getElementById('docTypePickerWrap').style.display = 'none';
-  document.getElementById('docUploadStatus').textContent = 'Cliquez ou glissez votre document ici';
-  document.getElementById('docUploadZone').style.opacity = '1';
-  document.getElementById('docFileInput').value = '';
+  const wrap = document.getElementById('docTypePickerWrap');
+  const status = document.getElementById('docUploadStatus');
+  const zone = document.getElementById('docUploadZone');
+  const inp = document.getElementById('docFileInput');
+  if (wrap)   wrap.style.display = 'none';
+  if (status) status.textContent = 'Cliquez ou glissez votre document ici';
+  if (zone)   zone.style.opacity = '1';
+  if (inp)    inp.value = '';
 }
+
 async function confirmDocUpload() {
-  const type = document.getElementById('docTypeCustom').value.trim() || 'Document';
+  const customVal = (document.getElementById('docTypeCustom')?.value || '').trim();
+  const selectVal = document.getElementById('docTypeSelect')?.value || 'Document';
+  const type = customVal || selectVal;
   if (!_pendingUploadFile) return;
-  await _doUploadFile(_pendingUploadFile, type);
-  cancelDocUpload();
+  const file = _pendingUploadFile;
+  _pendingUploadFile = null;
+  await _doUploadFile(file, type);
 }
+
 async function deletePatientDoc(pid, docId, btn) {
   if (!confirm('Supprimer ce document ?')) return;
   btn.disabled = true;
   const res = await api(`/api/patients/${pid}/documents/${docId}`, 'DELETE');
   if (res.ok) {
-    btn.closest('div[style]').remove();
+    const row = btn.closest('div[style]');
+    if (row) row.remove();
   } else {
     alert(res.error || 'Erreur lors de la suppression');
     btn.disabled = false;
@@ -3987,10 +4000,16 @@ async function uploadPatientDoc(input) {
 
 function _prepareUpload(file) {
   _pendingUploadFile = file;
-  document.getElementById('docUploadStatus').textContent = `Fichier : ${file.name}`;
-  document.getElementById('docUploadZone').style.opacity = '0.6';
-  document.getElementById('docTypeCustom').value = '';
-  document.getElementById('docTypePickerWrap').style.display = 'block';
+  const status = document.getElementById('docUploadStatus');
+  const zone   = document.getElementById('docUploadZone');
+  const wrap   = document.getElementById('docTypePickerWrap');
+  const fname  = document.getElementById('docUploadFilename');
+  const custom = document.getElementById('docTypeCustom');
+  if (status) status.textContent = 'Fichier selectionne — choisissez le type ci-dessous';
+  if (zone)   zone.style.opacity = '0.6';
+  if (fname)  fname.textContent  = 'Fichier : ' + file.name;
+  if (custom) custom.value = '';
+  if (wrap)   wrap.style.display = 'block';
 }
 
 async function _doUploadFile(file, type) {
@@ -4009,11 +4028,13 @@ async function _doUploadFile(file, type) {
         if (res.ok) {
           showView('mes-documents');
         } else {
-          alert(res.error || 'Erreur lors de l\'envoi du document.');
+          alert(res.error || "Erreur lors de l'envoi du document.");
           if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
+          const wrap = document.getElementById('docTypePickerWrap');
+          if (wrap) wrap.style.display = 'none';
         }
       } catch(err) {
-        alert('Erreur réseau lors de l\'envoi.');
+        alert('Erreur reseau lors de l\'envoi.');
         if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
       }
       resolve();
