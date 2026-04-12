@@ -82,6 +82,41 @@ def send_credentials_email(to_address: str, prenom: str, nom: str,
     return send_email(to_address, "Vos identifiants OphtalmoScan", body)
 
 
+def send_account_validated_email(to_address: str, prenom: str, nom: str,
+                                  username: str, app_host: str = '') -> bool:
+    """Notify a médecin that their account has been validated by the admin."""
+    login_url = f"{app_host}/" if app_host else "l'application"
+    body = f"""
+<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:#0e7a76;padding:22px 28px">
+    <div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">Système de gestion ophtalmologique</div>
+  </div>
+  <div style="padding:28px">
+    <h2 style="color:#0e7a76;margin-top:0">Votre compte a été activé</h2>
+    <p>Bonjour Dr. <strong>{prenom} {nom}</strong>,</p>
+    <p>Nous avons le plaisir de vous informer que votre compte OphtalmoScan a été <strong style="color:#0e7a76">validé par l'administrateur</strong>.</p>
+    <p>Vous pouvez dès maintenant vous connecter avec votre identifiant :</p>
+    <table style="width:100%;background:#f0faf9;border-radius:8px;border:1px solid #b2dfdb;border-collapse:collapse;margin:18px 0">
+      <tr>
+        <td style="padding:12px 16px;color:#555;width:40%">🔑 Identifiant</td>
+        <td style="padding:12px 16px;font-weight:700;font-family:monospace;font-size:15px">{username}</td>
+      </tr>
+    </table>
+    <div style="text-align:center;margin:24px 0">
+      <a href="{login_url}" style="background:#0e7a76;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+        Se connecter
+      </a>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <p style="color:#9ca3af;font-size:11px;margin:0">— OphtalmoScan · Ce message est généré automatiquement</p>
+  </div>
+</div>
+</body></html>"""
+    return send_email(to_address, "Votre compte OphtalmoScan a été activé", body)
+
+
 def _rdv_html(prenom, nom, date_str, heure, type_rdv, medecin):
     return f"""
 <html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
