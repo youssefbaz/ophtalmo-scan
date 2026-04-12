@@ -107,14 +107,15 @@ def _add_months(d, months):
 
 
 SUIVI_ETAPES = [
-    ("J7",     lambda d: d + datetime.timedelta(days=7)),
-    ("J30",    lambda d: d + datetime.timedelta(days=30)),
-    ("J2Mois", lambda d: _add_months(d, 2)),
-    ("J3Mois", lambda d: _add_months(d, 3)),
-    ("J6Mois", lambda d: _add_months(d, 6)),
-    ("J12M",   lambda d: _add_months(d, 12)),
-    ("J18Mois",lambda d: _add_months(d, 18)),
-    ("A2",     lambda d: _add_months(d, 24)),
+    ("Jour 2",  lambda d: d + datetime.timedelta(days=2)),
+    ("Jour 7",  lambda d: d + datetime.timedelta(days=7)),
+    ("1 Mois",  lambda d: d + datetime.timedelta(days=30)),
+    ("2 Mois",  lambda d: _add_months(d, 2)),
+    ("3 Mois",  lambda d: _add_months(d, 3)),
+    ("6 Mois",  lambda d: _add_months(d, 6)),
+    ("1 An",    lambda d: _add_months(d, 12)),
+    ("18 Mois", lambda d: _add_months(d, 18)),
+    ("2 Ans",   lambda d: _add_months(d, 24)),
 ]
 
 

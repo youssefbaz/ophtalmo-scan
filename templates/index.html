@@ -1843,7 +1843,7 @@ async function renderDashboardMedecin(c) {
           <div class="rdv-date-block urgent"><div class="rdv-day urgent">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
           <div class="rdv-info">
             <div class="rdv-type">🚨 ${r.patient_prenom} ${r.patient_nom}</div>
-            <div class="rdv-meta">${r.type} · ${r.heure} · <span style="color:#fca5a5">Urgent</span></div>
+            <div class="rdv-meta">${_normRdvType(r.type)} · ${r.heure} · <span style="color:#fca5a5">Urgent</span></div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-amber btn-sm" onclick="modifierRdv('${r.id}','${r.date}','${r.heure}')">✏ Modifier</button>
@@ -1869,7 +1869,7 @@ async function renderDashboardMedecin(c) {
               </div>
               <div class="rdv-info">
                 <div class="rdv-type">${r.urgent?'🚨 ':''} ${r.patient_prenom} ${r.patient_nom}</div>
-                <div class="rdv-meta">${r.type} · ${r.medecin}</div>
+                <div class="rdv-meta">${_normRdvType(r.type)} · ${r.medecin}</div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
                 <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
@@ -1912,7 +1912,7 @@ async function renderDashboardMedecin(c) {
             <div class="rdv-date-block"><div class="rdv-day" style="font-size:16px">${r.heure}</div></div>
             <div class="rdv-info">
               <div class="rdv-type">${r.patient_prenom} ${r.patient_nom}</div>
-              <div class="rdv-meta">${r.type}</div>
+              <div class="rdv-meta">${_normRdvType(r.type)}</div>
             </div>
             <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
           </div>
@@ -1923,7 +1923,7 @@ async function renderDashboardMedecin(c) {
             <div class="rdv-date-block"><div class="rdv-day" style="font-size:16px">${r.heure}</div></div>
             <div class="rdv-info">
               <div class="rdv-type">${r.patient_prenom} ${r.patient_nom}</div>
-              <div class="rdv-meta">${r.type}</div>
+              <div class="rdv-meta">${_normRdvType(r.type)}</div>
             </div>
             <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
           </div>
@@ -2030,7 +2030,7 @@ async function renderDashboardPatient(c) {
         ${prochains.slice(0,4).map((r,i) => `
           <div class="rdv-card" style="${i===0?'border-color:var(--teal)':''}">
             <div class="rdv-date-block"><div class="rdv-day">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
-            <div class="rdv-info"><div class="rdv-type">${r.type}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
+            <div class="rdv-info"><div class="rdv-type">${_normRdvType(r.type)}</div><div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div></div>
             <span class="badge ${r.statut==='confirmé'?'badge-teal':'badge-amber'}">${r.statut}</span>
           </div>
         `).join('') || '<div style="color:var(--text3);font-size:13px;padding:16px;text-align:center">Aucun RDV programmé</div>'}
@@ -2899,12 +2899,12 @@ async function renderPatientProfile(c, pid) {
             <div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})} ${new Date(r.date).getFullYear()}</div>
           </div>
           <div class="rdv-info" style="flex:1">
-            <div class="rdv-type">${r.urgent?'🚨 ':''}${r.type}</div>
+            <div class="rdv-type">${r.urgent?'🚨 ':''}${_normRdvType(r.type)}</div>
             <div class="rdv-meta">⏰ ${r.heure} · ${r.medecin}</div>
             <div id="rdv-detail-${r.id}" style="display:none;margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text2)">
               <div><strong>Date :</strong> ${fmtDateLong(r.date)}</div>
               <div><strong>Heure :</strong> ${r.heure}</div>
-              <div><strong>Type :</strong> ${r.type}</div>
+              <div><strong>Type :</strong> ${_normRdvType(r.type)}</div>
               <div><strong>Médecin :</strong> ${r.medecin}</div>
               <div><strong>Statut :</strong> ${r.statut}</div>
               ${r.notes?`<div><strong>Notes :</strong> ${r.notes}</div>`:''}
@@ -3272,7 +3272,7 @@ function _rdvMiniCard(r) {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
         <span style="font-size:12px;font-weight:600;color:var(--text);flex:1;cursor:${USER.role==='medecin'?'pointer':'default'}"
-              ${USER.role==='medecin'?`onclick="loadPatient('${r.patient_id}')"`:''}>${r.heure} · ${r.type}</span>
+              ${USER.role==='medecin'?`onclick="loadPatient('${r.patient_id}')"`:''}>${r.heure} · ${_normRdvType(r.type)}</span>
         ${USER.role==='medecin'?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="event.stopPropagation();openEditRdvAgenda('${r.id}')">✏</button>`:''}
       </div>
       <div style="font-size:11px;color:var(--text2);margin-left:16px">${r.patient_prenom||''} ${r.patient_nom||''}</div>
@@ -3492,7 +3492,7 @@ async function renderMesRdv(c) {
       <div class="rdv-card" style="${r.date===today ? 'border-color:var(--teal);box-shadow:0 0 0 2px rgba(14,165,160,0.15)' : ''}">
         ${_rdvDateBig(r.date, r.heure, {today: r.date===today, tomorrow: r.date===tomorrow, urgent: r.urgent})}
         <div class="rdv-info">
-          <div class="rdv-type">${r.urgent ? '&#128680; ' : ''}<strong>${escH(r.type)}</strong></div>
+          <div class="rdv-type">${r.urgent ? '&#128680; ' : ''}<strong>${escH(_normRdvType(r.type))}</strong></div>
           <div class="rdv-meta" style="margin-top:5px">&#x1F3E5; ${escH(r.medecin || 'Médecin')}</div>
         </div>
         <span class="badge ${r.statut==='confirmé'?'badge-teal':r.statut==='en_attente'?'badge-amber':'badge-red'}">${r.statut}</span>
@@ -3507,7 +3507,7 @@ async function renderMesRdv(c) {
       <div class="rdv-card" style="opacity:0.6">
         ${_rdvDateBig(r.date, r.heure, {past: true})}
         <div class="rdv-info">
-          <div class="rdv-type">${escH(r.type)}</div>
+          <div class="rdv-type">${escH(_normRdvType(r.type))}</div>
           <div class="rdv-meta" style="margin-top:5px">&#x1F3E5; ${escH(r.medecin || 'Médecin')}</div>
         </div>
         <span class="badge badge-teal">pass&#233;</span>
@@ -4262,14 +4262,16 @@ function renderSuiviTab(suivi, patient, pid) {
     return '';
   };
 
-  const stepCards = steps.map(s => `
+  const stepCards = steps.map(s => {
+    const lbl = _suiviLabel(s.etape);
+    return `
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;${cardBorder(s)}">
-      <div style="width:48px;height:48px;border-radius:12px;background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:var(--teal2);border:1px solid var(--border)">
-        ${s.etape}
+      <div style="min-width:54px;height:54px;border-radius:12px;background:var(--teal-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:var(--teal2);border:1px solid rgba(14,165,160,0.25);padding:0 6px;text-align:center;line-height:1.2">
+        ${lbl.includes(' ') ? `<span style="font-size:13px">${lbl.replace(' ','<br>')}</span>` : `<span style="font-size:15px">${lbl}</span>`}
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">${_suiviLabel(s.etape)}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text)">Contrôle ${lbl}</span>
           ${statusBadge(s)}
         </div>
         <div style="font-size:11px;color:var(--text3)">Prévu : ${new Date(s.date_prevue).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>
@@ -4283,7 +4285,8 @@ function renderSuiviTab(suivi, patient, pid) {
         ${s.statut !== 'a_faire' ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;opacity:.6" onclick="markSuiviStatut('${s.id}','${pid}','reset')">↩</button>` : ''}
         <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="deleteSuivi('${s.id}','${pid}','${s.etape}')">🗑</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   return `
     <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -4307,9 +4310,21 @@ function renderSuiviTab(suivi, patient, pid) {
     </div>`;
 }
 
+// Maps old DB codes AND normalises RDV type strings (e.g. "Suivi post-op J2Mois")
+const _SUIVI_LEGACY = {
+  'J2':'Jour 2', 'J7':'Jour 7', 'J30':'1 Mois',
+  'J2Mois':'2 Mois', 'J3Mois':'3 Mois', 'J6Mois':'6 Mois',
+  'J12M':'1 An', 'J12Mois':'1 An',
+  'J18Mois':'18 Mois', 'A2':'2 Ans'
+};
 function _suiviLabel(etape) {
-  const labels = { J7:'Contrôle J7', J30:'Contrôle J30', J2Mois:'Contrôle 2 mois', J3Mois:'Contrôle 3 mois', J6Mois:'Contrôle 6 mois', J12M:'Bilan 1 an', J18Mois:'Contrôle 18 mois', A2:'Bilan 2 ans' };
-  return labels[etape] || etape;
+  return _SUIVI_LEGACY[etape] || etape;
+}
+function _normRdvType(type) {
+  // Convert "Suivi post-op J2Mois" → "Suivi post-op 2 Mois"
+  return (type || '').replace(/Suivi post-op (\S+)/, (_, code) =>
+    'Suivi post-op ' + (_SUIVI_LEGACY[code] || code)
+  );
 }
 
 async function markSuiviDone(sid, pid, etape, btn) {
@@ -5891,7 +5906,7 @@ async function renderTodayView(c) {
           <div class="checkin-time ${r.heure < now ? 'past' : ''}">${r.heure}</div>
           <div style="flex:1;min-width:0;cursor:pointer" onclick="loadPatient('${r.patient_id}')">
             <div style="font-size:14px;font-weight:600;color:var(--text)">${r.urgent?'🚨 ':''}${r.patient_prenom||''} ${r.patient_nom||''}</div>
-            <div style="font-size:12px;color:var(--text2);margin-top:2px">${r.type} · ${r.medecin}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">${_normRdvType(r.type)} · ${r.medecin}</div>
             ${r.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">📝 ${escH(r.notes)}</div>` : ''}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
