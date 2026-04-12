@@ -2957,26 +2957,53 @@ function _imgCard(img, pid, patient, isPatientDoc = false) {
 }
 
 function renderDocsGrid(docs, pid) {
-  if (!docs.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucun document non-image uploadé par le patient</div>';
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
-    ${docs.map(d=>`
-      <div class="doc-card" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">
-        <div class="doc-preview" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:80px">
-          <div style="font-size:36px;text-align:center">📎</div>
-        </div>
-        <div class="doc-info">
-          <div class="doc-type">${d.type}</div>
-          <div class="doc-date">${fmtDate(d.date)}</div>
-          ${d.analyse_ia ? `<div style="margin-top:4px;font-size:11px;color:var(--teal2)">✓ Analysé par IA</div>` : ''}
-          <div style="display:flex;gap:6px;margin-top:8px">
-            <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="event.stopPropagation();viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">👁 Voir</button>
-            <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="event.stopPropagation();analyzeDocAI('${pid}','${d.id}','${escJ(d.type)}')">🤖 IA</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:0 8px" onclick="event.stopPropagation();softDeleteDoc('${pid}','${d.id}','${escJ(d.type)}')" title="Supprimer">🗑</button>
+  if (!docs.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucun document uploadé par le patient</div>';
+  return `<div style="display:flex;flex-direction:column;gap:10px">
+    ${docs.map(d => {
+      const isPdf = (d.description||'').toLowerCase().endsWith('.pdf');
+      const icon  = isPdf ? '📄' : '🖼';
+      const isValidated = d.valide;
+      return `
+      <div class="doc-card" id="doc-row-${d.id}" style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+        <div style="font-size:28px;flex-shrink:0;cursor:pointer" onclick="viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${escH(d.type)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:1px">${fmtDate(d.date)} · ${escH(d.description||'')}</div>
+          <div style="margin-top:3px">
+            ${isValidated
+              ? `<span style="font-size:11px;color:var(--teal2)">✓ Validé</span>`
+              : `<span style="font-size:11px;color:var(--amber)">⏳ Non validé</span>`}
+            ${d.analyse_ia ? `<span style="font-size:11px;color:var(--teal2);margin-left:8px">· IA</span>` : ''}
           </div>
         </div>
-      </div>
-    `).join('')}
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" title="Voir" onclick="event.stopPropagation();viewDocImage('${pid}','${d.id}','${escJ(d.type)}')">👁</button>
+          <button class="btn btn-primary btn-sm" title="Analyse IA" onclick="event.stopPropagation();analyzeDocAI('${pid}','${d.id}','${escJ(d.type)}')">🤖</button>
+          ${!isValidated ? `<button class="btn btn-ghost btn-sm" id="val-btn-${d.id}" title="Valider" style="color:var(--teal2)" onclick="event.stopPropagation();validateDoc('${pid}','${d.id}')">✓ Valider</button>` : ''}
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" title="Supprimer" onclick="event.stopPropagation();softDeleteDoc('${pid}','${d.id}','${escJ(d.type)}')">🗑</button>
+        </div>
+      </div>`
+    }).join('')}
   </div>`;
+}
+
+async function validateDoc(pid, docId) {
+  const btn = document.getElementById(`val-btn-${docId}`);
+  if (btn) btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/documents/${docId}/validate`, 'POST');
+  if (res.ok) {
+    if (btn) {
+      btn.remove();
+      const row = document.getElementById(`doc-row-${docId}`);
+      if (row) {
+        const status = row.querySelector('span[style*="amber"]');
+        if (status) { status.style.color = 'var(--teal2)'; status.textContent = '✓ Validé'; }
+      }
+    }
+  } else {
+    alert(res.error || 'Erreur');
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function viewDocImage(pid, docId, type) {
@@ -3412,30 +3439,82 @@ async function renderMesRdv(c) {
 async function renderMesDocuments(c) {
   const pid = USER.patient_id;
   const docs = await api(`/api/patients/${pid}/documents`);
-  
+
   c.innerHTML = `
     <div style="margin-bottom:18px">
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Uploadez vos radios, scanners et examens pour que votre médecin puisse les consulter.</div>
-      <div class="import-zone" id="docUploadZone" onclick="document.getElementById('docFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDocDrop(event)">
+      <div class="import-zone" id="docUploadZone"
+        onclick="document.getElementById('docFileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDocDrop(event)">
         <div class="import-icon">📎</div>
-        <div class="import-text">Cliquez ou glissez votre document ici</div>
+        <div id="docUploadStatus" class="import-text">Cliquez ou glissez votre document ici</div>
         <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF</div>
       </div>
-      <input type="file" id="docFileInput" accept="image/*" style="display:none" onchange="uploadPatientDoc(this)">
+      <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="uploadPatientDoc(this)">
+      <div id="docTypePickerWrap" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Type de document</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          ${['Radio / Scanner','OCT','Fond d\'œil','Ordonnance','Résultats d\'analyses','Autre'].map(t=>
+            `<button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="selectDocType('${t}')">${t}</button>`
+          ).join('')}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="input" id="docTypeCustom" placeholder="Ou saisissez un type…" style="flex:1;font-size:13px">
+          <button class="btn btn-primary btn-sm" onclick="confirmDocUpload()">Envoyer</button>
+          <button class="btn btn-ghost btn-sm" onclick="cancelDocUpload()">Annuler</button>
+        </div>
+      </div>
     </div>
     <div class="section-title">Mes documents (${docs.length})</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px" id="patientDocsGrid">
-      ${docs.length?docs.map(d=>`
-        <div class="doc-card">
-          <div class="doc-preview"><div style="font-size:40px;text-align:center">📎</div></div>
-          <div class="doc-info">
-            <div class="doc-type">${d.type}</div>
-            <div class="doc-date">${fmtDate(d.date)}</div>
-            ${d.analyse_ia?`<div style="font-size:11px;color:var(--teal2);margin-top:4px">✓ Vu par le médecin</div>`:'<div style="font-size:11px;color:var(--amber);margin-top:4px">⏳ En attente de consultation</div>'}
+    <div style="display:flex;flex-direction:column;gap:10px" id="patientDocsGrid">
+      ${docs.length ? docs.map(d => `
+        <div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px">
+          <div style="font-size:28px;flex-shrink:0">${d.description&&d.description.toLowerCase().endsWith('.pdf')?'📄':'🖼'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(d.type)}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">${fmtDate(d.date)} · ${escH(d.description||'')}</div>
+            <div style="margin-top:4px">
+              ${d.valide
+                ? `<span style="font-size:11px;color:var(--teal2)">✓ Vu par le médecin</span>`
+                : `<span style="font-size:11px;color:var(--amber)">⏳ En attente de consultation</span>`}
+            </div>
           </div>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red);flex-shrink:0"
+            onclick="deletePatientDoc('${pid}','${d.id}',this)" title="Supprimer">🗑</button>
         </div>
-      `).join(''):'<div style="color:var(--text3);text-align:center;padding:20px;grid-column:1/-1">Aucun document</div>'}
+      `).join('') : '<div style="color:var(--text3);text-align:center;padding:30px;background:var(--card);border:1px dashed var(--border);border-radius:12px">Aucun document uploadé</div>'}
     </div>`;
+}
+
+let _pendingUploadFile = null;
+function selectDocType(t) {
+  document.getElementById('docTypeCustom').value = t;
+}
+function cancelDocUpload() {
+  _pendingUploadFile = null;
+  document.getElementById('docTypePickerWrap').style.display = 'none';
+  document.getElementById('docUploadStatus').textContent = 'Cliquez ou glissez votre document ici';
+  document.getElementById('docUploadZone').style.opacity = '1';
+  document.getElementById('docFileInput').value = '';
+}
+async function confirmDocUpload() {
+  const type = document.getElementById('docTypeCustom').value.trim() || 'Document';
+  if (!_pendingUploadFile) return;
+  await _doUploadFile(_pendingUploadFile, type);
+  cancelDocUpload();
+}
+async function deletePatientDoc(pid, docId, btn) {
+  if (!confirm('Supprimer ce document ?')) return;
+  btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/documents/${docId}`, 'DELETE');
+  if (res.ok) {
+    btn.closest('div[style]').remove();
+  } else {
+    alert(res.error || 'Erreur lors de la suppression');
+    btn.disabled = false;
+  }
 }
 
 // ─── MES QUESTIONS (PATIENT) ──────────────────────────────────────────────────
@@ -3897,27 +3976,51 @@ async function submitImportCsv() {
 function handleDocDrop(e) {
   e.preventDefault();
   document.getElementById('docUploadZone').classList.remove('drag');
-  const file = e.dataTransfer.files[0]; if(!file) return;
-  uploadFile(file);
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  _prepareUpload(file);
 }
 
 async function uploadPatientDoc(input) {
-  const file = input.files[0]; if(!file) return;
-  uploadFile(file);
+  const file = input.files[0]; if (!file) return;
+  _prepareUpload(file);
 }
 
-async function uploadFile(file) {
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const b64 = e.target.result.split(',')[1];
-    // Ask for type
-    const type = prompt('Type de document?', 'Radio / Scanner');
-    if(!type) return;
-    const pid = USER.patient_id;
-    const res = await api(`/api/patients/${pid}/upload`,'POST',{image:b64,type,description:file.name});
-    if(res.ok) { showView('mes-documents'); }
-  };
-  reader.readAsDataURL(file);
+function _prepareUpload(file) {
+  _pendingUploadFile = file;
+  document.getElementById('docUploadStatus').textContent = `Fichier : ${file.name}`;
+  document.getElementById('docUploadZone').style.opacity = '0.6';
+  document.getElementById('docTypeCustom').value = '';
+  document.getElementById('docTypePickerWrap').style.display = 'block';
+}
+
+async function _doUploadFile(file, type) {
+  const status = document.getElementById('docUploadStatus');
+  const zone   = document.getElementById('docUploadZone');
+  if (status) { status.textContent = '⏳ Envoi en cours…'; zone.style.opacity = '0.5'; }
+
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const b64 = ev.target.result.split(',')[1];
+      const pid = USER.patient_id;
+      try {
+        const res = await api(`/api/patients/${pid}/upload`, 'POST',
+          { image: b64, type, description: file.name, source: 'document' });
+        if (res.ok) {
+          showView('mes-documents');
+        } else {
+          alert(res.error || 'Erreur lors de l\'envoi du document.');
+          if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
+        }
+      } catch(err) {
+        alert('Erreur réseau lors de l\'envoi.');
+        if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
+      }
+      resolve();
+    };
+    reader.onerror = () => { alert('Impossible de lire le fichier.'); resolve(); };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ─── QUESTIONS ────────────────────────────────────────────────────────────────
