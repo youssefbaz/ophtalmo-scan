@@ -3675,10 +3675,66 @@ function openAddRdv(pid) {
   openModal('modalRdv');
 }
 
+function _rdvDoctorPickerHtml(defaultHeure) {
+  return `
+    <div class="form-full" style="margin-bottom:14px">
+      <label class="lbl">Médecin</label>
+      <input class="input" id="rdvDoctorSearch" placeholder="Rechercher un médecin par nom..." autocomplete="off"
+        oninput="debounceRdvDoctorSearch(this.value)">
+      <input type="hidden" id="rdvMedecinId">
+      <input type="hidden" id="rdvMedecin">
+      <div id="rdvDoctorResults" style="display:none;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:var(--card);max-height:180px;overflow-y:auto;z-index:10;position:relative"></div>
+      <div id="rdvDoctorSelected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.3);border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px">
+        <span id="rdvDoctorSelectedName" style="flex:1"></span>
+        <button type="button" class="btn btn-ghost" style="padding:2px 8px;font-size:11px" onclick="clearRdvDoctorSelection()">✕</button>
+      </div>
+    </div>`;
+}
+
+let _rdvDoctorTimer = null;
+function debounceRdvDoctorSearch(q) {
+  clearTimeout(_rdvDoctorTimer);
+  _rdvDoctorTimer = setTimeout(() => searchRdvDoctors(q), 300);
+}
+async function searchRdvDoctors(q) {
+  const box = document.getElementById('rdvDoctorResults');
+  if (!box) return;
+  if (!q || q.length < 2) { box.style.display = 'none'; return; }
+  const results = await api(`/api/doctors/search?q=${encodeURIComponent(q)}`);
+  if (!results || !results.length) {
+    box.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text3)">Aucun médecin trouvé</div>';
+    box.style.display = 'block'; return;
+  }
+  box.innerHTML = results.map(d => `
+    <div style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"
+      onclick="selectRdvDoctor('${d.id}','${escH(d.prenom)} ${escH(d.nom)}','${escH(d.organisation||'')}')">
+      <div style="font-weight:600">Dr. ${escH(d.prenom)} ${escH(d.nom)}</div>
+      ${d.organisation ? `<div style="font-size:11px;color:var(--text2)">${escH(d.organisation)}</div>` : ''}
+    </div>`).join('');
+  box.style.display = 'block';
+}
+function selectRdvDoctor(id, name, org) {
+  document.getElementById('rdvMedecinId').value = id;
+  document.getElementById('rdvMedecin').value = name;
+  document.getElementById('rdvDoctorSearch').value = '';
+  document.getElementById('rdvDoctorResults').style.display = 'none';
+  const sel = document.getElementById('rdvDoctorSelected');
+  document.getElementById('rdvDoctorSelectedName').textContent = `👨‍⚕️ Dr. ${name}${org ? ' · ' + org : ''}`;
+  sel.style.display = 'flex';
+}
+function clearRdvDoctorSelection() {
+  document.getElementById('rdvMedecinId').value = '';
+  document.getElementById('rdvMedecin').value = '';
+  document.getElementById('rdvDoctorSelected').style.display = 'none';
+  document.getElementById('rdvDoctorSearch').value = '';
+}
+
 function openAddRdvPatient() {
   document.getElementById('modalRdvTitle').textContent = 'Demander un rendez-vous';
   document.getElementById('modalRdvContent').innerHTML = `
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Votre demande sera envoyée au médecin pour validation.</div>
+    ${_rdvDoctorPickerHtml('09:00')}
     <div class="form-full"><label class="lbl">Motif de consultation</label>
       <input class="input" id="rdvType" placeholder="Ex: Baisse de vision, contrôle, irritation...">
     </div>
@@ -3700,6 +3756,7 @@ function openRdvUrgent() {
     <div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#fca5a5">
       ⚠️ Cette demande sera marquée urgente et notifiée immédiatement au médecin.
     </div>
+    ${_rdvDoctorPickerHtml('08:00')}
     <div class="form-full"><label class="lbl">Motif urgent</label>
       <input class="input" id="rdvType" placeholder="Ex: Douleur oculaire intense, baisse vision soudaine...">
     </div>
@@ -3717,10 +3774,17 @@ function openRdvUrgent() {
 
 async function submitRdv(urgent) {
   const pid = USER.role==='patient' ? USER.patient_id : document.getElementById('rdvPid')?.value;
+  const medecinId = document.getElementById('rdvMedecinId')?.value || '';
+  const medecinNom = document.getElementById('rdvMedecin')?.value || '';
+  if (USER.role === 'patient' && !medecinId) {
+    alert('Veuillez sélectionner un médecin.');
+    return;
+  }
   const payload = {
     patient_id: pid, type: document.getElementById('rdvType').value,
     date: document.getElementById('rdvDate').value, heure: document.getElementById('rdvHeure').value,
-    medecin: document.getElementById('rdvMedecin')?.value || USER.nom,
+    medecin: medecinNom || document.getElementById('rdvMedecin')?.value || USER.nom,
+    medecin_id: medecinId,
     notes: document.getElementById('rdvNotes').value, urgent
   };
   const res = await api('/api/rdv','POST',payload);
@@ -5681,11 +5745,26 @@ document.addEventListener('click', e => {
 
 // ─── PDF ORDONNANCE DOWNLOAD ──────────────────────────────────────────────────
 
-function downloadOrdonnancePDF(pid, oid) {
-  const a = document.createElement('a');
-  a.href = `/api/patients/${pid}/ordonnances/${oid}/pdf`;
-  a.download = `ordonnance_${oid}.pdf`;
-  a.click();
+async function downloadOrdonnancePDF(pid, oid) {
+  try {
+    const resp = await fetch(`/api/patients/${pid}/ordonnances/${oid}/pdf`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      alert(err.error || `Erreur ${resp.status} lors du téléchargement.`);
+      return;
+    }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ordonnance_${oid}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(e) {
+    alert('Erreur lors du téléchargement du PDF.');
+  }
 }
 
 // ─── AI CONSULTATION SUMMARY ──────────────────────────────────────────────────

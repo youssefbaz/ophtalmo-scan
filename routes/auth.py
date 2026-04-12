@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db, current_user, log_audit, record_login_attempt, is_account_locked, add_notif, next_medecin_code
 from extensions import limiter
-from security_utils import validate_password, sanitize, get_client_ip, get_user_agent, decrypt_patient, encrypt_patient_fields
+from security_utils import validate_password, sanitize, get_client_ip, get_user_agent, decrypt_patient, encrypt_patient_fields, decrypt_field
 
 bp = Blueprint('auth', __name__)
 
@@ -102,12 +102,15 @@ def me():
     u = current_user()
     if not u:
         return jsonify({"authenticated": False}), 401
+    # Patient nom/prenom are stored encrypted in the users table — decrypt before returning
+    nom    = decrypt_field(u['nom']    or '') if u['role'] == 'patient' else (u['nom']    or '')
+    prenom = decrypt_field(u['prenom'] or '') if u['role'] == 'patient' else (u['prenom'] or '')
     info = {
         "authenticated": True,
         "id":    u['id'],
         "role":  u['role'],
-        "nom":   u['nom'],
-        "prenom": u['prenom'] or '',
+        "nom":   nom,
+        "prenom": prenom,
         "totp_enabled": bool(u['totp_enabled']) if u['totp_enabled'] else False
     }
     if u['role'] == 'patient':
@@ -520,7 +523,11 @@ def settings_get_profile():
         "SELECT id,username,nom,prenom,email,organisation,medecin_code,role,totp_enabled FROM users WHERE id=?",
         (u['id'],)
     ).fetchone()
-    return jsonify(dict(row))
+    profile = dict(row)
+    if profile.get('role') == 'patient':
+        profile['nom']    = decrypt_field(profile.get('nom')    or '')
+        profile['prenom'] = decrypt_field(profile.get('prenom') or '')
+    return jsonify(profile)
 
 
 @bp.route('/api/settings/profile', methods=['PUT'])
