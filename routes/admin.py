@@ -79,10 +79,10 @@ def admin_validate(uid):
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
     db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
-    db.commit()
     add_notif(db, "compte_valide",
               f"✅ Compte validé : {row['prenom']} {row['nom']} ({row['username']})",
               "admin")
+    db.commit()
     return jsonify({"ok": True})
 
 
