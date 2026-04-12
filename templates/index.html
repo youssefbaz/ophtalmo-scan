@@ -4318,7 +4318,7 @@ async function loadPatientsSidebar(q='') {
       ? MEDECINS.find(m => m.id === p.medecin_id) : null;
     return `
       <div class="patient-mini ${currentPatientId===p.id?'active':''}" onclick="loadPatient('${p.id}')">
-        <div class="pm-name">${p.prenom} ${p.nom}</div>
+        <div class="pm-name">${p.prenom} ${p.nom}${p.linked?` <span style="font-size:9px;background:rgba(14,165,160,0.15);color:var(--teal2);padding:1px 5px;border-radius:6px;vertical-align:middle">RDV</span>`:''}</div>
         <div class="pm-id">${p.id}${dr?` · <span style="color:var(--teal2);font-size:10px">${dr.nom}</span>`:''}</div>
         ${(p.nb_rdv_urgent||0)>0?`<span class="pm-badge">🚨 ${p.nb_rdv_urgent}</span>`:''}
       </div>`;

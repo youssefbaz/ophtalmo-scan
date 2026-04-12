@@ -3,7 +3,15 @@ from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
 from database import get_db, current_user, add_notif, next_medecin_code
 from extensions import limiter
-from security_utils import validate_password, encrypt_patient_fields, sanitize
+from security_utils import validate_password, encrypt_patient_fields, sanitize, decrypt_field
+
+
+def _decrypt_user_row(r: dict) -> dict:
+    """Decrypt nom/prenom for patient accounts (stored encrypted in users table)."""
+    if r.get('role') == 'patient':
+        r['nom']    = decrypt_field(r.get('nom')    or '')
+        r['prenom'] = decrypt_field(r.get('prenom') or '')
+    return r
 
 bp = Blueprint('admin', __name__)
 
@@ -51,7 +59,7 @@ def admin_get_users():
         sql += " AND status=?"; params.append(status)
     sql += " ORDER BY created_at DESC"
     rows = db.execute(sql, params).fetchall()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([_decrypt_user_row(dict(r)) for r in rows])
 
 
 # ─── PENDING ACCOUNTS ─────────────────────────────────────────────────────────
@@ -65,7 +73,7 @@ def admin_get_pending():
         "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at "
         "FROM users WHERE status='pending' ORDER BY created_at DESC"
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([_decrypt_user_row(dict(r)) for r in rows])
 
 
 # ─── VALIDATE ─────────────────────────────────────────────────────────────────
@@ -78,9 +86,11 @@ def admin_validate(uid):
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
+    u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
+    u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
     add_notif(db, "compte_valide",
-              f"✅ Compte validé : {row['prenom']} {row['nom']} ({row['username']})",
+              f"✅ Compte validé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
     db.commit()
 
@@ -91,7 +101,7 @@ def admin_validate(uid):
             from email_notif import send_account_validated_email
             send_account_validated_email(
                 email,
-                row['prenom'], row['nom'], row['username'],
+                u_prenom, u_nom, row['username'],
                 app_host=request.host_url.rstrip('/')
             )
         except Exception:
@@ -112,10 +122,12 @@ def admin_deactivate(uid):
         return jsonify({"error": "Utilisateur non trouvé"}), 404
     if row['role'] == 'admin':
         return jsonify({"error": "Impossible de désactiver le compte administrateur"}), 400
+    u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
+    u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='inactive' WHERE id=?", (uid,))
     db.commit()
     add_notif(db, "compte_desactive",
-              f"🔒 Compte désactivé : {row['prenom']} {row['nom']} ({row['username']})",
+              f"🔒 Compte désactivé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
     return jsonify({"ok": True})
 
@@ -128,10 +140,12 @@ def admin_activate(uid):
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
+    u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
+    u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
     db.commit()
     add_notif(db, "compte_active",
-              f"🔓 Compte activé : {row['prenom']} {row['nom']} ({row['username']})",
+              f"🔓 Compte activé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
     return jsonify({"ok": True})
 
@@ -148,10 +162,12 @@ def admin_delete_user(uid):
         return jsonify({"error": "Utilisateur non trouvé"}), 404
     if row['role'] == 'admin':
         return jsonify({"error": "Impossible de supprimer le compte administrateur"}), 400
+    u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
+    u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("DELETE FROM users WHERE id=?", (uid,))
     db.commit()
     add_notif(db, "compte_supprime",
-              f"🗑️ Compte supprimé : {row['prenom']} {row['nom']} ({row['username']})",
+              f"🗑️ Compte supprimé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
     return jsonify({"ok": True})
 
@@ -169,7 +185,7 @@ def admin_get_user(uid):
     ).fetchone()
     if not row:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
-    return jsonify(dict(row))
+    return jsonify(_decrypt_user_row(dict(row)))
 
 
 # ─── UPDATE USER ──────────────────────────────────────────────────────────────
