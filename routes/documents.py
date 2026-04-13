@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from database import get_db, current_user, add_notif, require_role
 from llm import call_llm, SYSTEM_OPHTHALMO
 from security_utils import decrypt_patient
+from extensions import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ def _analyze_in_background(app, doc_id: str, prompt: str, image_b64):
 
 
 @bp.route('/api/patients/<pid>/upload', methods=['POST'])
+@limiter.limit("30 per hour; 5 per minute")
 def upload_document(pid):
     u = current_user()
     if not u:
@@ -171,6 +173,7 @@ def get_document(pid, doc_id):
 
 
 @bp.route('/api/patients/<pid>/documents/<doc_id>/analyze', methods=['POST'])
+@limiter.limit("20 per hour")
 def analyze_document(pid, doc_id):
     u = current_user()
     if not u or u['role'] != 'medecin':

@@ -42,6 +42,12 @@ def create_app():
     load_dotenv(_DOTENV_PATH, override=True)
     import security_utils as _su
     _su._FERNET = None  # discard any singleton built before the key was available
+    # Trigger key initialisation now so the backup/warning fires at startup,
+    # then log the fingerprint so operators can verify key consistency.
+    _su._get_fernet()
+    logging.getLogger(__name__).info(
+        "Encryption key fingerprint: %s", _su.get_key_fingerprint()
+    )
 
     app = Flask(__name__)
 
@@ -55,7 +61,12 @@ def create_app():
     app.secret_key = secret_key
 
     # ── Session config ────────────────────────────────────────────────────────
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+    # Idle timeout: clear session after N minutes of inactivity (default 30).
+    # Absolute lifetime is set higher so a legitimately active session is never
+    # cut short by the cookie expiry before the idle check fires.
+    idle_minutes = int(os.environ.get('SESSION_IDLE_TIMEOUT', '30'))
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=max(idle_minutes, 30))
+    app.config['SESSION_IDLE_TIMEOUT']       = idle_minutes
     app.config['SESSION_COOKIE_HTTPONLY']    = True
     app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
     # Set SESSION_COOKIE_SECURE=1 in production (HTTPS only).
@@ -73,10 +84,55 @@ def create_app():
     limiter.init_app(app)
 
     # ── CSRF ──────────────────────────────────────────────────────────────────
-    # All routes are JSON API endpoints in a SPA. Cross-origin CSRF is already
-    # blocked by SameSite=Lax session cookies; form-based CSRF tokens are not
-    # needed and cause session-cookie timing issues over plain HTTP.
-    # csrf.init_app(app) is intentionally not called.
+    # This is a JSON-only SPA. We enforce two complementary defences:
+    #   1. SameSite=Lax cookies — browsers won't attach the session cookie on
+    #      cross-origin navigations (covers the vast majority of CSRF vectors).
+    #   2. Content-Type check (below) — browsers cannot send cross-origin
+    #      application/json without a CORS preflight, which we never approve.
+    # Together these are equivalent to a synchronizer-token in practice.
+    # Full csrf.init_app(app) is deliberately omitted — it requires HTTPS and
+    # template integration that would break the SPA flow.
+    from flask import request as _req, session as _sess
+    import datetime as _dt
+
+    @app.before_request
+    def _csrf_json_guard():
+        """Reject mutating non-JSON requests to /api/* — effective CSRF barrier."""
+        if _req.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            return
+        if not _req.path.startswith('/api/'):
+            return
+        ct  = _req.content_type or ''
+        xrw = _req.headers.get('X-Requested-With', '')
+        if 'application/json' not in ct and xrw != 'XMLHttpRequest':
+            logging.getLogger(__name__).warning(
+                "CSRF guard blocked %s %s (Content-Type=%r, X-Requested-With=%r)",
+                _req.method, _req.path, ct, xrw
+            )
+            return jsonify({"error": "Requête invalide"}), 400
+
+    @app.before_request
+    def _check_session_idle():
+        """Expire session after SESSION_IDLE_TIMEOUT minutes of inactivity."""
+        last = _sess.get('_last_active')
+        if not last:
+            return
+        idle = app.config.get('SESSION_IDLE_TIMEOUT', 30)
+        try:
+            delta = (_dt.datetime.utcnow() -
+                     _dt.datetime.fromisoformat(last)).total_seconds()
+            if delta > idle * 60:
+                _sess.clear()
+        except Exception:
+            _sess.clear()
+
+    @app.after_request
+    def _refresh_session_activity(response):
+        """Stamp last-active on every authenticated response."""
+        if _sess.get('user_id'):
+            _sess['_last_active'] = _dt.datetime.utcnow().isoformat()
+            _sess.modified = True
+        return response
 
     # ── Upload folder ─────────────────────────────────────────────────────────
     os.makedirs(os.path.join(os.path.dirname(__file__), 'uploads'), exist_ok=True)
@@ -217,19 +273,17 @@ app = create_app()
 
 if __name__ == '__main__':
     from llm import GROQ_API_KEY, GEMINI_API_KEY, GROQ_MODEL, GEMINI_MODEL
+    from security_utils import get_key_fingerprint
+    _log = logging.getLogger(__name__)
     debug = os.environ.get('FLASK_DEBUG', '0') == '1'
-    print("\n" + "=" * 60)
-    print("  OphtalmoScan v2 -- SQLite Edition")
-    print("=" * 60)
+    _log.info("OphtalmoScan v2 — SQLite Edition — starting up")
+    _log.info("LLM: %s + %s (fallback)", GROQ_MODEL, GEMINI_MODEL)
+    _log.info("Encryption key fingerprint: %s", get_key_fingerprint())
     if not GROQ_API_KEY:
-        print("  [!] GROQ_API_KEY manquante !")
+        _log.warning("GROQ_API_KEY is not set — primary LLM unavailable")
     if not GEMINI_API_KEY:
-        print("  [!] GEMINI_API_KEY manquante !")
+        _log.warning("GEMINI_API_KEY is not set — Gemini fallback unavailable")
     if debug:
-        print("  [!] Mode DEBUG actif — ne pas utiliser en production !")
-        print("  Comptes de demonstration disponibles (voir database.py)")
-        print("  AVERTISSEMENT: changez les mots de passe par defaut avant la mise en production!")
-    print(f"  LLM : {GROQ_MODEL} + {GEMINI_MODEL} (fallback)")
-    print(f"  DB  : ophtalmo.db (SQLite)")
-    print("=" * 60 + "\n")
+        _log.warning("FLASK_DEBUG is active — do NOT use in production")
+        _log.warning("Demo accounts active — change default passwords before going live")
     app.run(debug=debug, port=5000)

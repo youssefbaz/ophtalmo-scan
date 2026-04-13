@@ -1,11 +1,13 @@
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user
 from llm import call_llm, SYSTEM_OPHTHALMO
+from extensions import limiter
 
 bp = Blueprint('ai', __name__)
 
 
 @bp.route('/api/ai/question', methods=['POST'])
+@limiter.limit("40 per hour; 5 per minute")
 def ai_question():
     u = current_user()
     if not u:
@@ -16,6 +18,7 @@ def ai_question():
 
 
 @bp.route('/api/ai/analyze-image', methods=['POST'])
+@limiter.limit("20 per hour; 3 per minute")
 def ai_analyze():
     u = current_user()
     if not u or u['role'] != 'medecin':
