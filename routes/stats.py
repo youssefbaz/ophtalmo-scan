@@ -100,6 +100,7 @@ def get_stats():
         patients_per_year.append({'year': str(y), 'count': cnt})
 
     # ── Sex distribution ───────────────────────────────────────────────────────
+    # sexe is stored as 'M' / 'F' / '' — normalise to M / F / N/R.
     sex_dist = {}
     if patient_ids:
         pid_frag, pid_params = _pid_col_in('id')
@@ -107,7 +108,10 @@ def get_stats():
             f"SELECT sexe, COUNT(*) as n FROM patients WHERE {pid_frag} GROUP BY sexe",
             pid_params
         ).fetchall():
-            sex_dist[row['sexe'] or 'N/R'] = row['n']
+            key = (row['sexe'] or '').strip().upper()
+            if key not in ('M', 'F'):
+                key = 'N/R'
+            sex_dist[key] = sex_dist.get(key, 0) + row['n']
 
     # ── Age distribution ───────────────────────────────────────────────────────
     # ddn is stored Fernet-encrypted — must decrypt before parsing the year.
