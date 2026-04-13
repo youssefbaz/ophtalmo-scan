@@ -2503,8 +2503,8 @@ async function renderAdminCreatePatient(c) {
           <input class="form-input" id="apTel" placeholder="06 xx xx xx xx">
         </div>
         <div class="form-group" style="flex:1">
-          <label class="form-label">Email</label>
-          <input class="form-input" type="email" id="apEmail" placeholder="patient@email.com">
+          <label class="form-label">Email *</label>
+          <input class="form-input" type="email" id="apEmail" placeholder="patient@email.com" required>
         </div>
       </div>
       <div class="form-group">
@@ -2546,6 +2546,9 @@ async function adminSubmitCreatePatient() {
 
   if (!nom || !prenom) {
     msgEl.innerHTML = '<div class="auth-msg auth-msg-error">Nom et prénom sont requis.</div>'; return;
+  }
+  if (!email || !email.includes('@')) {
+    msgEl.innerHTML = '<div class="auth-msg auth-msg-error">L\'adresse email est obligatoire.</div>'; return;
   }
   const res = await api('/api/admin/patients','POST',{nom,prenom,ddn,sexe,telephone,email,medecin_id,send_email,antecedents,allergies});
   if (res.ok) {
@@ -4008,7 +4011,7 @@ function openAddPatient() {
     </div>
     <div class="form-row">
       <div><label class="lbl">Téléphone</label><input class="input" id="pTel" placeholder="06 xx xx xx xx"></div>
-      <div><label class="lbl">Email</label><input class="input" id="pEmail" placeholder="email@example.com"></div>
+      <div><label class="lbl">Email *</label><input class="input" type="email" id="pEmail" placeholder="email@example.com" required></div>
     </div>
     <div class="form-full"><label class="lbl">Antécédents (séparés par virgule)</label>
       <input class="input" id="pAnt" placeholder="Ex: Glaucome, Diabète...">
@@ -4034,10 +4037,19 @@ function openAddPatient() {
 }
 
 async function submitAddPatient() {
+  const nom    = document.getElementById('pNom').value.trim();
+  const prenom = document.getElementById('pPrenom').value.trim();
+  const email  = document.getElementById('pEmail').value.trim();
+  if (!nom || !prenom) {
+    showToast('Nom et prénom sont requis.', 'error'); return;
+  }
+  if (!email || !email.includes('@')) {
+    showToast('L\'adresse email est obligatoire.', 'error'); return;
+  }
   const payload = {
-    nom: document.getElementById('pNom').value, prenom: document.getElementById('pPrenom').value,
+    nom, prenom, email,
     ddn: document.getElementById('pDdn').value, sexe: document.getElementById('pSexe').value,
-    telephone: document.getElementById('pTel').value, email: document.getElementById('pEmail').value,
+    telephone: document.getElementById('pTel').value,
     antecedents: document.getElementById('pAnt').value.split(',').map(s=>s.trim()).filter(Boolean),
     allergies: document.getElementById('pAllerg').value.split(',').map(s=>s.trim()).filter(Boolean),
     medecin_id: document.getElementById('pMedecinId')?.value || USER.id,
