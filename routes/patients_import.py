@@ -45,19 +45,24 @@ def import_csv():
             nom    = sanitize(pd_data.get("nom",""),    max_len=100)
             prenom = sanitize(pd_data.get("prenom",""), max_len=100)
             email  = sanitize(pd_data.get("email",""),  max_len=200)
+            ddn_plain = sanitize(pd_data.get("ddn", ""), max_len=20)
+            try:
+                birth_year = int(ddn_plain[:4]) if len(ddn_plain) >= 4 else 0
+            except (ValueError, TypeError):
+                birth_year = 0
             pii = encrypt_patient_fields({
                 "nom": nom, "prenom": prenom,
-                "ddn":       sanitize(pd_data.get("ddn",""),       max_len=20),
+                "ddn":       ddn_plain,
                 "telephone": sanitize(pd_data.get("telephone",""), max_len=30),
                 "email":     email,
             })
             db.execute(
-                "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id,birth_year) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (pid, pii["nom"], pii["prenom"], pii["ddn"],
                  pd_data.get("sexe",""), pii["telephone"], pii["email"],
                  json.dumps(pd_data.get("antecedents",[])), json.dumps(pd_data.get("allergies",[])),
-                 u['id'])
+                 u['id'], birth_year)
             )
             creds = _auto_create_account(db, pid, nom=nom, prenom=prenom, email=email, app_host=host)
             added.append({"id": pid, "nom": nom, "prenom": prenom, "credentials": creds})

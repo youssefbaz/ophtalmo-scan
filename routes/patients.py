@@ -153,22 +153,28 @@ def add_patient():
     if not email_raw or '@' not in email_raw:
         return jsonify({"error": "L'adresse email du patient est obligatoire."}), 400
 
+    ddn_plain = sanitize(data.get("ddn", ""), max_len=20)
+    try:
+        birth_year = int(ddn_plain[:4]) if len(ddn_plain) >= 4 else 0
+    except (ValueError, TypeError):
+        birth_year = 0
+
     pii = encrypt_patient_fields({
         "nom":       sanitize(data.get("nom", ""),       max_len=100),
         "prenom":    sanitize(data.get("prenom", ""),    max_len=100),
-        "ddn":       sanitize(data.get("ddn", ""),       max_len=20),
+        "ddn":       ddn_plain,
         "telephone": sanitize(data.get("telephone", ""), max_len=30),
         "email":     email_raw,
     })
     try:
         db.execute(
-            "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO patients (id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id,birth_year) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (pid,
              pii["nom"], pii["prenom"], pii["ddn"], sanitize(data.get("sexe",""), max_len=10),
              pii["telephone"], pii["email"],
              json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])),
-             medecin_id)
+             medecin_id, birth_year)
         )
         host  = request.host_url.rstrip('/')
         email = email_raw if send_email else ''
@@ -205,19 +211,25 @@ def update_patient(pid):
     ).fetchone():
         return jsonify({"error": "Non trouvé"}), 404
     data = request.json or {}
+    ddn_plain = sanitize(data.get("ddn", ""), max_len=20)
+    try:
+        birth_year = int(ddn_plain[:4]) if len(ddn_plain) >= 4 else 0
+    except (ValueError, TypeError):
+        birth_year = 0
     pii = encrypt_patient_fields({
         "nom":       sanitize(data.get("nom", ""),       max_len=100),
         "prenom":    sanitize(data.get("prenom", ""),    max_len=100),
-        "ddn":       sanitize(data.get("ddn", ""),       max_len=20),
+        "ddn":       ddn_plain,
         "telephone": sanitize(data.get("telephone", ""), max_len=30),
         "email":     sanitize(data.get("email", ""),     max_len=200),
     })
     db.execute(
         "UPDATE patients SET nom=?, prenom=?, ddn=?, sexe=?, telephone=?, email=?, "
-        "antecedents=?, allergies=? WHERE id=?",
+        "antecedents=?, allergies=?, birth_year=? WHERE id=?",
         (pii["nom"], pii["prenom"], pii["ddn"], sanitize(data.get("sexe",""), max_len=10),
          pii["telephone"], pii["email"],
-         json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])), pid)
+         json.dumps(data.get("antecedents",[])), json.dumps(data.get("allergies",[])),
+         birth_year, pid)
     )
     db.commit()
     return jsonify({"ok": True})

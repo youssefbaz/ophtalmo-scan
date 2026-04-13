@@ -392,19 +392,24 @@ def admin_create_patient():
         row = db.execute("SELECT id FROM users WHERE role='medecin' AND status='active' LIMIT 1").fetchone()
         medecin_id = row['id'] if row else ''
 
+    ddn_plain = sanitize(ddn, max_len=20)
+    try:
+        birth_year = int(ddn_plain[:4]) if len(ddn_plain) >= 4 else 0
+    except (ValueError, TypeError):
+        birth_year = 0
     pii = encrypt_patient_fields({
         "nom":       sanitize(nom,       max_len=100),
         "prenom":    sanitize(prenom,    max_len=100),
-        "ddn":       sanitize(ddn,       max_len=20),
+        "ddn":       ddn_plain,
         "telephone": sanitize(telephone, max_len=30),
         "email":     sanitize(email,     max_len=200),
     })
 
     db.execute(
-        "INSERT INTO patients(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO patients(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id,birth_year) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         (pid, pii["nom"], pii["prenom"], pii["ddn"], sexe, pii["telephone"], pii["email"],
-         json.dumps(antecedents), json.dumps(allergies), medecin_id)
+         json.dumps(antecedents), json.dumps(allergies), medecin_id, birth_year)
     )
     db.commit()
 

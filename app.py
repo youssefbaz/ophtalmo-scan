@@ -71,6 +71,12 @@ def create_app():
     logging.getLogger(__name__).info(
         "Encryption key fingerprint: %s", _su.get_key_fingerprint()
     )
+    # Self-test: verify the key can round-trip encrypt/decrypt before serving traffic
+    try:
+        _su.verify_encryption_key()
+        logging.getLogger(__name__).info("Encryption key self-test: OK")
+    except RuntimeError as _e:
+        raise RuntimeError(f"FATAL: {_e} — cannot start with a broken encryption key.") from _e
 
     app = Flask(__name__)
 
@@ -159,6 +165,7 @@ def create_app():
 
     # ── Upload folder ─────────────────────────────────────────────────────────
     os.makedirs(os.path.join(os.path.dirname(__file__), 'uploads'), exist_ok=True)
+    os.makedirs(os.path.join(os.path.dirname(__file__), 'uploads', 'documents'), exist_ok=True)
 
     # ── Database ──────────────────────────────────────────────────────────────
     from database import init_db, close_db
@@ -252,6 +259,24 @@ def create_app():
     def server_error(e):
         logging.getLogger(__name__).exception("Unhandled server error")
         return jsonify({"error": "Erreur serveur interne"}), 500
+
+    # ── Encryption health check (admin) ──────────────────────────────────────
+    @app.route('/api/admin/encryption-health', methods=['GET'])
+    def encryption_health():
+        from database import current_user as _cu
+        u = _cu()
+        if not u or u['role'] != 'admin':
+            return jsonify({"error": "Accès refusé"}), 403
+        try:
+            import security_utils as _su2
+            result = _su2.verify_encryption_key()
+            return jsonify({
+                "ok":          True,
+                "fingerprint": result["fingerprint"],
+                "message":     "Clé de chiffrement opérationnelle — round-trip test réussi.",
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
     # ── Manual email reminder trigger ─────────────────────────────────────────
     @app.route('/api/email/send-reminders', methods=['POST'])

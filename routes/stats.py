@@ -5,7 +5,6 @@ All queries are scoped to the requesting médecin's own patients.
 import datetime, json as _json
 from flask import Blueprint, jsonify
 from database import get_db, current_user, require_role
-from security_utils import decrypt_field
 
 bp = Blueprint('stats', __name__)
 
@@ -114,21 +113,25 @@ def get_stats():
             sex_dist[key] = sex_dist.get(key, 0) + row['n']
 
     # ── Age distribution ───────────────────────────────────────────────────────
-    # ddn is stored Fernet-encrypted — must decrypt before parsing the year.
+    # birth_year is a plaintext INTEGER derived from ddn at write-time — no decryption needed.
+    # GROUP BY birth_year so we touch O(distinct years) rows, not O(patients).
     age_bands = {'0-17': 0, '18-39': 0, '40-59': 0, '60-79': 0, '80+': 0}
     if patient_ids:
         pid_frag, pid_params = _pid_col_in('id')
+        current_year = today.year
         for row in db.execute(
-            f"SELECT ddn FROM patients WHERE ddn != '' AND {pid_frag}", pid_params
+            f"SELECT birth_year, COUNT(*) as n FROM patients "
+            f"WHERE birth_year > 0 AND {pid_frag} GROUP BY birth_year",
+            pid_params
         ).fetchall():
             try:
-                ddn_plain = decrypt_field(row['ddn'])
-                age = today.year - int(ddn_plain[:4])
-                if age < 18:    age_bands['0-17']  += 1
-                elif age < 40:  age_bands['18-39'] += 1
-                elif age < 60:  age_bands['40-59'] += 1
-                elif age < 80:  age_bands['60-79'] += 1
-                else:           age_bands['80+']   += 1
+                age = current_year - row['birth_year']
+                n   = row['n']
+                if age < 18:    age_bands['0-17']  += n
+                elif age < 40:  age_bands['18-39'] += n
+                elif age < 60:  age_bands['40-59'] += n
+                elif age < 80:  age_bands['60-79'] += n
+                else:           age_bands['80+']   += n
             except Exception:
                 pass
 

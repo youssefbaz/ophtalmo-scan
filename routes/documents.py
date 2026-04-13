@@ -1,13 +1,42 @@
-import uuid, datetime, json, logging, threading, base64, io
+import uuid, datetime, json, logging, threading, base64, io, os
 from flask import Blueprint, request, jsonify, current_app
 from database import get_db, current_user, add_notif, require_role
 from llm import call_llm, SYSTEM_OPHTHALMO
-from security_utils import decrypt_patient
+from security_utils import decrypt_patient, encrypt_field, decrypt_field
 from extensions import limiter
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('documents', __name__)
+
+# Directory for encrypted image files — keeps images out of SQLite
+_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'documents')
+
+
+def _save_image_file(doc_id: str, image_b64: str) -> str:
+    """Fernet-encrypt image_b64 and save to disk. Returns the absolute file path."""
+    os.makedirs(_DOCS_DIR, exist_ok=True)
+    path = os.path.join(_DOCS_DIR, f"{doc_id}.enc")
+    encrypted = encrypt_field(image_b64)
+    with open(path, 'w', encoding='ascii') as f:
+        f.write(encrypted)
+    return path
+
+
+def _load_image_b64(doc: dict) -> str:
+    """Return the image as a base64 string, reading from file when available.
+
+    Backward-compatible: falls back to the legacy image_b64 DB column so
+    documents uploaded before this change continue to work.
+    """
+    image_path = (doc.get('image_path') or '').strip()
+    if image_path and os.path.exists(image_path):
+        try:
+            with open(image_path, 'r', encoding='ascii') as f:
+                return decrypt_field(f.read().strip())
+        except Exception as e:
+            logger.warning("Failed to load image from %s: %s", image_path, e)
+    return doc.get('image_b64') or ''
 
 
 _ALLOWED_IMAGE_MAGIC: list[tuple[bytes, str]] = [
@@ -114,16 +143,25 @@ def upload_document(pid):
     raw_image = data.get('image', '') or ''
     if raw_image and not _validate_image_mime(raw_image):
         return jsonify({"error": "Type de fichier non autorisé. Seules les images JPEG, PNG et GIF sont acceptées."}), 400
-    stored_image = _compress_image(raw_image) if raw_image else ''
+
+    # Save image to encrypted file on disk (not in SQLite column)
+    stored_image_path = ''
+    if raw_image:
+        compressed = _compress_image(raw_image)
+        try:
+            stored_image_path = _save_image_file(doc_id, compressed)
+        except Exception as _ie:
+            logger.error("Image file save failed for %s: %s", doc_id, _ie)
+            return jsonify({"error": "Erreur lors de l'enregistrement de l'image"}), 500
 
     db.execute(
-        "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,source,medecin_id) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,image_path,source,medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (doc_id, pid, doc_type,
          datetime.datetime.now().strftime("%Y-%m-%d"),
          data.get('description',''), u['role'],
          1 if u['role'] == 'medecin' else 0,
-         stored_image, source, target_mid)
+         '', stored_image_path, source, target_mid)
     )
     db.commit()
 
@@ -145,11 +183,15 @@ def get_documents(pid):
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
 
+    _has_image_expr = (
+        "(CASE WHEN (image_b64 != '' AND image_b64 IS NOT NULL) "
+        "OR (image_path != '' AND image_path IS NOT NULL) THEN 1 ELSE 0 END) AS has_image"
+    )
     if u['role'] == 'medecin':
         # Show documents explicitly directed to this doctor, plus legacy docs with no medecin_id
         rows = db.execute(
-            "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
-            "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
+            f"SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
+            f"{_has_image_expr} "
             "FROM documents WHERE patient_id=? AND source='document' AND deleted=0 "
             "AND (medecin_id=? OR medecin_id='' OR medecin_id IS NULL) "
             "ORDER BY date DESC",
@@ -157,8 +199,8 @@ def get_documents(pid):
         ).fetchall()
     else:
         rows = db.execute(
-            "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
-            "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
+            f"SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,medecin_id,"
+            f"{_has_image_expr} "
             "FROM documents WHERE patient_id=? AND source='document' AND deleted=0 ORDER BY date DESC",
             (pid,)
         ).fetchall()
@@ -173,7 +215,8 @@ def get_deleted_documents(pid):
     db = get_db()
     rows = db.execute(
         "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,"
-        "(CASE WHEN image_b64 != '' AND image_b64 IS NOT NULL THEN 1 ELSE 0 END) AS has_image "
+        "(CASE WHEN (image_b64 != '' AND image_b64 IS NOT NULL) "
+        "OR (image_path != '' AND image_path IS NOT NULL) THEN 1 ELSE 0 END) AS has_image "
         "FROM documents WHERE patient_id=? AND deleted=1 ORDER BY deleted_at DESC",
         (pid,)
     ).fetchall()
@@ -193,7 +236,10 @@ def get_document(pid, doc_id):
     ).fetchone()
     if not row:
         return jsonify({}), 404
-    return jsonify(dict(row))
+    result = dict(row)
+    # Load image from encrypted file when available (backward-compatible with legacy image_b64)
+    result['image_b64'] = _load_image_b64(result)
+    return jsonify(result)
 
 
 @bp.route('/api/patients/<pid>/documents/<doc_id>/analyze', methods=['POST'])
@@ -207,6 +253,19 @@ def analyze_document(pid, doc_id):
     doc = db.execute("SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone()
     if not p or not doc:
         return jsonify({}), 404
+
+    # Check ai_analysis consent before proceeding
+    consent_row = db.execute(
+        "SELECT granted FROM patient_consents "
+        "WHERE patient_id=? AND consent_type='ai_analysis' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (pid,)
+    ).fetchone()
+    if not consent_row or not consent_row['granted']:
+        return jsonify({
+            "error": "Consentement IA requis. Veuillez enregistrer le consentement du patient pour l'analyse IA avant de continuer.",
+            "consent_required": True
+        }), 403
 
     # If already processing, return current status
     current_status = doc['analysis_status'] if 'analysis_status' in doc.keys() else ''
@@ -233,7 +292,7 @@ def analyze_document(pid, doc_id):
 
     safe_type = _safe_llm(doc['type'])
 
-    image_b64 = doc['image_b64'] or None
+    image_b64 = _load_image_b64(dict(doc)) or None
     if image_b64:
         prompt = (f"Analysez cette image ophtalmologique de type '{safe_type}' uploadée par {uploader}. "
                   f"Contexte : {context}. "
