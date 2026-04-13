@@ -13,6 +13,7 @@ from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif, require_role, log_audit
 from security_utils import decrypt_patient, encrypt_patient_fields, sanitize
 from routes.patients_helpers import _assert_owns_patient, _build_patient, _auto_create_account, _next_patient_id
+from extensions import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,7 @@ def get_patient(pid):
 
 @bp.route('/api/patients', methods=['POST'])
 @require_role('medecin', 'admin')
+@limiter.limit("60 per hour")
 def add_patient():
     u = current_user()
     data = request.json or {}
@@ -191,6 +193,7 @@ def add_patient():
 # ─── UPDATE ────────────────────────────────────────────────────────────────────
 
 @bp.route('/api/patients/<pid>', methods=['PUT'])
+@limiter.limit("120 per hour")
 def update_patient(pid):
     u = current_user()
     if not u or u['role'] not in ('medecin', 'admin'):

@@ -14,7 +14,9 @@ _limiter_enabled = os.environ.get("RATELIMIT_ENABLED", "1") != "0"
 
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[],          # no global limit — set per-route
+    # Global safety net: 600 req/hour per IP across all API routes.
+    # Tight limits on expensive endpoints are applied per-route below.
+    default_limits=["600 per hour", "60 per minute"],
     storage_uri="memory://",
     enabled=_limiter_enabled,
 )

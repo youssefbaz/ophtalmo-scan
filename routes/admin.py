@@ -218,6 +218,7 @@ def admin_update_user(uid):
 # ─── RESET USER PASSWORD (admin) ──────────────────────────────────────────────
 
 @bp.route('/api/admin/users/<uid>/reset-password', methods=['POST'])
+@limiter.limit("20 per hour")
 def admin_reset_password(uid):
     _, err = _require_admin()
     if err: return err
@@ -339,6 +340,7 @@ def admin_create_medecin():
 # ─── CREATE PATIENT (admin) ───────────────────────────────────────────────────
 
 @bp.route('/api/admin/patients', methods=['POST'])
+@limiter.limit("60 per hour")
 def admin_create_patient():
     _, err = _require_admin()
     if err: return err

@@ -4941,7 +4941,7 @@ function showModal(title, bodyHTML, onConfirm, confirmOnly=false) {
 
 // ─── API HELPER ───────────────────────────────────────────────────────────────
 async function api(url, method='GET', body=null) {
-  const opts = { method, headers:{'Content-Type':'application/json'}, credentials:'include' };
+  const opts = { method, headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'}, credentials:'include' };
   if(body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(url, opts);
