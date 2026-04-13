@@ -1,5 +1,5 @@
-import uuid, datetime, json, logging
-from flask import Blueprint, request, jsonify
+import uuid, datetime, json, logging, threading, base64, io
+from flask import Blueprint, request, jsonify, current_app
 from database import get_db, current_user, add_notif, require_role
 from llm import call_llm, SYSTEM_OPHTHALMO
 from security_utils import decrypt_patient
@@ -7,6 +7,60 @@ from security_utils import decrypt_patient
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('documents', __name__)
+
+
+def _compress_image(image_b64: str, max_dim: int = 1600, quality: int = 78) -> str:
+    """Resize and JPEG-compress a base64 image to reduce database storage.
+
+    Falls back to the original if compression fails or produces a larger result.
+    """
+    if not image_b64:
+        return image_b64
+    try:
+        from PIL import Image
+        raw = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(raw))
+        # Flatten transparency to white background for JPEG
+        if img.mode in ('RGBA', 'P', 'LA'):
+            bg = Image.new('RGB', img.size, (255, 255, 255))
+            src = img.convert('RGBA') if img.mode == 'P' else img
+            mask = src.split()[3] if src.mode in ('RGBA', 'LA') else None
+            bg.paste(src.convert('RGB'), mask=mask)
+            img = bg
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        # Resize only when necessary (maintain aspect ratio)
+        if img.width > max_dim or img.height > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=quality, optimize=True)
+        compressed = base64.b64encode(buf.getvalue()).decode('ascii')
+        # Only keep the compressed version when it's actually smaller
+        return compressed if len(compressed) < len(image_b64) else image_b64
+    except Exception as e:
+        logger.warning(f"Image compression failed: {e}")
+        return image_b64
+
+
+def _analyze_in_background(app, doc_id: str, prompt: str, image_b64):
+    """Run the LLM analysis in a background thread and persist the result."""
+    with app.app_context():
+        from database import get_db as _get_db
+        db = _get_db()
+        try:
+            analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
+            db.execute(
+                "UPDATE documents SET analyse_ia=?, valide=1, analysis_status='done' WHERE id=?",
+                (analysis, doc_id)
+            )
+            db.commit()
+            logger.info(f"Background analysis done for document {doc_id}")
+        except Exception as e:
+            logger.error(f"Background LLM analysis failed for doc {doc_id}: {e}")
+            db.execute(
+                "UPDATE documents SET analysis_status='failed' WHERE id=?", (doc_id,)
+            )
+            db.commit()
 
 
 @bp.route('/api/patients/<pid>/upload', methods=['POST'])
@@ -32,6 +86,10 @@ def upload_document(pid):
     if u['role'] == 'medecin':
         target_mid = u['id']
 
+    # Compress image before storing to reduce DB size
+    raw_image = data.get('image', '') or ''
+    stored_image = _compress_image(raw_image) if raw_image else ''
+
     db.execute(
         "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,source,medecin_id) "
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -39,7 +97,7 @@ def upload_document(pid):
          datetime.datetime.now().strftime("%Y-%m-%d"),
          data.get('description',''), u['role'],
          1 if u['role'] == 'medecin' else 0,
-         data.get('image',''), source, target_mid)
+         stored_image, source, target_mid)
     )
     db.commit()
 
@@ -123,6 +181,11 @@ def analyze_document(pid, doc_id):
     if not p or not doc:
         return jsonify({}), 404
 
+    # If already processing, return current status
+    current_status = doc['analysis_status'] if 'analysis_status' in doc.keys() else ''
+    if current_status == 'pending':
+        return jsonify({"ok": True, "status": "pending", "message": "Analyse déjà en cours…"})
+
     antecedents = json.loads(p['antecedents'] or '[]')
     age = datetime.datetime.now().year - int(p['ddn'][:4]) if p['ddn'] else 0
     context = (f"Patient : {p['prenom']} {p['nom']}, {age} ans. "
@@ -140,14 +203,19 @@ def analyze_document(pid, doc_id):
                   f"Contexte : {context}. "
                   f"Donnez les points de vigilance clinique et les recommandations générales.")
 
-    try:
-        analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
-    except Exception as e:
-        logger.error(f"LLM analyze failed: {e}")
-        return jsonify({"error": "Service IA indisponible, réessayez dans quelques minutes."}), 503
-    db.execute("UPDATE documents SET analyse_ia=?, valide=1 WHERE id=?", (analysis, doc_id))
+    # Mark as pending and fire background thread — return immediately
+    db.execute("UPDATE documents SET analysis_status='pending' WHERE id=?", (doc_id,))
     db.commit()
-    return jsonify({"ok": True, "analysis": analysis})
+
+    app_ref = current_app._get_current_object()
+    threading.Thread(
+        target=_analyze_in_background,
+        args=(app_ref, doc_id, prompt, image_b64),
+        daemon=True
+    ).start()
+
+    return jsonify({"ok": True, "status": "pending",
+                    "message": "Analyse IA lancée — vérifiez le résultat dans quelques secondes."})
 
 
 @bp.route('/api/patients/<pid>/documents/<doc_id>/validate', methods=['POST'])
@@ -217,10 +285,14 @@ def consultation_summary(pid):
     hid  = data.get('historique_id')
 
     if hid:
-        h = db.execute("SELECT * FROM historique WHERE id=? AND patient_id=?", (hid, pid)).fetchone()
+        h = db.execute(
+            "SELECT * FROM historique WHERE id=? AND patient_id=? AND (deleted IS NULL OR deleted=0)",
+            (hid, pid)
+        ).fetchone()
     else:
         h = db.execute(
-            "SELECT * FROM historique WHERE patient_id=? ORDER BY date DESC LIMIT 1", (pid,)
+            "SELECT * FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
+            "ORDER BY date DESC LIMIT 1", (pid,)
         ).fetchone()
 
     if not h:

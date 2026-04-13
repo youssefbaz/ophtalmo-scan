@@ -1,5 +1,6 @@
 import uuid
 import secrets
+import hashlib
 import datetime
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -61,11 +62,28 @@ def login():
         import pyotp
         totp = pyotp.TOTP(row['totp_secret'])
         if not totp.verify(totp_token, valid_window=1):
-            record_login_attempt(db, row['id'], ip, success=False)
+            # Try backup code as fallback (strip dashes, uppercase)
+            code_clean = totp_token.replace('-', '').upper()
+            code_hash  = hashlib.sha256(code_clean.encode()).hexdigest()
+            backup = db.execute(
+                "SELECT id FROM totp_backup_codes WHERE user_id=? AND code_hash=? AND used=0",
+                (row['id'], code_hash)
+            ).fetchone()
+            if not backup:
+                record_login_attempt(db, row['id'], ip, success=False)
+                db.commit()
+                log_audit(db, 'login_totp_failed', 'users', row['id'], user_id=row['id'],
+                          detail=f"ip={ip}", ip_address=ip, user_agent=ua)
+                db.commit()
+                return jsonify({"ok": False, "error": "Code 2FA invalide ou expiré"}), 401
+            # Valid backup code — mark it as used (single-use)
+            db.execute(
+                "UPDATE totp_backup_codes SET used=1, used_at=? WHERE id=?",
+                (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), backup['id'])
+            )
+            log_audit(db, 'login_backup_code_used', 'users', row['id'], user_id=row['id'],
+                      detail=f"ip={ip}", ip_address=ip, user_agent=ua)
             db.commit()
-            log_audit(db, 'login_totp_failed', 'users', row['id'], user_id=row['id'], detail=f"ip={ip}", ip_address=ip, user_agent=ua)
-            db.commit()
-            return jsonify({"ok": False, "error": "Code 2FA invalide ou expiré"}), 401
 
     # ── Success ────────────────────────────────────────────────────────────────
     record_login_attempt(db, row['id'], ip, success=True)

@@ -2,12 +2,15 @@
 routes/totp.py — TOTP 2FA management endpoints (Step 3).
 
 Endpoints:
-  POST /api/totp/setup    — generate a new TOTP secret + QR code for the logged-in user
+  POST /api/totp/setup    — generate a new TOTP secret + QR code + backup codes
   POST /api/totp/verify   — confirm the TOTP code and activate 2FA
   POST /api/totp/disable  — disable 2FA (requires current password + TOTP code)
 """
 import io
+import uuid
 import base64
+import hashlib
+import secrets
 import pyotp
 import qrcode
 from flask import Blueprint, request, jsonify
@@ -20,9 +23,26 @@ bp = Blueprint('totp', __name__)
 _ISSUER = "OphtalmoScan"
 
 
+def _generate_backup_codes(db, user_id: str) -> list:
+    """Generate 8 one-time backup codes, store hashed, return plaintext formatted strings."""
+    # Invalidate any previous unused codes for this user
+    db.execute("DELETE FROM totp_backup_codes WHERE user_id=? AND used=0", (user_id,))
+    codes = []
+    for _ in range(8):
+        raw = secrets.token_hex(4).upper()          # 8-char hex  e.g. "A3F29E1B"
+        display = f"{raw[:4]}-{raw[4:]}"            # "A3F2-9E1B"
+        code_hash = hashlib.sha256(raw.encode()).hexdigest()
+        db.execute(
+            "INSERT INTO totp_backup_codes (id, user_id, code_hash, used) VALUES (?,?,?,0)",
+            (str(uuid.uuid4())[:8], user_id, code_hash)
+        )
+        codes.append(display)
+    return codes
+
+
 @bp.route('/api/totp/setup', methods=['POST'])
 def totp_setup():
-    """Generate a new TOTP secret and return a QR code PNG as base64."""
+    """Generate a new TOTP secret, QR code and backup codes for the logged-in user."""
     u = current_user()
     if not u:
         return jsonify({"error": "Non connecté"}), 401
@@ -49,16 +69,20 @@ def totp_setup():
     qr_img.save(buf, format="PNG")
     qr_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
-    # Persist the (not-yet-activated) secret in the DB
+    # Persist the (not-yet-activated) secret
     db.execute("UPDATE users SET totp_secret=?, totp_enabled=0 WHERE id=?",
                (secret, u['id']))
+
+    # Generate backup codes (stored hashed, returned once in plaintext)
+    backup_codes = _generate_backup_codes(db, u['id'])
     db.commit()
 
     return jsonify({
-        "ok":     True,
-        "secret": secret,
-        "qr":     f"data:image/png;base64,{qr_b64}",
-        "uri":    totp_uri,
+        "ok":           True,
+        "secret":       secret,
+        "qr":           f"data:image/png;base64,{qr_b64}",
+        "uri":          totp_uri,
+        "backup_codes": backup_codes,
     })
 
 
@@ -116,6 +140,21 @@ def totp_disable():
         return jsonify({"error": "Code 2FA invalide"}), 401
 
     db.execute("UPDATE users SET totp_secret='', totp_enabled=0 WHERE id=?", (u['id'],))
+    # Invalidate all backup codes
+    db.execute("DELETE FROM totp_backup_codes WHERE user_id=?", (u['id'],))
     log_audit(db, 'totp_disabled', u['id'], '', ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True, "message": "Authentification à deux facteurs désactivée."})
+
+
+@bp.route('/api/totp/backup-codes', methods=['GET'])
+def list_backup_codes():
+    """Return how many unused backup codes the user still has (count only, not codes)."""
+    u = current_user()
+    if not u:
+        return jsonify({"error": "Non connecté"}), 401
+    db = get_db()
+    row = db.execute(
+        "SELECT COUNT(*) AS cnt FROM totp_backup_codes WHERE user_id=? AND used=0", (u['id'],)
+    ).fetchone()
+    return jsonify({"remaining": row['cnt'] if row else 0})
