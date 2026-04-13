@@ -4,6 +4,7 @@ routes/patients_history.py — Consultation history and clinical trends endpoint
 import uuid, datetime, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, log_audit
+from routes.patients_helpers import _assert_owns_patient
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ def add_historique(pid):
         return jsonify({"error": "Accès refusé"}), 403
     data = request.json or {}
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     if not db.execute(
         "SELECT id FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)
     ).fetchone():
@@ -51,6 +53,7 @@ def update_historique(pid, hid):
         return jsonify({"error": "Accès refusé"}), 403
     data = request.json or {}
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     if not db.execute(
         "SELECT id FROM historique WHERE id=? AND patient_id=? AND (deleted IS NULL OR deleted=0)",
         (hid, pid)
@@ -81,6 +84,7 @@ def delete_historique(pid, hid):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    _assert_owns_patient(db, u, pid)
     if not db.execute(
         "SELECT id FROM historique WHERE id=? AND patient_id=? AND (deleted IS NULL OR deleted=0)",
         (hid, pid)

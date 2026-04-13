@@ -55,6 +55,7 @@ def _seed_test_users(db_path):
     con = sqlite3.connect(db_path)
     cur = con.cursor()
 
+    # Medecins
     for uid, username, role in [
         ("MED_A", "medecin_a", "medecin"),
         ("MED_B", "medecin_b", "medecin"),
@@ -67,17 +68,28 @@ def _seed_test_users(db_path):
              role, "Test", "Dr", "active")
         )
 
+    # Admin user
+    cur.execute(
+        "INSERT OR IGNORE INTO users "
+        "(id,username,password_hash,role,nom,prenom,status,totp_enabled,locked_until) "
+        "VALUES (?,?,?,?,?,?,?,0,'')",
+        ("ADMIN_T", "admin_test", generate_password_hash("AdminPass@2025!"),
+         "admin", "Admin", "Test", "active")
+    )
+
+    # Test patient record
     pii = encrypt_patient_fields({
         "nom":"Dupont","prenom":"Alice","ddn":"1980-01-01","telephone":"","email":""
     })
     cur.execute(
         "INSERT OR IGNORE INTO patients "
-        "(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id,birth_year) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         ("P_A001", pii["nom"], pii["prenom"], pii["ddn"],
-         "F", pii["telephone"], pii["email"], "[]", "[]", "MED_A")
+         "F", pii["telephone"], pii["email"], "[]", "[]", "MED_A", 1980)
     )
 
+    # Patient user linked to P_A001
     cur.execute(
         "INSERT OR IGNORE INTO users "
         "(id,username,password_hash,role,nom,prenom,patient_id,status,totp_enabled,locked_until) "
@@ -473,3 +485,820 @@ class TestSecurityControls:
         assert r.status_code == 400
         assert "non autorisé" in (r.get_json() or {}).get("error", "").lower() or \
                r.status_code == 400
+
+
+# ─── 8. Patient CRUD ─────────────────────────────────────────────────────────
+
+class TestPatientCRUD:
+    """Full create / read / update / soft-delete cycle for patients."""
+
+    def test_create_patient_success(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients", json={
+            "nom": "Lemaire", "prenom": "Sophie",
+            "ddn": "1990-06-15", "sexe": "F",
+            "telephone": "0600000001", "email": "sophie.lemaire@test.com",
+            "antecedents": ["Myopie"], "allergies": []
+        })
+        assert r.status_code == 201
+        data = r.get_json()
+        assert data["ok"] is True
+        assert data["id"].startswith("P")
+
+    def test_create_patient_missing_email_returns_400(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients", json={
+            "nom": "Sans", "prenom": "Email", "ddn": "1990-01-01", "sexe": "M"
+        })
+        assert r.status_code == 400
+
+    def test_create_patient_requires_auth(self, client):
+        r = client.post("/api/patients", json={
+            "nom": "Ghost", "prenom": "User", "email": "g@x.com"
+        })
+        assert r.status_code in (401, 403)
+
+    def test_patient_list_returns_list(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_patient_list_pagination(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients?page=1&per_page=10")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert "data" in data and "total" in data and "pages" in data
+
+    def test_update_patient_success(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.put("/api/patients/P_A001", json={
+            "nom": "Dupont", "prenom": "Alice",
+            "ddn": "1980-01-01", "sexe": "F",
+            "telephone": "0600000002", "email": "alice@test.com",
+            "antecedents": [], "allergies": []
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_update_patient_pii_re_encrypted(self, app, db_path):
+        """After PUT, the nom column must still be Fernet-encrypted."""
+        c = _authed(app, "medecin_a")
+        c.put("/api/patients/P_A001", json={
+            "nom": "Dupont", "prenom": "Alice", "ddn": "1980-01-01",
+            "sexe": "F", "telephone": "", "email": "", "antecedents": [], "allergies": []
+        })
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT nom FROM patients WHERE id='P_A001'").fetchone()
+        con.close()
+        assert row[0].startswith("gAAAAA"), "nom must remain encrypted after update"
+
+    def test_birth_year_stored_on_create(self, app, db_path):
+        """birth_year must be derived from ddn and stored as a plaintext integer."""
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients", json={
+            "nom": "BYearTest", "prenom": "Fixture",
+            "ddn": "1992-03-22", "sexe": "M",
+            "telephone": "", "email": "byear@test.com",
+            "antecedents": [], "allergies": []
+        })
+        assert r.status_code == 201
+        pid = r.get_json()["id"]
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT birth_year, ddn FROM patients WHERE id=?", (pid,)).fetchone()
+        con.close()
+        assert row[0] == 1992, f"birth_year should be 1992, got {row[0]}"
+        assert row[1].startswith("gAAAAA"), "ddn should be Fernet-encrypted"
+
+    def test_birth_year_updated_on_put(self, app, db_path):
+        """PUT with a new ddn must update birth_year."""
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients", json={
+            "nom": "BYearUpd", "prenom": "Update",
+            "ddn": "1985-07-10", "sexe": "F",
+            "telephone": "", "email": "byearupd@test.com",
+            "antecedents": [], "allergies": []
+        })
+        pid = r.get_json()["id"]
+        c.put(f"/api/patients/{pid}", json={
+            "nom": "BYearUpd", "prenom": "Update",
+            "ddn": "1978-11-30", "sexe": "F",
+            "telephone": "", "email": "", "antecedents": [], "allergies": []
+        })
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT birth_year FROM patients WHERE id=?", (pid,)).fetchone()
+        con.close()
+        assert row[0] == 1978, f"birth_year should be updated to 1978, got {row[0]}"
+
+    def test_soft_delete_removes_from_list(self, app, db_path):
+        """Deleting a patient flags deleted=1 and hides it from the list."""
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients", json={
+            "nom": "ToDelete", "prenom": "Patient",
+            "ddn": "1970-01-01", "sexe": "M",
+            "telephone": "", "email": "todelete@test.com",
+            "antecedents": [], "allergies": []
+        })
+        pid = r.get_json()["id"]
+
+        rd = c.delete(f"/api/patients/{pid}", json={})
+        assert rd.status_code == 200
+
+        ids = [p["id"] for p in c.get("/api/patients").get_json()]
+        assert pid not in ids
+
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM patients WHERE id=?", (pid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_patient_export(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/export")
+        assert r.status_code == 200
+        data = r.get_json()
+        # Export must be anonymised — no name
+        assert "nom" not in data
+        assert "sexe" in data
+
+
+# ─── 9. Historique ───────────────────────────────────────────────────────────
+
+class TestHistorique:
+    """Consultation history CRUD."""
+
+    def _create_entry(self, c, pid="P_A001", date="2024-03-01"):
+        return c.post(f"/api/patients/{pid}/historique", json={
+            "date": date, "motif": "Test motif",
+            "diagnostic": "Test diagnostic", "traitement": "Test traitement",
+            "tension_od": "15", "tension_og": "16",
+            "acuite_od": "10/10", "acuite_og": "9/10", "notes": "Test"
+        })
+
+    def test_create_historique(self, app):
+        c = _authed(app, "medecin_a")
+        r = self._create_entry(c)
+        assert r.status_code == 201
+        data = r.get_json()
+        assert data["ok"] is True
+        assert data["id"].startswith("H")
+
+    def test_list_historique_requires_auth(self, client):
+        # Historique is returned inside GET /api/patients/<pid> — which requires auth
+        r = client.get("/api/patients/P_A001")
+        assert r.status_code in (401, 403)
+
+    def test_list_historique(self, app):
+        c = _authed(app, "medecin_a")
+        data = c.get("/api/patients/P_A001").get_json()
+        assert "historique" in data
+        assert isinstance(data["historique"], list)
+
+    def test_list_grows_after_create(self, app):
+        c = _authed(app, "medecin_a")
+        before = len(c.get("/api/patients/P_A001").get_json()["historique"])
+        self._create_entry(c, date="2024-05-10")
+        after = len(c.get("/api/patients/P_A001").get_json()["historique"])
+        assert after == before + 1
+
+    def test_update_historique(self, app):
+        c = _authed(app, "medecin_a")
+        hid = self._create_entry(c, date="2024-06-01").get_json()["id"]
+        r = c.put(f"/api/patients/P_A001/historique/{hid}", json={
+            "date": "2024-06-02", "motif": "Suivi", "diagnostic": "Stable",
+            "traitement": "Unchanged", "tension_od": "14", "tension_og": "15",
+            "acuite_od": "10/10", "acuite_og": "10/10", "notes": "Updated"
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_delete_historique_soft(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        hid = self._create_entry(c, date="2024-07-01").get_json()["id"]
+        r = c.delete(f"/api/patients/P_A001/historique/{hid}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM historique WHERE id=?", (hid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_medecin_b_cannot_add_historique(self, app):
+        c = _authed(app, "medecin_b")
+        r = self._create_entry(c, pid="P_A001")
+        assert r.status_code == 403
+
+    def test_patient_cannot_add_historique(self, app):
+        c = _authed(app, "patient_a")
+        r = self._create_entry(c)
+        assert r.status_code == 403
+
+    def test_trends_endpoint(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/trends")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+
+# ─── 10. RDV ─────────────────────────────────────────────────────────────────
+
+class TestRDV:
+    """Appointment CRUD and conflict detection."""
+
+    _date_counter = 0  # prevent date collisions across tests
+
+    @classmethod
+    def _next_date(cls):
+        cls._date_counter += 1
+        return f"2026-{(cls._date_counter % 12) + 1:02d}-{(cls._date_counter % 28) + 1:02d}"
+
+    def _create_rdv(self, c, pid="P_A001", heure="10:00"):
+        return c.post("/api/rdv", json={
+            "patient_id": pid, "date": self._next_date(),
+            "heure": heure, "type": "Consultation", "notes": ""
+        })
+
+    def test_list_rdv_requires_auth(self, client):
+        r = client.get("/api/rdv")
+        assert r.status_code in (401, 403)
+
+    def test_create_rdv_requires_auth(self, client):
+        r = client.post("/api/rdv", json={
+            "patient_id": "P_A001", "date": "2026-01-01", "heure": "09:00"
+        })
+        assert r.status_code in (401, 403)
+
+    def test_create_rdv_success(self, app):
+        c = _authed(app, "medecin_a")
+        r = self._create_rdv(c)
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["ok"] is True
+        assert data["rdv"]["id"].startswith("RDV")
+
+    def test_list_rdv(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/rdv")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_rdv_conflict_detection(self, app):
+        """Two RDVs for the same patient at identical date+time → 409."""
+        c = _authed(app, "medecin_a")
+        date = self._next_date()
+        c.post("/api/rdv", json={
+            "patient_id": "P_A001", "date": date, "heure": "11:00",
+            "type": "Consultation"
+        })
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001", "date": date, "heure": "11:00",
+            "type": "Consultation"
+        })
+        assert r.status_code == 409
+
+    def test_update_rdv(self, app):
+        c = _authed(app, "medecin_a")
+        rdv_id = self._create_rdv(c).get_json()["rdv"]["id"]
+        r = c.put(f"/api/rdv/{rdv_id}", json={
+            "date": self._next_date(), "heure": "15:00",
+            "type": "Suivi", "statut": "programmé", "notes": "Updated"
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_validate_rdv(self, app):
+        c = _authed(app, "medecin_a")
+        rdv_id = self._create_rdv(c).get_json()["rdv"]["id"]
+        r = c.post(f"/api/rdv/{rdv_id}/valider", json={"statut": "confirmé"})
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_delete_rdv_soft(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        rdv_id = self._create_rdv(c).get_json()["rdv"]["id"]
+        r = c.delete(f"/api/rdv/{rdv_id}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_patient_can_request_rdv(self, app):
+        c = _authed(app, "patient_a")
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001",
+            "date": self._next_date(), "heure": "09:30",
+            "type": "Urgence", "urgent": True
+        })
+        assert r.status_code == 200
+
+    def test_patient_cannot_delete_rdv(self, app):
+        c_med = _authed(app, "medecin_a")
+        rdv_id = self._create_rdv(c_med).get_json()["rdv"]["id"]
+        c_pat = _authed(app, "patient_a")
+        r = c_pat.delete(f"/api/rdv/{rdv_id}", json={})
+        assert r.status_code == 403
+
+
+# ─── 11. Documents ───────────────────────────────────────────────────────────
+
+class TestDocuments:
+    """Image upload, file storage, list, validate, soft-delete, restore."""
+
+    # Minimal valid 1×1 PNG encoded in base64
+    _PNG_B64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+        "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    )
+
+    def test_upload_valid_image(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/upload", json={
+            "type": "Fond d'œil", "description": "Test upload",
+            "image": self._PNG_B64
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+        assert r.get_json()["id"].startswith("DOC")
+
+    def test_upload_stores_to_file_not_db_column(self, app, db_path):
+        """New uploads must write an encrypted file and leave image_b64 empty in DB."""
+        c = _authed(app, "medecin_a")
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "OCT", "description": "File storage test",
+            "image": self._PNG_B64
+        }).get_json()["id"]
+
+        con = sqlite3.connect(db_path)
+        row = con.execute(
+            "SELECT image_b64, image_path FROM documents WHERE id=?", (doc_id,)
+        ).fetchone()
+        con.close()
+        assert row[0] == '' or row[0] is None, "image_b64 should be empty for new uploads"
+        assert row[1] and row[1] != '', "image_path should point to the encrypted file"
+
+    def test_get_document_returns_image_from_file(self, app):
+        """GET single document must return decrypted image_b64 loaded from the file."""
+        c = _authed(app, "medecin_a")
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "FO", "description": "Retrieve test",
+            "image": self._PNG_B64
+        }).get_json()["id"]
+        r = c.get(f"/api/patients/P_A001/documents/{doc_id}")
+        assert r.status_code == 200
+        assert r.get_json().get("image_b64"), "GET document must return non-empty image_b64"
+
+    def test_list_documents_requires_auth(self, client):
+        r = client.get("/api/patients/P_A001/documents")
+        assert r.status_code in (401, 403)
+
+    def test_list_documents(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/documents")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_list_sets_has_image_flag(self, app):
+        """Document list must set has_image=1 for docs uploaded by a patient (source='document')."""
+        # Medecin uploads have source='imagerie' and are excluded from the document list.
+        # Patient uploads have source='document' and appear in the list.
+        c_pat = _authed(app, "patient_a")
+        c_pat.post("/api/patients/P_A001/upload", json={
+            "type": "Ordonnance photo", "image": self._PNG_B64,
+            "medecin_id": "MED_A"
+        })
+        c_med = _authed(app, "medecin_a")
+        docs = c_med.get("/api/patients/P_A001/documents").get_json()
+        assert any(d.get("has_image") for d in docs), \
+            "Patient-uploaded document with image should have has_image=1"
+
+    def test_upload_without_image(self, app):
+        """Upload without image (plain document) must also succeed."""
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/upload", json={
+            "type": "Compte-rendu", "description": "No image"
+        })
+        assert r.status_code == 200
+
+    def test_validate_document(self, app):
+        c = _authed(app, "medecin_a")
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "ToValidate"
+        }).get_json()["id"]
+        r = c.post(f"/api/patients/P_A001/documents/{doc_id}/validate", json={})
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_soft_delete_document(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "ToDelete"
+        }).get_json()["id"]
+        r = c.delete(f"/api/patients/P_A001/documents/{doc_id}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM documents WHERE id=?", (doc_id,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_restore_document(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "ToRestore"
+        }).get_json()["id"]
+        c.delete(f"/api/patients/P_A001/documents/{doc_id}", json={})
+        r = c.post(f"/api/patients/P_A001/documents/{doc_id}/restore", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM documents WHERE id=?", (doc_id,)).fetchone()
+        con.close()
+        assert row[0] == 0
+
+    def test_patient_cannot_see_other_patient_docs(self, app):
+        c = _authed(app, "patient_a")
+        r = c.get("/api/patients/P_A002/documents")
+        assert r.status_code in (401, 403)
+
+    def test_ai_analysis_blocked_without_consent(self, app):
+        """analyze endpoint must return 403 consent_required when consent not granted."""
+        c = _authed(app, "medecin_a")
+        # Revoke ai_analysis consent to ensure it's not set
+        c.post("/api/consent/revoke", json={
+            "patient_id": "P_A001", "consent_type": "ai_analysis"
+        })
+        doc_id = c.post("/api/patients/P_A001/upload", json={
+            "type": "TestAI", "image": self._PNG_B64
+        }).get_json()["id"]
+        r = c.post(f"/api/patients/P_A001/documents/{doc_id}/analyze", json={})
+        assert r.status_code == 403
+        assert r.get_json().get("consent_required") is True
+
+
+# ─── 12. Questions ───────────────────────────────────────────────────────────
+
+class TestQuestions:
+    """Patient questions and medecin answers."""
+
+    def test_list_questions_requires_auth(self, client):
+        r = client.get("/api/patients/P_A001/questions")
+        assert r.status_code in (401, 403)
+
+    def test_medecin_can_list_questions(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/questions")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_patient_can_ask_question(self, app):
+        c = _authed(app, "patient_a")
+        r = c.post("/api/patients/P_A001/questions", json={
+            "question": "Quand est mon prochain rendez-vous ?"
+        })
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["ok"] is True
+        assert data["question"]["id"].startswith("Q")
+
+    def test_medecin_can_answer_question(self, app):
+        c_pat = _authed(app, "patient_a")
+        qid = c_pat.post("/api/patients/P_A001/questions", json={
+            "question": "Est-ce que mon glaucome s'améliore ?"
+        }).get_json()["question"]["id"]
+        c_med = _authed(app, "medecin_a")
+        r = c_med.post(f"/api/patients/P_A001/questions/{qid}/repondre", json={
+            "reponse": "Oui, les pressions oculaires sont stables."
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    def test_cannot_delete_unanswered_question(self, app):
+        """Deleting a question in 'en_attente' status must return 400."""
+        c_pat = _authed(app, "patient_a")
+        qid = c_pat.post("/api/patients/P_A001/questions", json={
+            "question": "Question sans réponse"
+        }).get_json()["question"]["id"]
+        c_med = _authed(app, "medecin_a")
+        r = c_med.delete(f"/api/patients/P_A001/questions/{qid}", json={})
+        assert r.status_code == 400
+
+    def test_can_delete_answered_question(self, app, db_path):
+        """A question with a reply can be soft-deleted."""
+        c_pat = _authed(app, "patient_a")
+        qid = c_pat.post("/api/patients/P_A001/questions", json={
+            "question": "Question à supprimer"
+        }).get_json()["question"]["id"]
+        c_med = _authed(app, "medecin_a")
+        c_med.post(f"/api/patients/P_A001/questions/{qid}/repondre", json={
+            "reponse": "Réponse du médecin."
+        })
+        r = c_med.delete(f"/api/patients/P_A001/questions/{qid}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM questions WHERE id=?", (qid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_patient_cannot_access_other_patient_questions(self, app):
+        c = _authed(app, "patient_a")
+        r = c.get("/api/patients/P_A002/questions")
+        assert r.status_code in (401, 403)
+
+
+# ─── 13. Ordonnances ─────────────────────────────────────────────────────────
+
+class TestOrdonnances:
+    """Prescription CRUD."""
+
+    def test_list_ordonnances_requires_auth(self, client):
+        r = client.get("/api/patients/P_A001/ordonnances")
+        assert r.status_code in (401, 403)
+
+    def test_create_ordonnance(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/ordonnances", json={
+            "type": "medicaments",
+            "contenu": {"medicaments": [{"nom": "Timolol 0.5%", "posologie": "2x/j"}]},
+            "notes": "Renouvellement 3 mois"
+        })
+        assert r.status_code == 201
+        assert r.get_json()["id"].startswith("O")
+
+    def test_list_ordonnances(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/ordonnances")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_list_includes_created_ordonnance(self, app):
+        c = _authed(app, "medecin_a")
+        before = len(c.get("/api/patients/P_A001/ordonnances").get_json())
+        c.post("/api/patients/P_A001/ordonnances", json={
+            "type": "medicaments", "contenu": {}, "notes": "Count test"
+        })
+        after = len(c.get("/api/patients/P_A001/ordonnances").get_json())
+        assert after == before + 1
+
+    def test_patient_cannot_create_ordonnance(self, app):
+        c = _authed(app, "patient_a")
+        r = c.post("/api/patients/P_A001/ordonnances", json={"type": "medicaments"})
+        assert r.status_code == 403
+
+    def test_delete_ordonnance(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        oid = c.post("/api/patients/P_A001/ordonnances", json={
+            "type": "lunettes", "contenu": {}, "notes": "Delete me"
+        }).get_json()["id"]
+        r = c.delete(f"/api/patients/P_A001/ordonnances/{oid}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM ordonnances WHERE id=?", (oid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+
+# ─── 14. IVT ─────────────────────────────────────────────────────────────────
+
+class TestIVT:
+    """Intravitreal injection CRUD and auto-numbering."""
+
+    def test_list_ivt_requires_auth(self, client):
+        r = client.get("/api/patients/P_A001/ivt")
+        assert r.status_code in (401, 403)
+
+    def test_create_ivt(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/ivt", json={
+            "oeil": "OG", "medicament": "Ranibizumab",
+            "dose": "0.5mg", "date": "2024-03-01", "notes": "RAS"
+        })
+        assert r.status_code == 201
+        data = r.get_json()
+        assert data["id"].startswith("IVT")
+        assert data["numero"] >= 1
+
+    def test_list_ivt(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/ivt")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_ivt_autonumbering(self, app):
+        """Each new injection for the same eye gets the next sequential numero."""
+        c = _authed(app, "medecin_a")
+        r1 = c.post("/api/patients/P_A001/ivt", json={
+            "oeil": "OD", "medicament": "Aflibercept",
+            "dose": "2mg", "date": "2024-04-01"
+        })
+        r2 = c.post("/api/patients/P_A001/ivt", json={
+            "oeil": "OD", "medicament": "Aflibercept",
+            "dose": "2mg", "date": "2024-05-01"
+        })
+        assert r2.get_json()["numero"] == r1.get_json()["numero"] + 1
+
+    def test_patient_cannot_create_ivt(self, app):
+        c = _authed(app, "patient_a")
+        r = c.post("/api/patients/P_A001/ivt", json={"oeil": "OG"})
+        assert r.status_code == 403
+
+    def test_delete_ivt_soft(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        iid = c.post("/api/patients/P_A001/ivt", json={
+            "oeil": "OG", "medicament": "Bevacizumab",
+            "dose": "1.25mg", "date": "2024-06-01"
+        }).get_json()["id"]
+        r = c.delete(f"/api/patients/P_A001/ivt/{iid}", json={})
+        assert r.status_code == 200
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM ivt WHERE id=?", (iid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+
+# ─── 15. Notifications ───────────────────────────────────────────────────────
+
+class TestNotifications:
+    """Notification list and mark-as-read."""
+
+    def test_list_requires_auth(self, client):
+        r = client.get("/api/notifications")
+        assert r.status_code in (401, 403)
+
+    def test_list_notifications_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/notifications")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_list_notifications_patient(self, app):
+        c = _authed(app, "patient_a")
+        r = c.get("/api/notifications")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_mark_notification_read(self, app, db_path):
+        """Posting to /lu must flip lu=1 in the DB."""
+        # First create a notification by having the patient request an RDV
+        c_pat = _authed(app, "patient_a")
+        c_pat.post("/api/rdv", json={
+            "patient_id": "P_A001",
+            "date": "2027-01-10", "heure": "08:00",
+            "type": "Urgence", "urgent": True
+        })
+        c_med = _authed(app, "medecin_a")
+        notifs = c_med.get("/api/notifications").get_json()
+        if not notifs:
+            pytest.skip("No notifications available to mark as read")
+        nid = notifs[0]["id"]
+        r = c_med.post(f"/api/notifications/{nid}/lu", json={})
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT lu FROM notifications WHERE id=?", (nid,)).fetchone()
+        con.close()
+        assert row[0] == 1
+
+    def test_mark_lu_requires_auth(self, client):
+        r = client.post("/api/notifications/FAKE123/lu", json={})
+        assert r.status_code in (401, 403)
+
+
+# ─── 16. Admin access control ────────────────────────────────────────────────
+
+class TestAdmin:
+    """Admin endpoints must reject non-admin roles."""
+
+    _ADMIN_ROUTES_GET  = ["/api/admin/stats", "/api/admin/users", "/api/admin/users/pending"]
+    _ADMIN_ROUTES_POST = [
+        "/api/admin/users/X/validate",
+        "/api/admin/users/X/deactivate",
+        "/api/admin/users/X/activate",
+    ]
+
+    def test_admin_get_routes_blocked_for_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        for url in self._ADMIN_ROUTES_GET:
+            r = c.get(url)
+            assert r.status_code == 403, f"Expected 403 for medecin at {url}, got {r.status_code}"
+
+    def test_admin_post_routes_blocked_for_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        for url in self._ADMIN_ROUTES_POST:
+            r = c.post(url, json={})
+            assert r.status_code == 403, f"Expected 403 for medecin at {url}, got {r.status_code}"
+
+    def test_admin_routes_blocked_for_patient(self, app):
+        c = _authed(app, "patient_a")
+        for url in self._ADMIN_ROUTES_GET:
+            r = c.get(url)
+            assert r.status_code == 403, f"Expected 403 for patient at {url}, got {r.status_code}"
+
+    def test_admin_delete_user_blocked_for_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.delete("/api/admin/users/NOBODY", json={})
+        assert r.status_code == 403
+
+    def test_admin_endpoints_require_login(self, client):
+        for url in self._ADMIN_ROUTES_GET:
+            r = client.get(url)
+            assert r.status_code in (401, 403), \
+                f"Unauthenticated GET {url} should be 401/403, got {r.status_code}"
+
+    def test_admin_can_list_users(self, app):
+        c = _authed(app, "admin_test", "AdminPass@2025!")
+        r = c.get("/api/admin/users")
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_admin_can_view_stats(self, app):
+        c = _authed(app, "admin_test", "AdminPass@2025!")
+        r = c.get("/api/admin/stats")
+        assert r.status_code == 200
+
+
+# ─── 17. Data integrity ───────────────────────────────────────────────────────
+
+class TestDataIntegrity:
+    """Cross-cutting checks: age_bands, stats scoping, GDPR, audit log."""
+
+    def test_stats_age_bands_non_zero(self, app):
+        """age_bands must be populated when patients have birth_year set."""
+        c = _authed(app, "medecin_a")
+        # Ensure at least one patient with a known DOB exists under medecin_a
+        c.post("/api/patients", json={
+            "nom": "AgeBand", "prenom": "Test",
+            "ddn": "1970-01-01", "sexe": "M",
+            "telephone": "", "email": "ageband@test.com",
+            "antecedents": [], "allergies": []
+        })
+        data = c.get("/api/stats").get_json()
+        bands = data["age_bands"]
+        assert sum(bands.values()) >= 1, "age_bands should have at least one patient counted"
+
+    def test_stats_excludes_deleted_patients(self, app):
+        """A soft-deleted patient must not be counted in total_patients."""
+        c = _authed(app, "medecin_a")
+        before = c.get("/api/stats").get_json()["total_patients"]
+        pid = c.post("/api/patients", json={
+            "nom": "Phantom", "prenom": "Delete",
+            "ddn": "1960-05-05", "sexe": "M",
+            "telephone": "", "email": "phantom@test.com",
+            "antecedents": [], "allergies": []
+        }).get_json()["id"]
+        assert c.get("/api/stats").get_json()["total_patients"] == before + 1
+        c.delete(f"/api/patients/{pid}", json={})
+        assert c.get("/api/stats").get_json()["total_patients"] == before
+
+    def test_audit_log_requires_auth(self, client):
+        r = client.get("/api/patients/P_A001/audit")
+        assert r.status_code in (401, 403)
+
+    def test_audit_log_accessible_by_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/audit")
+        assert r.status_code == 200
+
+    def test_audit_log_blocked_for_patient(self, app):
+        c = _authed(app, "patient_a")
+        r = c.get("/api/patients/P_A001/audit")
+        assert r.status_code == 403
+
+    def test_gdpr_delete_anonymises_audit_log(self, app, db_path):
+        """After patient delete, audit_log detail must be anonymised (GDPR erasure)."""
+        c = _authed(app, "medecin_a")
+        pid = c.post("/api/patients", json={
+            "nom": "GDPR", "prenom": "Erase",
+            "ddn": "1965-08-15", "sexe": "F",
+            "telephone": "", "email": "gdpr@test.com",
+            "antecedents": [], "allergies": []
+        }).get_json()["id"]
+        c.get(f"/api/patients/{pid}")    # produces at least one audit READ entry
+        c.delete(f"/api/patients/{pid}", json={})
+
+        con = sqlite3.connect(db_path)
+        rows = con.execute(
+            "SELECT detail FROM audit_log "
+            "WHERE patient_id=? AND action != 'patient_deleted_gdpr'",
+            (pid,)
+        ).fetchall()
+        con.close()
+        for (detail,) in rows:
+            assert detail == '[données supprimées - RGPD]', \
+                f"Audit detail should be anonymised, got: {detail!r}"
+
+    def test_sex_distribution_normalised(self, app):
+        """sex_dist must only contain keys M, F, or N/R — never raw ciphertext."""
+        c = _authed(app, "medecin_a")
+        data = c.get("/api/stats").get_json()
+        for key in data.get("sex_dist", {}):
+            assert key in ("M", "F", "N/R"), \
+                f"Unexpected sex_dist key (possibly ciphertext): {key!r}"
+
+    def test_patient_profile_endpoint(self, app):
+        """Authenticated users can update their own profile settings via PUT."""
+        c = _authed(app, "medecin_a")
+        r = c.put("/api/settings/profile", json={
+            "nom": "Test", "prenom": "Dr",
+            "email": "drtest@test.com", "organisation": "Clinique Test"
+        })
+        # 200 success or 400 validation — must not be 401/403/500
+        assert r.status_code in (200, 400)
