@@ -357,6 +357,8 @@ def admin_create_patient():
 
     if not nom or not prenom:
         return jsonify({"error": "Nom et prénom requis"}), 400
+    if not email or '@' not in email:
+        return jsonify({"error": "L'adresse email du patient est obligatoire."}), 400
 
     from routes.patients import _next_patient_id, _auto_create_account
     db  = get_db()

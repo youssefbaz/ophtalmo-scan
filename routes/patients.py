@@ -147,12 +147,16 @@ def add_patient():
     pid        = _next_patient_id(db)
     medecin_id = data.get("medecin_id") or (u['id'] if u['role'] == 'medecin' else '')
     send_email = data.get("send_email", True)
+    email_raw = sanitize(data.get("email", ""), max_len=200).strip()
+    if not email_raw or '@' not in email_raw:
+        return jsonify({"error": "L'adresse email du patient est obligatoire."}), 400
+
     pii = encrypt_patient_fields({
         "nom":       sanitize(data.get("nom", ""),       max_len=100),
         "prenom":    sanitize(data.get("prenom", ""),    max_len=100),
         "ddn":       sanitize(data.get("ddn", ""),       max_len=20),
         "telephone": sanitize(data.get("telephone", ""), max_len=30),
-        "email":     sanitize(data.get("email", ""),     max_len=200),
+        "email":     email_raw,
     })
     try:
         db.execute(
@@ -165,7 +169,7 @@ def add_patient():
              medecin_id)
         )
         host  = request.host_url.rstrip('/')
-        email = data.get("email","") if send_email else ''
+        email = email_raw if send_email else ''
         creds = _auto_create_account(
             db, pid,
             nom=data.get("nom",""), prenom=data.get("prenom",""),
