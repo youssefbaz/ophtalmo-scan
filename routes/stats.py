@@ -5,6 +5,7 @@ All queries are scoped to the requesting médecin's own patients.
 import datetime, json as _json
 from flask import Blueprint, jsonify
 from database import get_db, current_user, require_role
+from security_utils import decrypt_field
 
 bp = Blueprint('stats', __name__)
 
@@ -20,13 +21,16 @@ def get_stats():
     month_start = today.replace(day=1).isoformat()
     year_start  = today.replace(month=1, day=1).isoformat()
 
-    # ── Build the scoped patient id list ──────────────────────────────────────
+    # ── Build the scoped patient id list (active / non-deleted only) ─────────
     # Admin: all patients. Médecin: own patients only.
     if role == 'admin':
-        patient_ids = [r[0] for r in db.execute("SELECT id FROM patients").fetchall()]
+        patient_ids = [r[0] for r in db.execute(
+            "SELECT id FROM patients WHERE (deleted IS NULL OR deleted=0)"
+        ).fetchall()]
     else:
         patient_ids = [r[0] for r in db.execute(
-            "SELECT id FROM patients WHERE medecin_id=?", (mid,)
+            "SELECT id FROM patients WHERE medecin_id=? AND (deleted IS NULL OR deleted=0)",
+            (mid,)
         ).fetchall()]
 
     total_patients = len(patient_ids)
@@ -43,21 +47,23 @@ def get_stats():
             return "1=0", []
         return f"{col} IN ({','.join('?'*len(patient_ids))})", list(patient_ids)
 
+    _not_deleted = "(deleted IS NULL OR deleted=0)"
+
     # ── New patients ──────────────────────────────────────────────────────────
     if role == 'admin':
         new_this_month = db.execute(
-            "SELECT COUNT(*) FROM patients WHERE created_at >= ?", (month_start,)
+            f"SELECT COUNT(*) FROM patients WHERE {_not_deleted} AND created_at >= ?", (month_start,)
         ).fetchone()[0]
         new_this_year = db.execute(
-            "SELECT COUNT(*) FROM patients WHERE created_at >= ?", (year_start,)
+            f"SELECT COUNT(*) FROM patients WHERE {_not_deleted} AND created_at >= ?", (year_start,)
         ).fetchone()[0]
     else:
         new_this_month = db.execute(
-            "SELECT COUNT(*) FROM patients WHERE medecin_id=? AND created_at >= ?",
+            f"SELECT COUNT(*) FROM patients WHERE medecin_id=? AND {_not_deleted} AND created_at >= ?",
             (mid, month_start)
         ).fetchone()[0]
         new_this_year = db.execute(
-            "SELECT COUNT(*) FROM patients WHERE medecin_id=? AND created_at >= ?",
+            f"SELECT COUNT(*) FROM patients WHERE medecin_id=? AND {_not_deleted} AND created_at >= ?",
             (mid, year_start)
         ).fetchone()[0]
 
@@ -68,11 +74,12 @@ def get_stats():
         ym = d.strftime('%Y-%m')
         if role == 'admin':
             cnt = db.execute(
-                "SELECT COUNT(*) FROM patients WHERE strftime('%Y-%m', created_at)=?", (ym,)
+                f"SELECT COUNT(*) FROM patients WHERE {_not_deleted} AND strftime('%Y-%m', created_at)=?",
+                (ym,)
             ).fetchone()[0]
         else:
             cnt = db.execute(
-                "SELECT COUNT(*) FROM patients WHERE medecin_id=? AND strftime('%Y-%m', created_at)=?",
+                f"SELECT COUNT(*) FROM patients WHERE medecin_id=? AND {_not_deleted} AND strftime('%Y-%m', created_at)=?",
                 (mid, ym)
             ).fetchone()[0]
         patients_per_month.append({'month': ym, 'count': cnt})
@@ -82,11 +89,12 @@ def get_stats():
     for y in range(today.year - 3, today.year + 1):
         if role == 'admin':
             cnt = db.execute(
-                "SELECT COUNT(*) FROM patients WHERE strftime('%Y', created_at)=?", (str(y),)
+                f"SELECT COUNT(*) FROM patients WHERE {_not_deleted} AND strftime('%Y', created_at)=?",
+                (str(y),)
             ).fetchone()[0]
         else:
             cnt = db.execute(
-                "SELECT COUNT(*) FROM patients WHERE medecin_id=? AND strftime('%Y', created_at)=?",
+                f"SELECT COUNT(*) FROM patients WHERE medecin_id=? AND {_not_deleted} AND strftime('%Y', created_at)=?",
                 (mid, str(y))
             ).fetchone()[0]
         patients_per_year.append({'year': str(y), 'count': cnt})
@@ -102,6 +110,7 @@ def get_stats():
             sex_dist[row['sexe'] or 'N/R'] = row['n']
 
     # ── Age distribution ───────────────────────────────────────────────────────
+    # ddn is stored Fernet-encrypted — must decrypt before parsing the year.
     age_bands = {'0-17': 0, '18-39': 0, '40-59': 0, '60-79': 0, '80+': 0}
     if patient_ids:
         pid_frag, pid_params = _pid_col_in('id')
@@ -109,7 +118,8 @@ def get_stats():
             f"SELECT ddn FROM patients WHERE ddn != '' AND {pid_frag}", pid_params
         ).fetchall():
             try:
-                age = today.year - int(row['ddn'][:4])
+                ddn_plain = decrypt_field(row['ddn'])
+                age = today.year - int(ddn_plain[:4])
                 if age < 18:    age_bands['0-17']  += 1
                 elif age < 40:  age_bands['18-39'] += 1
                 elif age < 60:  age_bands['40-59'] += 1
