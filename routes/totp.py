@@ -158,3 +158,40 @@ def list_backup_codes():
         "SELECT COUNT(*) AS cnt FROM totp_backup_codes WHERE user_id=? AND used=0", (u['id'],)
     ).fetchone()
     return jsonify({"remaining": row['cnt'] if row else 0})
+
+
+@bp.route('/api/totp/backup-codes/regenerate', methods=['POST'])
+def regenerate_backup_codes():
+    """Regenerate 2FA backup codes — requires current password confirmation.
+
+    Invalidates all existing unused codes and returns 8 fresh ones.
+    Only available when 2FA is already enabled.
+    """
+    u = current_user()
+    if not u:
+        return jsonify({"error": "Non connecté"}), 401
+
+    data     = request.json or {}
+    password = data.get('password', '')
+
+    db  = get_db()
+    row = db.execute("SELECT * FROM users WHERE id=?", (u['id'],)).fetchone()
+
+    if not row['totp_enabled']:
+        return jsonify({"error": "La 2FA n'est pas activée sur ce compte."}), 400
+
+    if not check_password_hash(row['password_hash'], password):
+        log_audit(db, 'totp_regen_failed', u['id'], '', ip_address=get_client_ip(), user_agent=get_user_agent())
+        db.commit()
+        return jsonify({"error": "Mot de passe incorrect"}), 401
+
+    new_codes = _generate_backup_codes(db, u['id'])
+    log_audit(db, 'totp_backup_codes_regenerated', u['id'], '',
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+
+    return jsonify({
+        "ok":           True,
+        "backup_codes": new_codes,
+        "message":      "Nouveaux codes de secours générés. Sauvegardez-les maintenant — ils ne seront plus affichés.",
+    })

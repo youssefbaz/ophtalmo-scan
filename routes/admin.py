@@ -1,9 +1,9 @@
 import uuid, json
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash
-from database import get_db, current_user, add_notif, next_medecin_code
+from database import get_db, current_user, add_notif, next_medecin_code, log_audit
 from extensions import limiter
-from security_utils import validate_password, encrypt_patient_fields, sanitize, decrypt_field
+from security_utils import validate_password, encrypt_patient_fields, sanitize, decrypt_field, get_client_ip, get_user_agent
 
 
 def _decrypt_user_row(r: dict) -> dict:
@@ -80,7 +80,7 @@ def admin_get_pending():
 
 @bp.route('/api/admin/users/<uid>/validate', methods=['POST'])
 def admin_validate(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -89,6 +89,9 @@ def admin_validate(uid):
     u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
     u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
+    log_audit(db, 'admin_account_validated', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} username={row['username']}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     add_notif(db, "compte_valide",
               f"✅ Compte validé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
@@ -114,7 +117,7 @@ def admin_validate(uid):
 
 @bp.route('/api/admin/users/<uid>/deactivate', methods=['POST'])
 def admin_deactivate(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     db  = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -125,6 +128,9 @@ def admin_deactivate(uid):
     u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
     u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='inactive' WHERE id=?", (uid,))
+    log_audit(db, 'admin_account_deactivated', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} username={row['username']}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     add_notif(db, "compte_desactive",
               f"🔒 Compte désactivé : {u_prenom} {u_nom} ({row['username']})",
@@ -134,7 +140,7 @@ def admin_deactivate(uid):
 
 @bp.route('/api/admin/users/<uid>/activate', methods=['POST'])
 def admin_activate(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     db  = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -143,6 +149,9 @@ def admin_activate(uid):
     u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
     u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
     db.execute("UPDATE users SET status='active' WHERE id=?", (uid,))
+    log_audit(db, 'admin_account_activated', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} username={row['username']}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     add_notif(db, "compte_active",
               f"🔓 Compte activé : {u_prenom} {u_nom} ({row['username']})",
@@ -154,7 +163,7 @@ def admin_activate(uid):
 
 @bp.route('/api/admin/users/<uid>', methods=['DELETE'])
 def admin_delete_user(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     db  = get_db()
     row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -164,6 +173,9 @@ def admin_delete_user(uid):
         return jsonify({"error": "Impossible de supprimer le compte administrateur"}), 400
     u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
     u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
+    log_audit(db, 'admin_user_deleted', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} username={row['username']} role={row['role']}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.execute("DELETE FROM users WHERE id=?", (uid,))
     db.commit()
     add_notif(db, "compte_supprime",
@@ -192,7 +204,7 @@ def admin_get_user(uid):
 
 @bp.route('/api/admin/users/<uid>', methods=['PUT'])
 def admin_update_user(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     db   = get_db()
     row  = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
@@ -211,6 +223,9 @@ def admin_update_user(uid):
             uid,
         )
     )
+    log_audit(db, 'admin_user_updated', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} fields={list(data.keys())}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True})
 
@@ -220,7 +235,7 @@ def admin_update_user(uid):
 @bp.route('/api/admin/users/<uid>/reset-password', methods=['POST'])
 @limiter.limit("20 per hour")
 def admin_reset_password(uid):
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     data     = request.json or {}
     new_pw   = data.get("new_password", "")
@@ -232,6 +247,9 @@ def admin_reset_password(uid):
         return jsonify({"error": "Utilisateur non trouvé"}), 404
     db.execute("UPDATE users SET password_hash=? WHERE id=?",
                (generate_password_hash(new_pw), uid))
+    log_audit(db, 'admin_password_reset', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True})
 
@@ -300,7 +318,7 @@ def admin_test_email():
 
 @bp.route('/api/admin/medecins', methods=['POST'])
 def admin_create_medecin():
-    _, err = _require_admin()
+    admin, err = _require_admin()
     if err: return err
     data = request.json or {}
 
@@ -330,6 +348,9 @@ def admin_create_medecin():
         (uid, username, generate_password_hash(password),
          "medecin", nom, prenom, email, organisation, date_naissance, "active", mcode)
     )
+    log_audit(db, 'admin_medecin_created', 'users', uid,
+              user_id=admin['id'], detail=f"new_user={uid} username={username} mcode={mcode}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     add_notif(db, "medecin_cree",
               f"👨‍⚕️ Nouveau médecin créé : Dr. {prenom} {nom} ({username}) — {mcode}",

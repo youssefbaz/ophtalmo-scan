@@ -241,8 +241,15 @@ def delete_patient(pid):
     db.execute(
         "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid)
     )
-    log_audit(db, 'DELETE', 'patients', pid, u['id'], pid,
-              f"{patient['prenom']} {patient['nom']}")
+    # RGPD — droit à l'effacement : anonymise les références nominatives dans audit_log
+    # On remplace les champs detail qui contiennent l'identifiant patient
+    # pour ne pas laisser le nom en clair dans les journaux d'audit.
+    db.execute(
+        "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
+        (pid,)
+    )
+    log_audit(db, 'patient_deleted_gdpr', 'patients', pid, u['id'], pid,
+              f"patient_id={pid} deleted_by={u['id']}")
     db.commit()
     return jsonify({"ok": True})
 

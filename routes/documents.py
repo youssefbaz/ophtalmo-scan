@@ -10,6 +10,28 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('documents', __name__)
 
 
+_ALLOWED_IMAGE_MAGIC: list[tuple[bytes, str]] = [
+    (b'\xff\xd8\xff',      'image/jpeg'),
+    (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    (b'GIF87a',            'image/gif'),
+    (b'GIF89a',            'image/gif'),
+]
+
+
+def _validate_image_mime(image_b64: str) -> bool:
+    """Return True if the base64-encoded bytes start with a known image magic header."""
+    if not image_b64:
+        return True  # no image supplied — nothing to reject
+    try:
+        raw = base64.b64decode(image_b64[:64])  # only need the first bytes
+        for magic, _ in _ALLOWED_IMAGE_MAGIC:
+            if raw.startswith(magic):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def _compress_image(image_b64: str, max_dim: int = 1600, quality: int = 78) -> str:
     """Resize and JPEG-compress a base64 image to reduce database storage.
 
@@ -88,8 +110,10 @@ def upload_document(pid):
     if u['role'] == 'medecin':
         target_mid = u['id']
 
-    # Compress image before storing to reduce DB size
+    # Validate and compress image before storing
     raw_image = data.get('image', '') or ''
+    if raw_image and not _validate_image_mime(raw_image):
+        return jsonify({"error": "Type de fichier non autorisé. Seules les images JPEG, PNG et GIF sont acceptées."}), 400
     stored_image = _compress_image(raw_image) if raw_image else ''
 
     db.execute(
@@ -195,14 +219,28 @@ def analyze_document(pid, doc_id):
                f"Antécédents : {', '.join(antecedents) or 'aucun renseigné'}")
     uploader = "le patient" if doc['uploaded_by'] == 'patient' else "le médecin"
 
+    def _safe_llm(val):
+        """Strip prompt-injection markers from free-text fields before inserting into LLM prompt."""
+        if val is None:
+            return ''
+        return (str(val)
+                .replace('```', '')
+                .replace('<|', '')
+                .replace('|>', '')
+                .replace('[INST]', '')
+                .replace('[/INST]', '')
+                .replace('###', ''))[:200]
+
+    safe_type = _safe_llm(doc['type'])
+
     image_b64 = doc['image_b64'] or None
     if image_b64:
-        prompt = (f"Analysez cette image ophtalmologique de type '{doc['type']}' uploadée par {uploader}. "
+        prompt = (f"Analysez cette image ophtalmologique de type '{safe_type}' uploadée par {uploader}. "
                   f"Contexte : {context}. "
                   f"Décrivez précisément les éléments cliniques visibles (structure, anomalies, lésions), "
                   f"formulez une impression diagnostique et des recommandations thérapeutiques.")
     else:
-        prompt = (f"{uploader.capitalize()} a uploadé un document de type '{doc['type']}'. "
+        prompt = (f"{uploader.capitalize()} a uploadé un document de type '{safe_type}'. "
                   f"Contexte : {context}. "
                   f"Donnez les points de vigilance clinique et les recommandations générales.")
 
