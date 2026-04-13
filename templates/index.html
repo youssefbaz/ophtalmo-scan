@@ -2752,7 +2752,7 @@ async function renderPatientProfile(c, pid) {
           <button class="btn btn-ghost btn-sm" onclick="printPatientSummary('${pid}')">🖨 Résumé</button>
           ${accountInfo.has_account
             ? `<button class="btn btn-ghost btn-sm" style="opacity:.6;cursor:default" disabled title="Compte: ${accountInfo.username}">👤 ${accountInfo.username}</button>`
-            : `<button class="btn btn-ghost btn-sm" onclick="openCreateAccount('${pid}','${escJ(patient.prenom)} ${escJ(patient.nom)}')">👤 Créer compte</button>
+            : `<button class="btn btn-ghost btn-sm" onclick="openCreateAccount('${pid}','${escJ(patient.prenom)} ${escJ(patient.nom)}','${escJ(patient.email||'')}')">👤 Créer compte</button>
                ${patient.email ? `<button class="btn btn-ghost btn-sm" onclick="sendPatientInvite('${pid}')" title="Envoyer lien d'inscription par email">📧 Lien</button>` : ''}`
           }
         </div>
@@ -5785,13 +5785,17 @@ async function sendPatientInvite(pid) {
   }
 }
 
-async function openCreateAccount(pid, fullName) {
+async function openCreateAccount(pid, fullName, patientEmail) {
   const sugUser = 'patient.' + fullName.toLowerCase().replace(/\s+/g,'.').replace(/[^a-z0-9.]/g,'');
   const sugPass = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,6);
   showModal('Créer un compte patient', `
     <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
       Un compte permettra à <b>${fullName}</b> de consulter ses données et poser des questions depuis l'application.
     </p>
+    <div class="form-group">
+      <label>Email * <span style="font-size:11px;color:var(--text2)">(les identifiants seront envoyés à cette adresse)</span></label>
+      <input id="acc-email" class="form-control" type="email" placeholder="patient@email.com" value="${escH(patientEmail||'')}" required>
+    </div>
     <div class="form-group">
       <label>Nom d'utilisateur</label>
       <input id="acc-user" class="form-control" value="${sugUser}">
@@ -5804,15 +5808,20 @@ async function openCreateAccount(pid, fullName) {
       </div>
     </div>
   `, async () => {
+    const email = document.getElementById('acc-email').value.trim();
+    if (!email || !email.includes('@')) {
+      showToast('L\'adresse email est obligatoire.', 'error'); return false;
+    }
     const res = await api(`/api/patients/${pid}/create-account`, 'POST', {
       username: document.getElementById('acc-user').value.trim(),
-      password: document.getElementById('acc-pass').value.trim()
+      password: document.getElementById('acc-pass').value.trim(),
+      email
     });
     if (res.ok) {
       closeModal();
       _showCredentialsModal(fullName, res, pid);
     } else {
-      alert(res.error || 'Erreur création compte');
+      showToast(res.error || 'Erreur création compte', 'error');
     }
   });
 }

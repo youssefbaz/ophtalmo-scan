@@ -49,6 +49,18 @@ def create_patient_account(pid):
         username = f"{base_username}{counter}"
         counter += 1
 
+    # Decrypt PII before use — p['email'] is stored as a Fernet token
+    patient = decrypt_patient(dict(p))
+
+    # Allow the doctor to override / update the email in the same request
+    email_to_use = (data.get('email') or '').strip() or patient.get('email', '')
+
+    # Persist updated email back to patients table if the doctor provided a new one
+    if data.get('email') and data['email'].strip() and data['email'].strip() != patient.get('email', ''):
+        from security_utils import encrypt_patient_fields
+        new_pii = encrypt_patient_fields({"email": data['email'].strip()})
+        db.execute("UPDATE patients SET email=? WHERE id=?", (new_pii['email'], pid))
+
     from werkzeug.security import generate_password_hash
     uid = "U" + str(uuid.uuid4())[:6].upper()
     db.execute(
@@ -58,18 +70,18 @@ def create_patient_account(pid):
     db.commit()
 
     email_sent = False
-    patient_email = p['email'] if p['email'] else None
-    if patient_email and '@' in patient_email:
+    if email_to_use and '@' in email_to_use:
         try:
             from email_notif import send_credentials_email
             host = request.host_url.rstrip('/')
             email_sent = send_credentials_email(
-                patient_email, p['prenom'], p['nom'], username, password, host
+                email_to_use, patient['prenom'], patient['nom'], username, password, host
             )
         except Exception:
             pass
 
-    return jsonify({"ok": True, "username": username, "password": password, "email_sent": email_sent})
+    return jsonify({"ok": True, "username": username, "password": password,
+                    "email_sent": email_sent, "email": email_to_use})
 
 
 @bp.route('/api/patients/unassigned', methods=['GET'])
