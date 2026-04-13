@@ -1,6 +1,9 @@
 import os
 import time
+import logging
 import requests as http_requests
+
+logger = logging.getLogger(__name__)
 
 GROQ_API_KEY    = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL      = "llama-3.3-70b-versatile"
@@ -100,20 +103,20 @@ def _call_gemini(prompt, system, max_tokens, image_b64=None):
         for attempt in range(2):
             try:
                 result = _call_gemini_model(model, prompt, system, max_tokens, image_b64)
-                print(f"[LLM] Réponse via Gemini ({model})")
+                logger.info(f"[LLM] Réponse via Gemini ({model})")
                 return result
             except http_requests.exceptions.HTTPError as e:
                 if e.response is not None and e.response.status_code == 429:
                     wait = 10 * (attempt + 1)   # 10s, then 20s
-                    print(f"[LLM] Gemini {model} rate-limited (429), attente {wait}s…")
+                    logger.warning(f"[LLM] Gemini {model} rate-limited (429), attente {wait}s…")
                     time.sleep(wait)
                     last_error = e
                     continue
-                print(f"[LLM] Gemini {model} erreur HTTP ({e}), modèle suivant…")
+                logger.error(f"[LLM] Gemini {model} erreur HTTP ({e}), modèle suivant…")
                 last_error = e
                 break
             except Exception as e:
-                print(f"[LLM] Gemini {model} échoué ({e}), modèle suivant…")
+                logger.error(f"[LLM] Gemini {model} échoué ({e}), modèle suivant…")
                 last_error = e
                 break
     raise last_error or Exception("Tous les modèles Gemini sont indisponibles")
@@ -151,17 +154,17 @@ def _call_openrouter(prompt, system, max_tokens, image_b64=None):
     for model in models:
         try:
             result = _call_openrouter_model(model, prompt, system, max_tokens, image_b64)
-            print(f"[LLM] Réponse via OpenRouter ({model})")
+            logger.info(f"[LLM] Réponse via OpenRouter ({model})")
             return result
         except http_requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
             if status == 429:
-                print(f"[LLM] OpenRouter {model} rate-limited, modèle suivant…")
+                logger.warning(f"[LLM] OpenRouter {model} rate-limited, modèle suivant…")
             else:
-                print(f"[LLM] OpenRouter {model} erreur {status}, modèle suivant…")
+                logger.error(f"[LLM] OpenRouter {model} erreur {status}, modèle suivant…")
             last_error = e
         except Exception as e:
-            print(f"[LLM] OpenRouter {model} échoué ({e}), modèle suivant…")
+            logger.error(f"[LLM] OpenRouter {model} échoué ({e}), modèle suivant…")
             last_error = e
     raise last_error or Exception("OpenRouter indisponible")
 
@@ -170,26 +173,26 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
     # 1. Text-only → Groq first (generous free tier, no vision needed)
     if GROQ_API_KEY and not image_b64:
         try:
-            print("[LLM] Réponse via Groq")
+            logger.info("[LLM] Réponse via Groq")
             return _call_groq(prompt, system, max_tokens)
         except Exception as e:
-            print(f"[LLM] Groq échoué ({e}), bascule…")
+            logger.warning(f"[LLM] Groq échoué ({e}), bascule…")
 
     # 2. Gemini (handles both text and vision)
     if GEMINI_API_KEY:
         try:
             return _call_gemini(prompt, system, max_tokens, image_b64)
         except Exception as e:
-            print(f"[LLM] Gemini indisponible ({e}), bascule sur OpenRouter…")
+            logger.warning(f"[LLM] Gemini indisponible ({e}), bascule sur OpenRouter…")
 
     # 3. OpenRouter free models (text + vision)
     if OPENROUTER_API_KEY:
         try:
             result = _call_openrouter(prompt, system, max_tokens, image_b64)
-            print(f"[LLM] Réponse via OpenRouter ({'vision' if image_b64 else 'text'})")
+            logger.info(f"[LLM] Réponse via OpenRouter ({'vision' if image_b64 else 'text'})")
             return result
         except Exception as e:
-            print(f"[LLM] OpenRouter échoué ({e})")
+            logger.error(f"[LLM] OpenRouter échoué ({e})")
 
     # 4. Last resort: Groq text-only even for image requests
     if image_b64 and GROQ_API_KEY:
@@ -199,9 +202,9 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
                 f"Analyse contextuelle uniquement.]\n\n{prompt}"
             )
             result = _call_groq(degraded, system, max_tokens)
-            print("[LLM] Analyse dégradée via Groq (sans vision)")
+            logger.warning("[LLM] Analyse dégradée via Groq (sans vision)")
             return f"⚠️ Analyse visuelle indisponible. Analyse contextuelle :\n\n{result}"
         except Exception as e:
-            print(f"[LLM] Groq dégradé échoué ({e})")
+            logger.error(f"[LLM] Groq dégradé échoué ({e})")
 
     return "⚠️ Tous les services IA sont indisponibles. Vérifiez vos clés API ou réessayez dans quelques minutes."

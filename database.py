@@ -394,6 +394,8 @@ def _create_tables(db):
         date_chirurgie  TEXT DEFAULT '',
         type_chirurgie  TEXT DEFAULT '',
         medecin_id      TEXT DEFAULT '',
+        deleted         INTEGER DEFAULT 0,
+        deleted_at      TEXT DEFAULT '',
         created_at      TEXT DEFAULT (datetime('now'))
     );
 
@@ -416,7 +418,9 @@ def _create_tables(db):
         refraction_og_axe   TEXT DEFAULT '',
         segment_ant         TEXT DEFAULT '',
         notes               TEXT DEFAULT '',
-        medecin             TEXT DEFAULT ''
+        medecin             TEXT DEFAULT '',
+        deleted             INTEGER DEFAULT 0,
+        deleted_at          TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS ordonnances (
@@ -430,34 +434,38 @@ def _create_tables(db):
     );
 
     CREATE TABLE IF NOT EXISTS rdv (
-        id          TEXT PRIMARY KEY,
-        patient_id  TEXT NOT NULL,
-        date        TEXT DEFAULT '',
-        heure       TEXT DEFAULT '',
-        type        TEXT DEFAULT 'Consultation',
-        statut      TEXT DEFAULT 'programme',
-        medecin     TEXT DEFAULT '',
-        notes       TEXT DEFAULT '',
-        urgent      INTEGER DEFAULT 0,
-        demande_par TEXT DEFAULT '',
-        sms_envoye  INTEGER DEFAULT 0,
-        email_envoye INTEGER DEFAULT 0
+        id           TEXT PRIMARY KEY,
+        patient_id   TEXT NOT NULL,
+        date         TEXT DEFAULT '',
+        heure        TEXT DEFAULT '',
+        type         TEXT DEFAULT 'Consultation',
+        statut       TEXT DEFAULT 'programme',
+        medecin      TEXT DEFAULT '',
+        medecin_id   TEXT DEFAULT '',
+        notes        TEXT DEFAULT '',
+        urgent       INTEGER DEFAULT 0,
+        demande_par  TEXT DEFAULT '',
+        sms_envoye   INTEGER DEFAULT 0,
+        email_envoye INTEGER DEFAULT 0,
+        deleted      INTEGER DEFAULT 0,
+        deleted_at   TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS documents (
-        id          TEXT PRIMARY KEY,
-        patient_id  TEXT NOT NULL,
-        type        TEXT DEFAULT 'Document',
-        date        TEXT DEFAULT '',
-        description TEXT DEFAULT '',
-        uploaded_by TEXT DEFAULT '',
-        valide      INTEGER DEFAULT 0,
-        image_b64   TEXT DEFAULT '',
-        notes       TEXT DEFAULT '',
-        analyse_ia  TEXT DEFAULT '',
-        source      TEXT DEFAULT 'document',
-        deleted     INTEGER DEFAULT 0,
-        deleted_at  TEXT DEFAULT ''
+        id               TEXT PRIMARY KEY,
+        patient_id       TEXT NOT NULL,
+        type             TEXT DEFAULT 'Document',
+        date             TEXT DEFAULT '',
+        description      TEXT DEFAULT '',
+        uploaded_by      TEXT DEFAULT '',
+        valide           INTEGER DEFAULT 0,
+        image_b64        TEXT DEFAULT '',
+        notes            TEXT DEFAULT '',
+        analyse_ia       TEXT DEFAULT '',
+        analysis_status  TEXT DEFAULT '',
+        source           TEXT DEFAULT 'document',
+        deleted          INTEGER DEFAULT 0,
+        deleted_at       TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS questions (
@@ -532,6 +540,17 @@ def _create_tables(db):
         success     INTEGER DEFAULT 0,
         created_at  TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS totp_backup_codes (
+        id          TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        code_hash   TEXT NOT NULL,
+        used        INTEGER DEFAULT 0,
+        used_at     TEXT DEFAULT '',
+        created_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_backup_codes ON totp_backup_codes(user_id, used);
 
     CREATE TABLE IF NOT EXISTS patient_consents (
         id           TEXT PRIMARY KEY,
@@ -668,13 +687,36 @@ def _migrate(db):
         ("ordonnances","deleted"),("ordonnances","deleted_at"),
         ("ivt","deleted"),        ("ivt","deleted_at"),
         ("rdv","sms_envoye"),     ("rdv","email_envoye"),
+        # New: soft-delete on patients, rdv, historique
+        ("patients","deleted"),   ("patients","deleted_at"),
+        ("rdv","deleted"),        ("rdv","deleted_at"),
+        ("historique","deleted"), ("historique","deleted_at"),
+        # New: async analysis status on documents
+        ("documents","analysis_status"),
     ]
     for table, col in soft_delete:
         try:
-            typedef = "INTEGER DEFAULT 0" if not col.endswith("_at") else "TEXT DEFAULT ''"
+            if col == "analysis_status":
+                typedef = "TEXT DEFAULT ''"
+            elif col.endswith("_at"):
+                typedef = "TEXT DEFAULT ''"
+            else:
+                typedef = "INTEGER DEFAULT 0"
             db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
         except Exception:
             pass
+
+    # TOTP backup codes table
+    try:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS totp_backup_codes (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+                code_hash TEXT NOT NULL, used INTEGER DEFAULT 0,
+                used_at TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now'))
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_backup_codes ON totp_backup_codes(user_id, used)")
+    except Exception:
+        pass
 
     # historique extra columns
     for col, typedef in [

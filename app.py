@@ -87,25 +87,30 @@ def create_app():
     app.teardown_appcontext(close_db)
 
     # ── Blueprints ────────────────────────────────────────────────────────────
-    from routes.auth          import bp as auth_bp
-    from routes.patients      import bp as patients_bp
-    from routes.rdv           import bp as rdv_bp
-    from routes.documents     import bp as docs_bp
-    from routes.questions     import bp as questions_bp
-    from routes.ai            import bp as ai_bp
-    from routes.notifications import bp as notifs_bp
-    from routes.ordonnances   import bp as ordonnances_bp
-    from routes.main          import bp as main_bp
-    from routes.ivt           import bp as ivt_bp
-    from routes.admin         import bp as admin_bp
-    from routes.agenda        import bp as agenda_bp
-    from routes.stats         import bp as stats_bp
-    from routes.totp          import bp as totp_bp
-    from routes.consent       import bp as consent_bp
+    from routes.auth              import bp as auth_bp
+    from routes.patients          import bp as patients_bp
+    from routes.patients_history  import bp as patients_history_bp
+    from routes.patients_surgery  import bp as patients_surgery_bp
+    from routes.patients_account  import bp as patients_account_bp
+    from routes.patients_import   import bp as patients_import_bp
+    from routes.rdv               import bp as rdv_bp
+    from routes.documents         import bp as docs_bp
+    from routes.questions         import bp as questions_bp
+    from routes.ai                import bp as ai_bp
+    from routes.notifications     import bp as notifs_bp
+    from routes.ordonnances       import bp as ordonnances_bp
+    from routes.main              import bp as main_bp
+    from routes.ivt               import bp as ivt_bp
+    from routes.admin             import bp as admin_bp
+    from routes.agenda            import bp as agenda_bp
+    from routes.stats             import bp as stats_bp
+    from routes.totp              import bp as totp_bp
+    from routes.consent           import bp as consent_bp
 
-    for blueprint in (auth_bp, patients_bp, rdv_bp, docs_bp, questions_bp,
-                      ai_bp, notifs_bp, ordonnances_bp, main_bp, ivt_bp,
-                      admin_bp, agenda_bp, stats_bp, totp_bp, consent_bp):
+    for blueprint in (auth_bp, patients_bp, patients_history_bp, patients_surgery_bp,
+                      patients_account_bp, patients_import_bp,
+                      rdv_bp, docs_bp, questions_bp, ai_bp, notifs_bp, ordonnances_bp,
+                      main_bp, ivt_bp, admin_bp, agenda_bp, stats_bp, totp_bp, consent_bp):
         app.register_blueprint(blueprint)
 
     # ── Flask-Talisman (Step 7 — Security headers / HTTPS) ───────────────────

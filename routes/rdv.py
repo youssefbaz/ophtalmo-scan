@@ -1,4 +1,4 @@
-import uuid, logging, re
+import uuid, datetime, logging, re
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
 from security_utils import decrypt_field, decrypt_patient
@@ -28,6 +28,7 @@ def get_rdv():
             SELECT r.*, p.nom AS patient_nom, p.prenom AS patient_prenom
             FROM rdv r JOIN patients p ON r.patient_id = p.id
             WHERE r.patient_id = ?
+              AND (r.deleted IS NULL OR r.deleted = 0)
             ORDER BY r.date, r.heure
         """, (u.get('patient_id'),)).fetchall()
     else:
@@ -36,8 +37,9 @@ def get_rdv():
         rows = db.execute("""
             SELECT r.*, p.nom AS patient_nom, p.prenom AS patient_prenom
             FROM rdv r JOIN patients p ON r.patient_id = p.id
-            WHERE r.medecin_id = ?
-               OR ((r.medecin_id IS NULL OR r.medecin_id = '') AND p.medecin_id = ?)
+            WHERE (r.medecin_id = ?
+               OR ((r.medecin_id IS NULL OR r.medecin_id = '') AND p.medecin_id = ?))
+              AND (r.deleted IS NULL OR r.deleted = 0)
             ORDER BY r.date, r.heure
         """, (u['id'], u['id'])).fetchall()
     result = [dict(r) for r in rows]
@@ -72,7 +74,8 @@ def add_rdv():
     # ── Conflict detection (same patient + date + heure already booked) ────────
     if rdv_date and rdv_heure:
         conflict = db.execute(
-            "SELECT id FROM rdv WHERE patient_id=? AND date=? AND heure=? AND statut NOT IN ('annulé','refusé')",
+            "SELECT id FROM rdv WHERE patient_id=? AND date=? AND heure=? "
+            "AND statut NOT IN ('annulé','refusé') AND (deleted IS NULL OR deleted=0)",
             (pid, rdv_date, rdv_heure)
         ).fetchone()
         if conflict:
@@ -175,12 +178,18 @@ def delete_rdv(rdv_id):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    row = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+    row = db.execute(
+        "SELECT * FROM rdv WHERE id=? AND (deleted IS NULL OR deleted=0)", (rdv_id,)
+    ).fetchone()
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
-    # Orphan-safe: cancel linked post-op steps before removing the RDV
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    # Cancel linked post-op steps
     db.execute("UPDATE suivi_postop SET statut='annulé' WHERE rdv_id=?", (rdv_id,))
-    db.execute("DELETE FROM rdv WHERE id=?", (rdv_id,))
+    # Soft-delete the RDV
+    db.execute(
+        "UPDATE rdv SET deleted=1, deleted_at=? WHERE id=?", (now, rdv_id)
+    )
     db.commit()
     return jsonify({"ok": True})
 
@@ -203,7 +212,8 @@ def update_rdv(rdv_id):
     if (new_date != row['date'] or new_heure != row['heure']) and new_date and new_heure:
         conflict = db.execute(
             "SELECT id FROM rdv WHERE patient_id=? AND date=? AND heure=? "
-            "AND statut NOT IN ('annulé','refusé') AND id != ?",
+            "AND statut NOT IN ('annulé','refusé') AND id != ? "
+            "AND (deleted IS NULL OR deleted=0)",
             (row['patient_id'], new_date, new_heure, rdv_id)
         ).fetchone()
         if conflict:
