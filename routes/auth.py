@@ -373,10 +373,13 @@ def patient_register():
     nom        = sanitize(data.get('nom',    ''), max_len=100).strip()
     prenom     = sanitize(data.get('prenom', ''), max_len=100).strip()
     ddn        = sanitize(data.get('ddn',    ''), max_len=20).strip()
+    email      = sanitize(data.get('email',  ''), max_len=200).strip()
     medecin_id = sanitize(data.get('medecin_id', ''), max_len=20).strip()
 
     if not all([nom, prenom, ddn]):
         return jsonify({"error": "Nom, prénom et date de naissance sont requis"}), 400
+    if not email or '@' not in email:
+        return jsonify({"error": "L'adresse email est obligatoire"}), 400
 
     if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
         return jsonify({"error": "Cet identifiant est déjà pris, choisissez-en un autre."}), 409
@@ -397,11 +400,11 @@ def patient_register():
     pid = f"P{((row_max[0] or 0) + 1):03d}"
 
     # Encrypt PII before storing
-    enc = encrypt_patient_fields({"nom": nom, "prenom": prenom, "ddn": ddn})
+    enc = encrypt_patient_fields({"nom": nom, "prenom": prenom, "ddn": ddn, "email": email})
 
     db.execute(
-        "INSERT INTO patients (id, nom, prenom, ddn, medecin_id) VALUES (?,?,?,?,?)",
-        (pid, enc['nom'], enc['prenom'], enc['ddn'], medecin_id)
+        "INSERT INTO patients (id, nom, prenom, ddn, email, medecin_id) VALUES (?,?,?,?,?,?)",
+        (pid, enc['nom'], enc['prenom'], enc['ddn'], enc['email'], medecin_id)
     )
 
     uid = "U" + str(uuid.uuid4())[:6].upper()
