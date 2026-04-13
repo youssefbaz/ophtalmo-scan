@@ -2500,8 +2500,9 @@ async function renderAdminCreatePatient(c) {
         <div class="form-group" style="flex:1">
           <label class="form-label">Sexe</label>
           <select class="form-input" id="apSexe">
-            <option value="F">Féminin</option>
+            <option value="">-- Choisir --</option>
             <option value="M">Masculin</option>
+            <option value="F">Féminin</option>
           </select>
         </div>
       </div>
@@ -4014,7 +4015,7 @@ function openAddPatient() {
     <div class="form-row">
       <div><label class="lbl">Date de naissance</label><input type="date" class="input" id="pDdn"></div>
       <div><label class="lbl">Sexe</label>
-        <select class="input" id="pSexe"><option value="F">Féminin</option><option value="M">Masculin</option></select>
+        <select class="input" id="pSexe"><option value="">-- Choisir --</option><option value="M">Masculin</option><option value="F">Féminin</option></select>
       </div>
     </div>
     <div class="form-row">
@@ -6359,12 +6360,17 @@ async function renderStatistiques(c) {
     });
 
     // Sex distribution (doughnut)
-    const sexLabels = Object.keys(s.sex_dist).map(k => k === 'F' ? 'Femmes' : k === 'M' ? 'Hommes' : 'N/R');
+    // Build in a fixed order (M, F, other) with explicit key→colour mapping
+    // so the chart is never wrong regardless of dict insertion order.
+    const _sexColorMap = { 'M': '#6366f1', 'F': '#ec4899' };
+    const _sexLabelMap = { 'M': 'Hommes',  'F': 'Femmes'  };
+    const _sexOrder    = ['M', 'F', ...Object.keys(s.sex_dist).filter(k => k !== 'M' && k !== 'F')];
+    const _sexFiltered = _sexOrder.filter(k => s.sex_dist[k] !== undefined);
     _statsChart('statsSexDist', {
       type: 'doughnut',
       data: {
-        labels: sexLabels,
-        datasets: [{ data: Object.values(s.sex_dist), backgroundColor: ['#ec4899','#6366f1','#94a3b8'], borderWidth: 0 }]
+        labels:   _sexFiltered.map(k => _sexLabelMap[k] || 'N/R'),
+        datasets: [{ data: _sexFiltered.map(k => s.sex_dist[k]), backgroundColor: _sexFiltered.map(k => _sexColorMap[k] || '#94a3b8'), borderWidth: 0 }]
       },
       options: { ...noScales, cutout: '65%' }
     });
