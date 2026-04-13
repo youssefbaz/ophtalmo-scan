@@ -5,6 +5,22 @@ from extensions import limiter
 
 bp = Blueprint('ai', __name__)
 
+_LLM_MAX_INPUT = 2000  # max chars for any user-supplied free-text before LLM
+
+
+def _sanitize_llm(text: str, max_len: int = _LLM_MAX_INPUT) -> str:
+    """Strip prompt-injection markers and cap length for LLM inputs."""
+    if not text:
+        return ''
+    cleaned = (str(text)
+               .replace('```', '')
+               .replace('<|', '')
+               .replace('|>', '')
+               .replace('[INST]', '')
+               .replace('[/INST]', '')
+               .replace('###', ''))
+    return cleaned[:max_len]
+
 
 @bp.route('/api/ai/question', methods=['POST'])
 @limiter.limit("40 per hour; 5 per minute")
@@ -12,8 +28,9 @@ def ai_question():
     u = current_user()
     if not u:
         return jsonify({}), 401
-    data   = request.json or {}
-    answer = call_llm(data.get('question', ''), SYSTEM_OPHTHALMO, max_tokens=800)
+    data     = request.json or {}
+    question = _sanitize_llm(data.get('question', ''))
+    answer   = call_llm(question, SYSTEM_OPHTHALMO, max_tokens=800)
     return jsonify({"answer": answer})
 
 
@@ -24,9 +41,9 @@ def ai_analyze():
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     data = request.json or {}
-    img_type  = data.get('type', 'imagerie ophtalmologique')
-    context   = data.get('context', '')
-    doc_id    = data.get('doc_id', '')
+    img_type   = _sanitize_llm(data.get('type', 'imagerie ophtalmologique'), max_len=100)
+    context    = _sanitize_llm(data.get('context', ''), max_len=500)
+    doc_id     = data.get('doc_id', '')
     patient_id = data.get('patient_id', '')
 
     image_b64 = None

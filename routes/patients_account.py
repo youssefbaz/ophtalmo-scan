@@ -159,9 +159,12 @@ def send_patient_invite(pid):
     db.commit()
 
     try:
+        import html as _html
         from email_notif import send_email
         host       = request.host_url.rstrip('/')
         invite_url = f"{host}/?invite={token}"
+        h_prenom   = _html.escape(patient['prenom'])
+        h_nom      = _html.escape(patient['nom'])
         body = f"""
 <html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
@@ -171,7 +174,7 @@ def send_patient_invite(pid):
   </div>
   <div style="padding:28px">
     <h2 style="color:#0e7a76;margin-top:0">Créez votre compte patient</h2>
-    <p>Bonjour <strong>{patient['prenom']} {patient['nom']}</strong>,</p>
+    <p>Bonjour <strong>{h_prenom} {h_nom}</strong>,</p>
     <p>Votre médecin vous invite à créer votre compte sur OphtalmoScan pour accéder à votre dossier médical en ligne.</p>
     <div style="text-align:center;margin:24px 0">
       <a href="{invite_url}" style="background:#0e7a76;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">

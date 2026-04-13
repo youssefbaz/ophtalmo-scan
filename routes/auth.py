@@ -561,15 +561,18 @@ def settings_request_pw_reset():
     db.commit()
 
     try:
+        import html as _html
         from email_notif import send_email as _send
         host      = request.host_url.rstrip('/')
         reset_url = f"{host}/?token={token}"
+        h_prenom  = _html.escape(u['prenom'] or '')
+        h_nom     = _html.escape(u['nom']    or '')
         body = f"""<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
   <div style="background:#0e7a76;padding:22px 28px"><div style="font-size:22px;font-weight:bold;color:#fff">OphtalmoScan</div></div>
   <div style="padding:28px">
     <h2 style="color:#0e7a76;margin-top:0">Réinitialisation de mot de passe</h2>
-    <p>Bonjour {u['prenom']} {u['nom']},</p>
+    <p>Bonjour {h_prenom} {h_nom},</p>
     <p>Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe :</p>
     <div style="text-align:center;margin:24px 0">
       <a href="{reset_url}" style="background:#0e7a76;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">

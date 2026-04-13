@@ -33,8 +33,31 @@ def _configure_logging():
     root.addHandler(fh)
 
 
+def _init_sentry():
+    """Initialise Sentry error monitoring if SENTRY_DSN is configured."""
+    dsn = os.environ.get('SENTRY_DSN', '').strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        sentry_sdk.init(
+            dsn=dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.05,   # 5% of transactions for performance monitoring
+            send_default_pii=False,    # never send PII to Sentry
+        )
+        logging.getLogger(__name__).info("Sentry error monitoring initialised")
+    except ImportError:
+        logging.getLogger(__name__).warning(
+            "SENTRY_DSN is set but sentry-sdk is not installed. "
+            "Run: pip install sentry-sdk[flask]"
+        )
+
+
 def create_app():
     _configure_logging()
+    _init_sentry()
 
     # Force .env to be loaded (with correct absolute path) before any security
     # module initialises its Fernet singleton. Also reset the singleton so that
@@ -248,18 +271,40 @@ def create_app():
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             from routes.agenda import check_postop_gaps
+            _sched_log = logging.getLogger('apscheduler.startup')
             scheduler = BackgroundScheduler()
             scheduler.add_job(
                 func=lambda: __import__('email_notif').send_rdv_email_reminders(app),
                 trigger='cron', hour=8, minute=5,
                 id='email_reminders', replace_existing=True
             )
+            _sched_log.info("Scheduled job registered: email_reminders (daily 08:05)")
             scheduler.add_job(
                 func=lambda: check_postop_gaps(app),
                 trigger='cron', hour=7, minute=30,
                 id='postop_gaps', replace_existing=True
             )
+            _sched_log.info("Scheduled job registered: postop_gaps (daily 07:30)")
+            # Daily encrypted database backup at 02:00
+            def _run_backup():
+                try:
+                    import backup as _bk
+                    path = _bk.run_backup()
+                    _sched_log.info(f"Scheduled backup completed: {path}")
+                except Exception as _e:
+                    _sched_log.error(f"Scheduled backup failed: {_e}")
+            scheduler.add_job(
+                func=_run_backup,
+                trigger='cron', hour=2, minute=0,
+                id='daily_backup', replace_existing=True
+            )
+            _sched_log.info("Scheduled job registered: daily_backup (daily 02:00)")
             scheduler.start()
+            _sched_log.info(
+                "APScheduler started — %d job(s) registered: %s",
+                len(scheduler.get_jobs()),
+                [j.id for j in scheduler.get_jobs()]
+            )
             import atexit
             atexit.register(lambda: scheduler.shutdown())
         except ImportError:
