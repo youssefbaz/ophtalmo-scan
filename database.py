@@ -347,22 +347,23 @@ def init_db(app):
 def _create_tables(db):
     db.executescript("""
     CREATE TABLE IF NOT EXISTS users (
-        id             TEXT PRIMARY KEY,
-        username       TEXT UNIQUE NOT NULL,
-        password_hash  TEXT NOT NULL,
-        role           TEXT NOT NULL,
-        nom            TEXT NOT NULL,
-        prenom         TEXT DEFAULT '',
-        email          TEXT DEFAULT '',
-        date_naissance TEXT DEFAULT '',
-        organisation   TEXT DEFAULT '',
-        status         TEXT DEFAULT 'active',
-        patient_id     TEXT,
-        medecin_code   TEXT DEFAULT '',
-        totp_secret    TEXT DEFAULT '',
-        totp_enabled   INTEGER DEFAULT 0,
-        locked_until   TEXT DEFAULT '',
-        created_at     TEXT DEFAULT (datetime('now'))
+        id                    TEXT PRIMARY KEY,
+        username              TEXT UNIQUE NOT NULL,
+        password_hash         TEXT NOT NULL,
+        role                  TEXT NOT NULL,
+        nom                   TEXT NOT NULL,
+        prenom                TEXT DEFAULT '',
+        email                 TEXT DEFAULT '',
+        date_naissance        TEXT DEFAULT '',
+        organisation          TEXT DEFAULT '',
+        status                TEXT DEFAULT 'active',
+        patient_id            TEXT,
+        medecin_code          TEXT DEFAULT '',
+        totp_secret           TEXT DEFAULT '',
+        totp_enabled          INTEGER DEFAULT 0,
+        locked_until          TEXT DEFAULT '',
+        force_password_change INTEGER DEFAULT 0,
+        created_at            TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS password_resets (
@@ -396,6 +397,7 @@ def _create_tables(db):
         medecin_id      TEXT DEFAULT '',
         deleted         INTEGER DEFAULT 0,
         deleted_at      TEXT DEFAULT '',
+        birth_year      INTEGER DEFAULT 0,
         created_at      TEXT DEFAULT (datetime('now'))
     );
 
@@ -460,6 +462,7 @@ def _create_tables(db):
         uploaded_by      TEXT DEFAULT '',
         valide           INTEGER DEFAULT 0,
         image_b64        TEXT DEFAULT '',
+        image_path       TEXT DEFAULT '',
         notes            TEXT DEFAULT '',
         analyse_ia       TEXT DEFAULT '',
         analysis_status  TEXT DEFAULT '',
@@ -585,14 +588,15 @@ def _migrate(db):
     """Idempotent migrations — add columns/tables added after initial deploy."""
     # Security columns on users
     new_user_cols = [
-        ("totp_secret",    "TEXT DEFAULT ''"),
-        ("totp_enabled",   "INTEGER DEFAULT 0"),
-        ("locked_until",   "TEXT DEFAULT ''"),
-        ("date_naissance", "TEXT DEFAULT ''"),
-        ("organisation",   "TEXT DEFAULT ''"),
-        ("status",         "TEXT DEFAULT 'active'"),
-        ("medecin_code",   "TEXT DEFAULT ''"),
-        ("email",          "TEXT DEFAULT ''"),
+        ("totp_secret",           "TEXT DEFAULT ''"),
+        ("totp_enabled",          "INTEGER DEFAULT 0"),
+        ("locked_until",          "TEXT DEFAULT ''"),
+        ("date_naissance",        "TEXT DEFAULT ''"),
+        ("organisation",          "TEXT DEFAULT ''"),
+        ("status",                "TEXT DEFAULT 'active'"),
+        ("medecin_code",          "TEXT DEFAULT ''"),
+        ("email",                 "TEXT DEFAULT ''"),
+        ("force_password_change", "INTEGER DEFAULT 0"),
     ]
     for col, typedef in new_user_cols:
         try:
@@ -680,6 +684,12 @@ def _migrate(db):
     except Exception:
         pass
 
+    # image_path column: stores path to encrypted image file (replaces image_b64 for new uploads)
+    try:
+        db.execute("ALTER TABLE documents ADD COLUMN image_path TEXT DEFAULT ''")
+    except Exception:
+        pass
+
     # Soft-delete columns on various tables
     soft_delete = [
         ("documents","deleted"), ("documents","deleted_at"),
@@ -734,6 +744,31 @@ def _migrate(db):
         db.execute("ALTER TABLE patients ADD COLUMN medecin_id TEXT DEFAULT ''")
     except Exception:
         pass
+
+    # birth_year: plaintext integer derived from ddn — avoids decrypting on every stats query
+    try:
+        db.execute("ALTER TABLE patients ADD COLUMN birth_year INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    # Backfill birth_year for existing rows where it is not yet set
+    try:
+        from security_utils import decrypt_field as _df
+        rows = db.execute(
+            "SELECT id, ddn FROM patients WHERE ddn != '' AND (birth_year IS NULL OR birth_year = 0)"
+        ).fetchall()
+        for _r in rows:
+            try:
+                _plain = _df(str(_r['ddn']))
+                _year  = int(_plain[:4])
+                if 1900 < _year < 2100:
+                    db.execute("UPDATE patients SET birth_year=? WHERE id=?", (_year, _r['id']))
+            except Exception:
+                pass
+        if rows:
+            db.commit()
+            logger.info("birth_year backfill complete: %d row(s) updated", len(rows))
+    except Exception as _bfe:
+        logger.warning("birth_year backfill skipped: %s", _bfe)
 
     # suivi_postop table
     try:
@@ -815,17 +850,17 @@ def _seed_data(db):
     )
 
     db.executemany(
-        "INSERT INTO users (id,username,password_hash,role,nom,prenom,email,organisation,status,patient_id,medecin_code) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO users (id,username,password_hash,role,nom,prenom,email,organisation,status,patient_id,medecin_code,force_password_change) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         [
             ("U000","admin",generate_password_hash(_admin_pw),
-             "admin","Administrateur","Système","admin@ophtalmo.local","OphtalmoScan","active",None,None),
+             "admin","Administrateur","Système","admin@ophtalmo.local","OphtalmoScan","active",None,None,1),
             ("U001","dr.martin",generate_password_hash(_medecin_pw),
-             "medecin","Martin","Jean","dr.martin@clinique.com","Clinique de la Vision","active",None,"M001"),
+             "medecin","Martin","Jean","dr.martin@clinique.com","Clinique de la Vision","active",None,"M001",1),
             ("U003","patient.marie",generate_password_hash(_patient_pw),
-             "patient","Dupont","Marie","marie.dupont@email.com","","active","P001",None),
+             "patient","Dupont","Marie","marie.dupont@email.com","","active","P001",None,1),
             ("U004","patient.jp",generate_password_hash(_patient_pw),
-             "patient","Bernard","Jean-Paul","jp.bernard@email.com","","active","P002",None),
+             "patient","Bernard","Jean-Paul","jp.bernard@email.com","","active","P002",None,1),
         ]
     )
     db.executemany(

@@ -94,11 +94,12 @@ def login():
     session.permanent = True
     session['username'] = username
     return jsonify({
-        "ok":     True,
-        "id":     row['id'],
-        "role":   row['role'],
-        "nom":    row['nom'],
-        "prenom": row['prenom'] or ''
+        "ok":                   True,
+        "id":                   row['id'],
+        "role":                 row['role'],
+        "nom":                  row['nom'],
+        "prenom":               row['prenom'] or '',
+        "force_password_change": bool(row['force_password_change']) if row['force_password_change'] else False,
     })
 
 
@@ -124,12 +125,13 @@ def me():
     nom    = decrypt_field(u['nom']    or '') if u['role'] == 'patient' else (u['nom']    or '')
     prenom = decrypt_field(u['prenom'] or '') if u['role'] == 'patient' else (u['prenom'] or '')
     info = {
-        "authenticated": True,
-        "id":    u['id'],
-        "role":  u['role'],
-        "nom":   nom,
-        "prenom": prenom,
-        "totp_enabled": bool(u['totp_enabled']) if u['totp_enabled'] else False
+        "authenticated":         True,
+        "id":                    u['id'],
+        "role":                  u['role'],
+        "nom":                   nom,
+        "prenom":                prenom,
+        "totp_enabled":          bool(u['totp_enabled']) if u['totp_enabled'] else False,
+        "force_password_change": bool(u['force_password_change']) if u['force_password_change'] else False,
     }
     if u['role'] == 'patient':
         info['patient_id'] = u.get('patient_id')
@@ -222,8 +224,10 @@ def change_password():
     if not row or not check_password_hash(row['password_hash'], current_pw):
         return jsonify({"error": "Mot de passe actuel incorrect"}), 401
 
-    db.execute("UPDATE users SET password_hash=? WHERE id=?",
-               (generate_password_hash(new_pw), u['id']))
+    db.execute(
+        "UPDATE users SET password_hash=?, force_password_change=0 WHERE id=?",
+        (generate_password_hash(new_pw), u['id'])
+    )
     log_audit(db, 'password_changed', 'users', u['id'], user_id=u['id'], ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()
     return jsonify({"ok": True})
@@ -400,11 +404,15 @@ def patient_register():
     pid = f"P{((row_max[0] or 0) + 1):03d}"
 
     # Encrypt PII before storing
+    try:
+        birth_year = int(str(ddn).strip()[:4]) if ddn and len(str(ddn).strip()) >= 4 else 0
+    except (ValueError, TypeError):
+        birth_year = 0
     enc = encrypt_patient_fields({"nom": nom, "prenom": prenom, "ddn": ddn, "email": email})
 
     db.execute(
-        "INSERT INTO patients (id, nom, prenom, ddn, email, medecin_id) VALUES (?,?,?,?,?,?)",
-        (pid, enc['nom'], enc['prenom'], enc['ddn'], enc['email'], medecin_id)
+        "INSERT INTO patients (id, nom, prenom, ddn, email, medecin_id, birth_year) VALUES (?,?,?,?,?,?,?)",
+        (pid, enc['nom'], enc['prenom'], enc['ddn'], enc['email'], medecin_id, birth_year)
     )
 
     uid = "U" + str(uuid.uuid4())[:6].upper()
