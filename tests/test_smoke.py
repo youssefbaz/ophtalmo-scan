@@ -1302,3 +1302,157 @@ class TestDataIntegrity:
         })
         # 200 success or 400 validation — must not be 401/403/500
         assert r.status_code in (200, 400)
+
+
+# ─── 17. Encryption round-trip ────────────────────────────────────────────────
+
+class TestEncryptionRoundTrip:
+    """Verify that data written encrypted comes back as readable plaintext via the API.
+
+    These tests catch silent decrypt failures — scenarios where the HTTP status
+    is 200 but the response body contains raw Fernet tokens instead of text.
+    """
+
+    _FERNET_RE = __import__('re').compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
+
+    def _is_ciphertext(self, value):
+        """Return True if value looks like a Fernet token (should never reach the API caller)."""
+        return bool(value and self._FERNET_RE.match(str(value).strip()))
+
+    def test_patient_pii_decrypted_on_read(self, app, db_path):
+        """Patient name/dob must be readable plaintext, not Fernet tokens."""
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001")
+        assert r.status_code == 200
+        p = r.get_json()
+        assert not self._is_ciphertext(p["nom"]),    f"nom is ciphertext: {p['nom'][:30]}"
+        assert not self._is_ciphertext(p["prenom"]), f"prenom is ciphertext: {p['prenom'][:30]}"
+        assert not self._is_ciphertext(p["ddn"]),    f"ddn is ciphertext: {p['ddn'][:30]}"
+        assert p["nom"] == "Dupont"
+        assert p["prenom"] == "Alice"
+
+    def test_historique_clinical_fields_decrypted(self, app, db_path):
+        """Consultation motif/diagnostic/notes must be readable after encrypt-write + read."""
+        c = _authed(app, "medecin_a")
+        # Write with known plaintext
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "2024-06-01",
+            "motif": "Test motif clair",
+            "diagnostic": "Glaucome stade 2",
+            "traitement": "Timolol 0.5%",
+            "notes": "Notes de test lisibles",
+            "segment_ant": "RAS",
+        })
+        assert r.status_code == 201
+        hid = r.get_json()["id"]
+
+        # Verify DB stores ciphertext (not plaintext)
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT motif, diagnostic FROM historique WHERE id=?", (hid,)).fetchone()
+        con.close()
+        assert self._is_ciphertext(row[0]), "DB should store encrypted motif, not plaintext"
+        assert self._is_ciphertext(row[1]), "DB should store encrypted diagnostic, not plaintext"
+
+        # Verify API returns plaintext
+        p = c.get("/api/patients/P_A001").get_json()
+        h = next((x for x in p["historique"] if x["id"] == hid), None)
+        assert h is not None
+        assert h["motif"]      == "Test motif clair",     f"motif ciphertext: {h['motif'][:30]}"
+        assert h["diagnostic"] == "Glaucome stade 2",     f"diagnostic ciphertext: {h['diagnostic'][:30]}"
+        assert h["notes"]      == "Notes de test lisibles", f"notes ciphertext: {h['notes'][:30]}"
+
+    def test_ordonnance_content_decrypted(self, app, db_path):
+        """Ordonnance notes must be readable plaintext via the API, encrypted in DB."""
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/ordonnances", json={
+            "type": "medicaments",
+            "contenu": {"medicaments": [{"nom": "Dorzolamide", "posologie": "3x/j"}]},
+            "notes": "Note ordonnance lisible",
+        })
+        assert r.status_code == 201
+        oid = r.get_json()["id"]
+
+        # Verify DB stores encrypted notes
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT notes, contenu FROM ordonnances WHERE id=?", (oid,)).fetchone()
+        con.close()
+        assert self._is_ciphertext(row[0]), "DB should store encrypted notes"
+        assert self._is_ciphertext(row[1]), "DB should store encrypted contenu"
+
+        # Verify API returns plaintext
+        ords = c.get("/api/patients/P_A001/ordonnances").get_json()
+        o = next((x for x in ords if x["id"] == oid), None)
+        assert o is not None
+        assert o["notes"] == "Note ordonnance lisible", f"notes ciphertext: {o['notes'][:30]}"
+        assert isinstance(o["contenu"], dict), "contenu should be parsed JSON dict, not string"
+        assert o["contenu"]["medicaments"][0]["nom"] == "Dorzolamide"
+
+    def test_question_text_decrypted(self, app, db_path):
+        """Patient question text must be readable via the API, encrypted at rest."""
+        # Grant AI consent so the question flow completes
+        con = sqlite3.connect(db_path)
+        import uuid as _uuid
+        con.execute(
+            "INSERT OR REPLACE INTO patient_consents (id, patient_id, user_id, consent_type, granted) "
+            "VALUES (?,?,?,?,1)",
+            (str(_uuid.uuid4()), "P_A001", "MED_A", "ai_analysis")
+        )
+        con.commit()
+        con.close()
+
+        c_pat = _authed(app, "patient_a")
+        r = c_pat.post("/api/patients/P_A001/questions", json={
+            "question": "Question lisible en clair"
+        })
+        assert r.status_code == 200
+        qid = r.get_json()["question"]["id"]
+
+        # Verify DB stores encrypted question
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT question FROM questions WHERE id=?", (qid,)).fetchone()
+        con.close()
+        assert self._is_ciphertext(row[0]), "DB should store encrypted question text"
+
+        # Verify API returns plaintext
+        qs = c_pat.get("/api/patients/P_A001/questions").get_json()
+        q = next((x for x in qs if x["id"] == qid), None)
+        assert q is not None
+        assert q["question"] == "Question lisible en clair", \
+            f"question is ciphertext: {q['question'][:30]}"
+
+    def test_security_utils_fernet_roundtrip(self):
+        """Unit test: encrypt → decrypt must be an identity function."""
+        from security_utils import encrypt_field, decrypt_field, encrypt_clinical, decrypt_clinical
+        samples = [
+            "Glaucome primitif à angle ouvert",
+            "Latanoprost 0.005% — 1 goutte le soir",
+            "patient présente une acuité 5/10 OD",
+            "Alice Dupont, née le 01/01/1980",
+            "",  # empty string must pass through unchanged
+        ]
+        for text in samples:
+            assert decrypt_field(encrypt_field(text)) == text, \
+                f"Round-trip failed for: {text!r}"
+
+        # Clinical dict round-trip
+        row = {"motif": "Baisse AV", "diagnostic": "DMLA", "traitement": "IVT", "notes": "RAS", "segment_ant": ""}
+        result = decrypt_clinical(encrypt_clinical(row))
+        for k, v in row.items():
+            assert result[k] == v, f"Clinical round-trip failed for field {k!r}"
+
+    def test_double_encrypt_guard(self):
+        """Encrypting an already-encrypted value must not double-encrypt it."""
+        from security_utils import encrypt_field, decrypt_field, _is_encrypted
+        plaintext = "Valeur sensible"
+        once      = encrypt_field(plaintext)
+        assert _is_encrypted(once)
+        # Simulating the idempotent guard used in encrypt_clinical/_is_encrypted
+        # If we call encrypt_field on an already-encrypted token it WILL wrap it again —
+        # that's why encrypt_clinical checks _is_encrypted first. Verify the guard works.
+        from security_utils import encrypt_clinical, decrypt_clinical
+        row = {"motif": once, "diagnostic": "", "traitement": "", "notes": "", "segment_ant": ""}
+        re_encrypted = encrypt_clinical(row)
+        # The guard should have left the already-encrypted field untouched
+        assert re_encrypted["motif"] == once, \
+            "encrypt_clinical should not re-encrypt an already-encrypted value"
+        assert decrypt_clinical(re_encrypted)["motif"] == plaintext

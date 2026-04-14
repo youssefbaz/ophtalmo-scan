@@ -49,6 +49,18 @@ def ai_analyze():
     image_b64 = None
     if doc_id and patient_id:
         db  = get_db()
+        # Check ai_analysis consent before proceeding
+        consent_row = db.execute(
+            "SELECT granted FROM patient_consents "
+            "WHERE patient_id=? AND consent_type='ai_analysis' "
+            "ORDER BY created_at DESC LIMIT 1",
+            (patient_id,)
+        ).fetchone()
+        if not consent_row or not consent_row['granted']:
+            return jsonify({
+                "error": "Consentement IA requis pour ce patient.",
+                "consent_required": True
+            }), 403
         row = db.execute(
             "SELECT image_b64 FROM documents WHERE id=? AND patient_id=?", (doc_id, patient_id)
         ).fetchone()

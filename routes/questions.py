@@ -1,8 +1,8 @@
 import uuid, datetime, json, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
-from llm import call_llm, SYSTEM_RESPONSE_DRAFT
-from security_utils import decrypt_patient
+from llm import call_llm, LLMUnavailableError, SYSTEM_RESPONSE_DRAFT
+from security_utils import decrypt_patient, decrypt_clinical, encrypt_question_fields, decrypt_question_fields
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ def get_questions(pid):
     rows = db.execute(
         "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC", (pid,)
     ).fetchall()
-    result = [dict(r) for r in rows]
+    result = [decrypt_question_fields(dict(r)) for r in rows]
     for q in result:
         q['reponse_validee'] = bool(q['reponse_validee'])
     return jsonify(result)
@@ -42,37 +42,53 @@ def add_question(pid):
     data          = request.json or {}
     question_text = data.get('question', '')
 
-    # Fetch last consultation for LLM context
-    derniere    = db.execute(
+    # Check AI consent before sending patient data to third-party LLM
+    _consent_row = db.execute(
+        "SELECT granted FROM patient_consents "
+        "WHERE patient_id=? AND consent_type='ai_analysis' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (pid,)
+    ).fetchone()
+    has_consent = bool(_consent_row and _consent_row['granted'])
+
+    # Fetch last consultation for LLM context (decrypt clinical fields)
+    derniere_row = db.execute(
         "SELECT * FROM historique WHERE patient_id=? ORDER BY date DESC LIMIT 1", (pid,)
     ).fetchone()
+    derniere    = decrypt_clinical(dict(derniere_row)) if derniere_row else None
     antecedents = json.loads(p['antecedents'] or '[]')
     allergies   = json.loads(p['allergies']   or '[]')
     age         = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
 
-    context = f"""Patient : {p['prenom']} {p['nom']}, {age} ans, {p['sexe']}.
+    if has_consent:
+        context = f"""Patient : {p['prenom']} {p['nom']}, {age} ans, {p['sexe']}.
 Antécédents : {', '.join(antecedents)}.
 Allergies : {', '.join(allergies) if allergies else 'Aucune'}.
 Traitements en cours : {derniere['traitement'] if derniere else 'Non renseigné'}.
 Dernière consultation ({derniere['date'] if derniere else 'N/A'}) : {derniere['diagnostic'] if derniere else 'N/A'}.
 Acuité OD : {derniere['acuite_od'] if derniere else 'N/A'} | OG : {derniere['acuite_og'] if derniere else 'N/A'}.
 Tonus OD : {derniere['tension_od'] if derniere else 'N/A'} | OG : {derniere['tension_og'] if derniere else 'N/A'}."""
-
-    try:
-        reponse_ia = call_llm(
-            f"Question du patient : {question_text}\nContexte : {context}",
-            SYSTEM_RESPONSE_DRAFT, max_tokens=400
-        )
-    except Exception as e:
-        logger.error(f"LLM question draft failed: {e}")
-        reponse_ia = "⚠️ Service IA indisponible. Votre question a été enregistrée et sera traitée par le médecin."
+        try:
+            reponse_ia = call_llm(
+                f"Question du patient : {question_text}\nContexte : {context}",
+                SYSTEM_RESPONSE_DRAFT, max_tokens=400
+            )
+        except LLMUnavailableError as e:
+            logger.error(f"LLM question draft failed: {e}")
+            reponse_ia = ""  # doctor will answer manually — no misleading AI draft
+        except Exception as e:
+            logger.error(f"LLM question draft unexpected error: {e}")
+            reponse_ia = ""
+    else:
+        reponse_ia = ""
 
     qid = "Q" + str(uuid.uuid4())[:6].upper()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    enc = encrypt_question_fields({"question": question_text, "reponse_ia": reponse_ia})
     db.execute(
         "INSERT INTO questions (id,patient_id,question,date,statut,reponse,reponse_ia,reponse_validee) "
         "VALUES (?,?,?,?,?,?,?,?)",
-        (qid, pid, question_text, now, 'en_attente', '', reponse_ia, 0)
+        (qid, pid, enc['question'], now, 'en_attente', '', enc['reponse_ia'], 0)
     )
     db.commit()
 
@@ -103,13 +119,15 @@ def repondre_question(pid, qid):
         return jsonify({}), 404
 
     data    = request.json or {}
-    reponse = data.get('reponse', q['reponse_ia'] or '')
+    q_dec   = decrypt_question_fields(dict(q))
+    reponse = data.get('reponse', q_dec['reponse_ia'] or '')
     now     = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    enc_rep = encrypt_question_fields({"reponse": reponse})
 
     db.execute(
         "UPDATE questions SET reponse=?, reponse_validee=1, statut='répondu', "
         "repondu_par=?, date_reponse=? WHERE id=?",
-        (reponse, u['nom'], now, qid)
+        (enc_rep['reponse'], u['nom'], now, qid)
     )
     db.commit()
     add_notif(db, "reponse", "Le médecin a répondu à votre question", "medecin", pid)
@@ -147,7 +165,7 @@ def get_deleted_questions(pid):
     rows = db.execute(
         "SELECT * FROM questions WHERE patient_id=? AND deleted=1 ORDER BY deleted_at DESC", (pid,)
     ).fetchall()
-    result = [dict(r) for r in rows]
+    result = [decrypt_question_fields(dict(r)) for r in rows]
     for q in result:
         q['reponse_validee'] = bool(q['reponse_validee'])
     return jsonify(result)

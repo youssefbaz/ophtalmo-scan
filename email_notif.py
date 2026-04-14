@@ -3,7 +3,7 @@
 Supports any SMTP provider (Gmail, Outlook, Mailjet SMTP, etc.).
 Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587 for Gmail with App Password.
 """
-import os, smtplib, datetime, logging, html
+import os, ssl, smtplib, datetime, logging, html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -34,11 +34,25 @@ def send_email(to_address: str, subject: str, body_html: str) -> bool:
         msg['From']    = EMAIL_FROM
         msg['To']      = to_address
         msg.attach(MIMEText(body_html, 'html', 'utf-8'))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, [to_address], msg.as_string())
+        # Port 465 = implicit SSL (SMTP_SSL); port 587/25 = STARTTLS
+        # Both paths use a verified SSL context — no plaintext fallback.
+        ssl_ctx = ssl.create_default_context()
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15, context=ssl_ctx) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(EMAIL_FROM, [to_address], msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.ehlo()
+                # Abort if the server doesn't advertise STARTTLS — refuse plaintext
+                if not server.has_extn('STARTTLS'):
+                    raise smtplib.SMTPException(
+                        f"Server {SMTP_HOST}:{SMTP_PORT} does not support STARTTLS — refusing plaintext delivery."
+                    )
+                server.starttls(context=ssl_ctx)
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(EMAIL_FROM, [to_address], msg.as_string())
         logger.info(f"Email sent to {to_address}: {subject}")
         return True
     except Exception as e:

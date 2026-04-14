@@ -45,6 +45,22 @@ def get_key_fingerprint() -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16].upper()
 
 
+def verify_encryption_key() -> dict:
+    """
+    Self-test: encrypt and decrypt a known sentinel value.
+    Returns {"ok": True, "fingerprint": "..."} or raises RuntimeError on failure.
+    """
+    sentinel = "OphtalmoScan-key-selftest-2024"
+    try:
+        encrypted = encrypt_field(sentinel)
+        decrypted = decrypt_field(encrypted)
+        if decrypted != sentinel:
+            raise RuntimeError("Round-trip mismatch — key may be corrupted.")
+        return {"ok": True, "fingerprint": get_key_fingerprint()}
+    except Exception as e:
+        raise RuntimeError(f"Encryption key self-test failed: {e}")
+
+
 def _get_fernet() -> Fernet:
     global _FERNET
     if _FERNET:
@@ -187,6 +203,98 @@ def sanitize_rich(value, max_len: int = 2000) -> str:
         return ""
     cleaned = _bleach_clean(str(value), tags=ALLOWED, strip=True).strip()
     return cleaned[:max_len]
+
+
+# ─── CLINICAL FIELD ENCRYPTION ────────────────────────────────────────────────
+# Extends PII encryption to cover medical content (consultations, prescriptions,
+# patient questions) so the DB at rest contains no readable medical records.
+
+import re as _re
+_FERNET_TOKEN_RE = _re.compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
+
+
+def _is_encrypted(value: str) -> bool:
+    """Return True when value already looks like a Fernet token — avoids double-encrypting."""
+    return bool(value and _FERNET_TOKEN_RE.match(str(value).strip()))
+
+
+# ── Historique (consultation records) ──────────────────────────────────────────
+_CLINICAL_FIELDS = ("motif", "diagnostic", "traitement", "notes", "segment_ant")
+
+
+def encrypt_clinical(row: dict) -> dict:
+    """Encrypt free-text clinical fields in a consultation dict."""
+    result = dict(row)
+    for field in _CLINICAL_FIELDS:
+        v = result.get(field) or ""
+        if v and not _is_encrypted(v):
+            result[field] = encrypt_field(v)
+    return result
+
+
+def decrypt_clinical(row: dict) -> dict:
+    """Decrypt clinical fields — safe to call on already-plaintext data."""
+    result = dict(row)
+    for field in _CLINICAL_FIELDS:
+        v = result.get(field) or ""
+        if v:
+            result[field] = decrypt_field(v)
+    return result
+
+
+# ── Ordonnances (prescriptions) ────────────────────────────────────────────────
+_ORDONNANCE_TEXT_FIELDS = ("notes",)
+
+
+def encrypt_ordonnance_fields(row: dict) -> dict:
+    """Encrypt prescription content and notes."""
+    result = dict(row)
+    for field in _ORDONNANCE_TEXT_FIELDS:
+        v = result.get(field) or ""
+        if v and not _is_encrypted(v):
+            result[field] = encrypt_field(v)
+    # contenu is stored as a JSON string — encrypt the whole string
+    v = result.get("contenu") or ""
+    if v and not _is_encrypted(v):
+        result["contenu"] = encrypt_field(v)
+    return result
+
+
+def decrypt_ordonnance_fields(row: dict) -> dict:
+    """Decrypt prescription content and notes."""
+    result = dict(row)
+    for field in _ORDONNANCE_TEXT_FIELDS:
+        v = result.get(field) or ""
+        if v:
+            result[field] = decrypt_field(v)
+    v = result.get("contenu") or ""
+    if v:
+        result["contenu"] = decrypt_field(v)
+    return result
+
+
+# ── Questions (patient messages) ───────────────────────────────────────────────
+_QUESTION_FIELDS = ("question", "reponse", "reponse_ia")
+
+
+def encrypt_question_fields(row: dict) -> dict:
+    """Encrypt patient question and doctor/AI answer text."""
+    result = dict(row)
+    for field in _QUESTION_FIELDS:
+        v = result.get(field) or ""
+        if v and not _is_encrypted(v):
+            result[field] = encrypt_field(v)
+    return result
+
+
+def decrypt_question_fields(row: dict) -> dict:
+    """Decrypt question/answer fields."""
+    result = dict(row)
+    for field in _QUESTION_FIELDS:
+        v = result.get(field) or ""
+        if v:
+            result[field] = decrypt_field(v)
+    return result
 
 
 # ─── REQUEST CONTEXT HELPERS (Step 5) ─────────────────────────────────────────

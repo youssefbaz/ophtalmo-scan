@@ -7,7 +7,9 @@ circular imports. All patient route modules import from here.
 import re, uuid, calendar, datetime, json, logging
 from flask import abort
 from database import get_db
-from security_utils import decrypt_patient, decrypt_field
+from security_utils import (decrypt_patient, decrypt_field,
+                             decrypt_clinical, decrypt_ordonnance_fields,
+                             decrypt_question_fields)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ def _build_patient(db, pid, strip_images=True):
     p['antecedents'] = json.loads(p['antecedents'] or '[]')
     p['allergies']   = json.loads(p['allergies']   or '[]')
 
-    p['historique'] = [dict(r) for r in
+    p['historique'] = [decrypt_clinical(dict(r)) for r in
         db.execute(
             "SELECT * FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
             "ORDER BY date DESC", (pid,)
@@ -84,7 +86,7 @@ def _build_patient(db, pid, strip_images=True):
     p['imagerie']  = imgs
     p['documents'] = docs
 
-    questions = [dict(r) for r in
+    questions = [decrypt_question_fields(dict(r)) for r in
         db.execute(
             "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC",
             (pid,)
@@ -99,7 +101,7 @@ def _build_patient(db, pid, strip_images=True):
             "ORDER BY date DESC, numero DESC", (pid,)
         )]
 
-    ordonnances = [dict(r) for r in
+    ordonnances = [decrypt_ordonnance_fields(dict(r)) for r in
         db.execute(
             "SELECT * FROM ordonnances WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
             "ORDER BY date DESC", (pid,)

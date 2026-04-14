@@ -1,8 +1,8 @@
 import uuid, datetime, json, logging, threading, base64, io, os
 from flask import Blueprint, request, jsonify, current_app
-from database import get_db, current_user, add_notif, require_role
-from llm import call_llm, SYSTEM_OPHTHALMO
-from security_utils import decrypt_patient, encrypt_field, decrypt_field
+from database import get_db, current_user, add_notif, require_role, audit_read
+from llm import call_llm, LLMUnavailableError, SYSTEM_OPHTHALMO
+from security_utils import decrypt_patient, encrypt_field, decrypt_field, decrypt_clinical
 from extensions import limiter
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,17 @@ def _analyze_in_background(app, doc_id: str, prompt: str, image_b64):
             )
             db.commit()
             logger.info(f"Background analysis done for document {doc_id}")
+        except LLMUnavailableError as e:
+            temporary = "temporaire" if e.temporary else "permanente"
+            logger.error(f"Background LLM analysis failed ({temporary}) for doc {doc_id}: {e}")
+            # Store failure reason so the UI can show 'Retry' vs 'Check API keys'
+            db.execute(
+                "UPDATE documents SET analysis_status=?, analyse_ia=? WHERE id=?",
+                ('failed_temp' if e.temporary else 'failed_perm',
+                 f"⚠️ Analyse échouée ({'temporaire — réessayez' if e.temporary else 'vérifiez vos clés API'}).",
+                 doc_id)
+            )
+            db.commit()
         except Exception as e:
             logger.error(f"Background LLM analysis failed for doc {doc_id}: {e}")
             db.execute(
@@ -239,6 +250,7 @@ def get_document(pid, doc_id):
     result = dict(row)
     # Load image from encrypted file when available (backward-compatible with legacy image_b64)
     result['image_b64'] = _load_image_b64(result)
+    audit_read(db, 'documents', doc_id, pid)
     return jsonify(result)
 
 
@@ -249,10 +261,11 @@ def analyze_document(pid, doc_id):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    p   = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    doc = db.execute("SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone()
-    if not p or not doc:
+    p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    doc   = db.execute("SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone()
+    if not p_row or not doc:
         return jsonify({}), 404
+    p = decrypt_patient(dict(p_row))
 
     # Check ai_analysis consent before proceeding
     consent_row = db.execute(
@@ -272,8 +285,8 @@ def analyze_document(pid, doc_id):
     if current_status == 'pending':
         return jsonify({"ok": True, "status": "pending", "message": "Analyse déjà en cours…"})
 
-    antecedents = json.loads(p['antecedents'] or '[]')
-    age = datetime.datetime.now().year - int(p['ddn'][:4]) if p['ddn'] else 0
+    antecedents = json.loads(p.get('antecedents') or '[]')
+    age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
     context = (f"Patient : {p['prenom']} {p['nom']}, {age} ans. "
                f"Antécédents : {', '.join(antecedents) or 'aucun renseigné'}")
     uploader = "le patient" if doc['uploaded_by'] == 'patient' else "le médecin"
@@ -377,30 +390,46 @@ def restore_document(pid, doc_id):
 def consultation_summary(pid):
     """Generate an AI-written clinical summary from the latest consultation."""
     db = get_db()
-    p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    if not p:
+    p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not p_row:
         return jsonify({"error": "Patient non trouvé"}), 404
+    p = decrypt_patient(dict(p_row))
+
+    # Enforce AI consent before sending patient data to third-party LLM
+    consent_row = db.execute(
+        "SELECT granted FROM patient_consents "
+        "WHERE patient_id=? AND consent_type='ai_analysis' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (pid,)
+    ).fetchone()
+    if not consent_row or not consent_row['granted']:
+        return jsonify({
+            "error": "Consentement IA requis. Veuillez enregistrer le consentement du patient avant de générer un résumé.",
+            "consent_required": True
+        }), 403
 
     data = request.json or {}
     hid  = data.get('historique_id')
 
     if hid:
-        h = db.execute(
+        h_row = db.execute(
             "SELECT * FROM historique WHERE id=? AND patient_id=? AND (deleted IS NULL OR deleted=0)",
             (hid, pid)
         ).fetchone()
     else:
-        h = db.execute(
+        h_row = db.execute(
             "SELECT * FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
             "ORDER BY date DESC LIMIT 1", (pid,)
         ).fetchone()
 
-    if not h:
+    if not h_row:
         return jsonify({"error": "Aucune consultation disponible"}), 404
 
-    antecedents = json.loads(p['antecedents'] or '[]')
-    allergies   = json.loads(p['allergies']   or '[]')
-    age = datetime.datetime.now().year - int(p['ddn'][:4]) if p.get('ddn') else 0
+    h = decrypt_clinical(dict(h_row))
+
+    antecedents = json.loads(p.get('antecedents') or '[]')
+    allergies   = json.loads(p.get('allergies')   or '[]')
+    age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
 
     def _safe(val):
         """Strip prompt-injection attempts from free-text DB fields."""
@@ -434,8 +463,14 @@ def consultation_summary(pid):
 
     try:
         summary = call_llm(prompt, SYSTEM_OPHTHALMO, max_tokens=1000)
-    except Exception as e:
+    except LLMUnavailableError as e:
         logger.error(f"LLM summary failed: {e}")
-        return jsonify({"error": "Service IA indisponible, réessayez dans quelques minutes."}), 503
+        msg = ("Service IA temporairement indisponible — réessayez dans quelques minutes."
+               if e.temporary else
+               "Service IA non configuré — vérifiez les clés API dans les paramètres.")
+        return jsonify({"error": msg, "temporary": e.temporary}), 503
+    except Exception as e:
+        logger.error(f"LLM summary unexpected error: {e}")
+        return jsonify({"error": "Erreur inattendue du service IA.", "temporary": True}), 503
 
     return jsonify({"ok": True, "summary": summary})
