@@ -75,12 +75,18 @@ _PG_SQL_SUBS = [
     (re.compile(r"strftime\('%Y',\s*(\w+)\)", re.I),
      lambda m: f"TO_CHAR({m.group(1)}::timestamp, 'YYYY')"),
     # strftime('%w', col) → EXTRACT(DOW FROM col::timestamp)::TEXT
+    # Both SQLite %w and PG EXTRACT(DOW) use 0=Sunday … 6=Saturday — identical semantics.
     (re.compile(r"strftime\('%w',\s*(\w+)\)", re.I),
      lambda m: f"EXTRACT(DOW FROM {m.group(1)}::timestamp)::TEXT"),
-    # GLOB 'M[0-9]*' → SIMILAR TO 'M[0-9]+' (PostgreSQL regex)
-    (re.compile(r"GLOB\s+'([^']+)'", re.I),
-     lambda m: f"SIMILAR TO '{m.group(1).replace('*', '%').replace('[0-9]', '[0-9]')}'"),
-    # INTEGER DEFAULT 0 autoincrement not needed (PG uses SERIAL)
+    # IFNULL(x, y) → COALESCE(x, y)  — PostgreSQL does not have IFNULL
+    (re.compile(r"\bIFNULL\s*\(", re.I), "COALESCE("),
+    # GLOB 'M[0-9]*' → SIMILAR TO 'M[0-9]%'  (PostgreSQL SIMILAR TO regex)
+    # Note: GLOB uses * = any sequence, ? = single char.
+    # SIMILAR TO uses SQL regex: % = any sequence, _ = single char.
+    (re.compile(r"\bGLOB\s+'([^']+)'", re.I),
+     lambda m: "SIMILAR TO '{}'".format(
+         m.group(1).replace('*', '%').replace('?', '_')
+     )),
 ]
 
 
@@ -159,6 +165,9 @@ def get_db():
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
+            # Wait up to 5 s for a write lock before raising OperationalError.
+            # Eliminates "database is locked" under light concurrent write load.
+            conn.execute("PRAGMA busy_timeout = 5000")
             g.db = conn
     return g.db
 
