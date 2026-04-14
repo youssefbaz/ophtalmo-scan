@@ -169,7 +169,26 @@ def _call_openrouter(prompt, system, max_tokens, image_b64=None):
     raise last_error or Exception("OpenRouter indisponible")
 
 
+def _is_temporary_error(exc) -> bool:
+    """True for transient failures (network, rate-limit, 5xx) vs config errors (no key, 401)."""
+    if isinstance(exc, http_requests.exceptions.ConnectionError):
+        return True
+    if isinstance(exc, http_requests.exceptions.Timeout):
+        return True
+    if isinstance(exc, http_requests.exceptions.HTTPError):
+        status = exc.response.status_code if exc.response is not None else 0
+        return status in (429, 500, 502, 503, 504)
+    return False  # unknown — assume permanent to avoid misleading "retry" prompts
+
+
 def call_llm(prompt, system, image_b64=None, max_tokens=800):
+    """Call the LLM chain. Returns a plaintext string on success.
+
+    Raises LLMUnavailableError on total failure so callers can distinguish
+    temporary (retryable) from permanent (config) outages.
+    """
+    last_exc = None
+
     # 1. Text-only → Groq first (generous free tier, no vision needed)
     if GROQ_API_KEY and not image_b64:
         try:
@@ -177,6 +196,7 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
             return _call_groq(prompt, system, max_tokens)
         except Exception as e:
             logger.warning(f"[LLM] Groq échoué ({e}), bascule…")
+            last_exc = e
 
     # 2. Gemini (handles both text and vision)
     if GEMINI_API_KEY:
@@ -184,6 +204,7 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
             return _call_gemini(prompt, system, max_tokens, image_b64)
         except Exception as e:
             logger.warning(f"[LLM] Gemini indisponible ({e}), bascule sur OpenRouter…")
+            last_exc = e
 
     # 3. OpenRouter free models (text + vision)
     if OPENROUTER_API_KEY:
@@ -193,6 +214,7 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
             return result
         except Exception as e:
             logger.error(f"[LLM] OpenRouter échoué ({e})")
+            last_exc = e
 
     # 4. Last resort: Groq text-only even for image requests
     if image_b64 and GROQ_API_KEY:
@@ -206,5 +228,26 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
             return f"⚠️ Analyse visuelle indisponible. Analyse contextuelle :\n\n{result}"
         except Exception as e:
             logger.error(f"[LLM] Groq dégradé échoué ({e})")
+            last_exc = e
 
-    return "⚠️ Tous les services IA sont indisponibles. Vérifiez vos clés API ou réessayez dans quelques minutes."
+    # Determine if failure is temporary or permanent
+    no_keys = not any([GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY])
+    temporary = (not no_keys) and (last_exc is None or _is_temporary_error(last_exc))
+    raise LLMUnavailableError(
+        "Tous les services IA sont indisponibles.",
+        temporary=temporary,
+        cause=last_exc,
+    )
+
+
+class LLMUnavailableError(Exception):
+    """Raised when all LLM providers fail.
+
+    Attributes:
+        temporary — True if the failure is likely transient (retry makes sense)
+        cause     — the underlying exception from the last provider
+    """
+    def __init__(self, message: str, temporary: bool = True, cause: Exception = None):
+        super().__init__(message)
+        self.temporary = temporary
+        self.cause = cause

@@ -828,7 +828,78 @@ def _migrate(db):
     db.execute(
         "UPDATE patients SET medecin_id='U001' WHERE medecin_id='' OR medecin_id IS NULL"
     )
+
+    # Encrypt any pre-existing plaintext clinical records (idempotent)
+    _migrate_encrypt_clinical(db)
+
     db.commit()
+
+
+def _migrate_encrypt_clinical(db):
+    """Encrypt plaintext clinical fields in historique, ordonnances, and questions.
+
+    Uses _is_encrypted() to skip already-encrypted rows — safe to call repeatedly.
+    """
+    try:
+        from security_utils import encrypt_field as _ef, _is_encrypted as _ie
+    except ImportError:
+        return
+
+    # ── historique ─────────────────────────────────────────────────────────────
+    clinical_fields = ("motif", "diagnostic", "traitement", "notes", "segment_ant")
+    hist_rows = db.execute(
+        "SELECT id, motif, diagnostic, traitement, notes, segment_ant FROM historique"
+    ).fetchall()
+    for row in hist_rows:
+        updates = {}
+        for field in clinical_fields:
+            v = row[field] or ""
+            if v and not _ie(v):
+                updates[field] = _ef(v)
+        if updates:
+            set_clause = ", ".join(f"{f}=?" for f in updates)
+            db.execute(
+                f"UPDATE historique SET {set_clause} WHERE id=?",
+                (*updates.values(), row["id"])
+            )
+
+    # ── ordonnances ────────────────────────────────────────────────────────────
+    ord_rows = db.execute("SELECT id, contenu, notes FROM ordonnances").fetchall()
+    for row in ord_rows:
+        updates = {}
+        for field in ("contenu", "notes"):
+            v = row[field] or ""
+            if v and not _ie(v):
+                updates[field] = _ef(v)
+        if updates:
+            set_clause = ", ".join(f"{f}=?" for f in updates)
+            db.execute(
+                f"UPDATE ordonnances SET {set_clause} WHERE id=?",
+                (*updates.values(), row["id"])
+            )
+
+    # ── questions ──────────────────────────────────────────────────────────────
+    q_rows = db.execute(
+        "SELECT id, question, reponse, reponse_ia FROM questions"
+    ).fetchall()
+    for row in q_rows:
+        updates = {}
+        for field in ("question", "reponse", "reponse_ia"):
+            v = row[field] or ""
+            if v and not _ie(v):
+                updates[field] = _ef(v)
+        if updates:
+            set_clause = ", ".join(f"{f}=?" for f in updates)
+            db.execute(
+                f"UPDATE questions SET {set_clause} WHERE id=?",
+                (*updates.values(), row["id"])
+            )
+
+    try:
+        db.commit()
+        logger.info("Clinical field encryption migration complete.")
+    except Exception as _ce:
+        logger.warning("Clinical encryption migration commit failed: %s", _ce)
 
 
 def _seed_data(db):

@@ -172,6 +172,24 @@ def create_app():
     init_db(app)
     app.teardown_appcontext(close_db)
 
+    # ── Recover documents stuck in 'pending' analysis state ──────────────────
+    # Any document left pending after a process restart will never resolve.
+    # Reset them to '' (not analysed) so the doctor can re-trigger analysis.
+    with app.app_context():
+        try:
+            from database import get_db as _get_db
+            _db = _get_db()
+            _stuck = _db.execute(
+                "UPDATE documents SET analysis_status='' WHERE analysis_status='pending'"
+            ).rowcount
+            if _stuck:
+                _db.commit()
+                logging.getLogger(__name__).warning(
+                    "Recovered %d document(s) stuck in 'pending' analysis state.", _stuck
+                )
+        except Exception as _re:
+            logging.getLogger(__name__).warning("Pending analysis recovery failed: %s", _re)
+
     # ── Blueprints ────────────────────────────────────────────────────────────
     from routes.auth              import bp as auth_bp
     from routes.patients          import bp as patients_bp
@@ -331,7 +349,18 @@ def create_app():
                 [j.id for j in scheduler.get_jobs()]
             )
             import atexit
-            atexit.register(lambda: scheduler.shutdown())
+            def _shutdown_scheduler():
+                import logging as _logging
+                # Suppress logging errors during shutdown (stream may be closed by test runners)
+                _prev = _logging.raiseExceptions
+                _logging.raiseExceptions = False
+                try:
+                    scheduler.shutdown(wait=False)
+                except Exception:
+                    pass
+                finally:
+                    _logging.raiseExceptions = _prev
+            atexit.register(_shutdown_scheduler)
         except ImportError:
             pass
 

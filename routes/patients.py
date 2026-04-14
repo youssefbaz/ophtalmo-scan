@@ -8,9 +8,9 @@ extracted into separate modules:
   - patients_account.py  — account creation, invitations, claims
   - patients_import.py   — CSV import/export, search, audit, post-op gaps
 """
-import json, datetime, logging
+import os, json, datetime, logging
 from flask import Blueprint, request, jsonify
-from database import get_db, current_user, add_notif, require_role, log_audit
+from database import get_db, current_user, add_notif, require_role, log_audit, audit_read
 from security_utils import decrypt_patient, encrypt_patient_fields, sanitize
 from routes.patients_helpers import _assert_owns_patient, _build_patient, _auto_create_account, _next_patient_id
 from extensions import limiter
@@ -119,6 +119,7 @@ def get_patient(pid):
     p = _build_patient(db, pid)
     if not p:
         return jsonify({"error": "Non trouvé"}), 404
+    audit_read(db, 'patients', pid, pid)
 
     if u['role'] == 'patient':
         patient_view = dict(p)
@@ -287,3 +288,64 @@ def assigner_medecin(pid):
     db.execute("UPDATE patients SET medecin_id=? WHERE id=?", (new_medecin_id, pid))
     db.commit()
     return jsonify({"ok": True})
+
+
+# ─── GDPR HARD PURGE ───────────────────────────────────────────────────────────
+
+@bp.route('/api/patients/<pid>/purge', methods=['DELETE'])
+@require_role('admin')
+def purge_patient(pid):
+    """
+    GDPR Art. 17 — Right to erasure (hard delete).
+    Irreversibly removes all patient data from the database.
+    Only callable by admins. Patient must already be soft-deleted.
+    """
+    u = current_user()
+    db = get_db()
+    patient = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    if not patient:
+        return jsonify({"error": "Patient introuvable"}), 404
+    if not patient['deleted']:
+        return jsonify({
+            "error": "Le patient doit d'abord être supprimé (suppression logique) avant purge définitive."
+        }), 409
+
+    # Hard-delete all linked data — order respects FK constraints
+    tables = [
+        ("historique",       "patient_id"),
+        ("ordonnances",      "patient_id"),
+        ("documents",        "patient_id"),
+        ("questions",        "patient_id"),
+        ("rdv",              "patient_id"),
+        ("ivt",              "patient_id"),
+        ("suivi_postop",     "patient_id"),
+        ("patient_consents", "patient_id"),
+        ("patient_doctors",  "patient_id"),
+        ("users",            "patient_id"),
+    ]
+    for table, col in tables:
+        try:
+            db.execute(f"DELETE FROM {table} WHERE {col}=?", (pid,))
+        except Exception:
+            pass  # table may not exist in all deployments
+
+    # Delete encrypted image files for this patient
+    try:
+        import glob as _glob
+        doc_rows = db.execute(
+            "SELECT image_path FROM documents WHERE patient_id=?", (pid,)
+        ).fetchall()
+        for row in doc_rows:
+            path = (row['image_path'] or '').strip()
+            if path and os.path.exists(path):
+                os.remove(path)
+    except Exception:
+        pass
+
+    db.execute("DELETE FROM patients WHERE id=?", (pid,))
+
+    # Keep a minimal erasure record in the audit log (no PII, just IDs and timestamp)
+    log_audit(db, 'GDPR_PURGE', 'patients', pid, u['id'], pid,
+              f"hard_purge by admin={u['id']}")
+    db.commit()
+    return jsonify({"ok": True, "purged": pid})

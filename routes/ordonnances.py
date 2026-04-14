@@ -1,7 +1,7 @@
 import json, uuid, datetime, logging
 from flask import Blueprint, request, jsonify, Response
 from database import get_db, current_user, require_role, log_audit
-from security_utils import decrypt_patient
+from security_utils import decrypt_patient, encrypt_ordonnance_fields, decrypt_ordonnance_fields
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def get_ordonnances(pid):
     ).fetchall()
     result = []
     for r in rows:
-        o = dict(r)
+        o = decrypt_ordonnance_fields(dict(r))
         try:
             o['contenu'] = json.loads(o['contenu'] or '{}')
         except Exception:
@@ -41,6 +41,8 @@ def add_ordonnance(pid):
     if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
         return jsonify({"error": "Patient non trouvé"}), 404
     oid = "O" + str(uuid.uuid4())[:6].upper()
+    raw = {"contenu": json.dumps(data.get('contenu', {})), "notes": data.get('notes', '')}
+    enc = encrypt_ordonnance_fields(raw)
     db.execute(
         "INSERT INTO ordonnances (id,patient_id,date,medecin,type,contenu,notes) "
         "VALUES (?,?,?,?,?,?,?)",
@@ -48,8 +50,8 @@ def add_ordonnance(pid):
          data.get('date', datetime.date.today().isoformat()),
          u['nom'],
          data.get('type', 'medicaments'),
-         json.dumps(data.get('contenu', {})),
-         data.get('notes', ''))
+         enc['contenu'],
+         enc['notes'])
     )
     log_audit(db, 'INSERT', 'ordonnances', oid, u['id'], pid,
               data.get('type', 'medicaments'))
@@ -81,10 +83,11 @@ def ordonnance_pdf(pid, oid):
     """Generate a printable PDF for an ordonnance using ReportLab."""
     db = get_db()
     p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
-    ord_  = db.execute("SELECT * FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone()
-    if not p_row or not ord_:
+    ord_row = db.execute("SELECT * FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone()
+    if not p_row or not ord_row:
         return jsonify({"error": "Non trouvé"}), 404
-    p = decrypt_patient(dict(p_row))
+    p    = decrypt_patient(dict(p_row))
+    ord_ = decrypt_ordonnance_fields(dict(ord_row))
 
     try:
         from reportlab.lib.pagesizes import A4
