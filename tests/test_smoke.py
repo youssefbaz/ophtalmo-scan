@@ -1456,3 +1456,98 @@ class TestEncryptionRoundTrip:
         assert re_encrypted["motif"] == once, \
             "encrypt_clinical should not re-encrypt an already-encrypted value"
         assert decrypt_clinical(re_encrypted)["motif"] == plaintext
+
+
+# ─── 18. Date validation ──────────────────────────────────────────────────────
+
+class TestDateValidation:
+    """Invalid date/time strings must be rejected at the API boundary."""
+
+    # ── Unit tests for the validator itself ───────────────────────────────────
+
+    def test_valid_date_accepts_iso(self):
+        from security_utils import valid_date
+        assert valid_date("2024-03-15") is True
+        assert valid_date("2000-01-01") is True
+        assert valid_date("1999-12-31") is True
+
+    def test_valid_date_rejects_bad_formats(self):
+        from security_utils import valid_date
+        assert valid_date("15-03-2024") is False    # wrong order
+        assert valid_date("2024/03/15") is False    # slashes
+        assert valid_date("not-a-date") is False
+        assert valid_date("") is False
+        assert valid_date(None) is False
+        assert valid_date("2024-13-01") is False    # month 13
+        assert valid_date("2024-00-10") is False    # month 0
+
+    def test_valid_heure_accepts_hhmm(self):
+        from security_utils import valid_heure
+        assert valid_heure("09:00") is True
+        assert valid_heure("23:59") is True
+        assert valid_heure("00:00") is True
+        assert valid_heure("") is True      # empty is allowed
+        assert valid_heure(None) is True    # None is allowed
+
+    def test_valid_heure_rejects_bad_formats(self):
+        from security_utils import valid_heure
+        assert valid_heure("9:00") is False     # missing leading zero
+        assert valid_heure("24:00") is False    # hour 24
+        assert valid_heure("12:60") is False    # minute 60
+        assert valid_heure("noon") is False
+
+    # ── Integration: bad dates rejected at the RDV endpoint ──────────────────
+
+    def test_rdv_rejects_bad_date(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001",
+            "date": "15/03/2024",   # wrong format
+            "heure": "10:00",
+            "type": "Consultation"
+        })
+        assert r.status_code == 400
+        assert "date" in r.get_json().get("error", "").lower()
+
+    def test_rdv_rejects_bad_heure(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001",
+            "date": "2025-06-01",
+            "heure": "9:00",        # missing leading zero
+            "type": "Consultation"
+        })
+        assert r.status_code == 400
+        assert "heure" in r.get_json().get("error", "").lower()
+
+    def test_rdv_accepts_valid_date(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001",
+            "date": "2028-09-15",
+            "heure": "14:30",
+            "type": "Consultation"
+        })
+        assert r.status_code == 200
+        assert r.get_json()["ok"] is True
+
+    # ── Integration: bad dates rejected at the historique endpoint ────────────
+
+    def test_historique_rejects_bad_date(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "01-01-2024",   # wrong format
+            "motif": "Test"
+        })
+        assert r.status_code == 400
+        assert "date" in r.get_json().get("error", "").lower()
+
+    def test_historique_accepts_valid_date(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "2024-09-20", "motif": "Date valid test",
+            "diagnostic": "", "traitement": "",
+            "tension_od": "", "tension_og": "",
+            "acuite_od": "", "acuite_og": "", "notes": ""
+        })
+        assert r.status_code == 201

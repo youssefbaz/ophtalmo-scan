@@ -1,7 +1,7 @@
 import uuid, datetime, logging, re
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, add_notif
-from security_utils import decrypt_field, decrypt_patient
+from security_utils import decrypt_field, decrypt_patient, valid_date, valid_heure
 
 # Detect Fernet tokens accidentally stored in plain-text fields
 _FERNET_RE = re.compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
@@ -68,6 +68,12 @@ def add_rdv():
 
     rdv_date  = data.get('date', '')
     rdv_heure = data.get('heure', '')
+
+    if rdv_date and not valid_date(rdv_date):
+        return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
+    if rdv_heure and not valid_heure(rdv_heure):
+        return jsonify({"error": "Format d'heure invalide (HH:MM attendu)."}), 400
+
     urgent = bool(data.get('urgent', False))
     statut = 'en_attente' if urgent or u['role'] == 'patient' else data.get('statut', 'programmé')
 
@@ -81,50 +87,54 @@ def add_rdv():
         if conflict:
             return jsonify({"error": f"Un rendez-vous existe déjà pour ce patient le {rdv_date} à {rdv_heure}."}), 409
 
-    rdv_id = "RDV" + str(uuid.uuid4())[:6].upper()
-    rdv_type   = data.get('type', 'Consultation')
-    rdv_medecin = data.get('medecin', u['nom'])
-    # medecin_id: use from payload (patient picks a doctor), or for doctor bookings use their own id
+    rdv_id         = "RDV" + str(uuid.uuid4())[:6].upper()
+    rdv_type       = data.get('type', 'Consultation')
+    rdv_medecin    = data.get('medecin', u['nom'])
     rdv_medecin_id = data.get('medecin_id', '') or (u['id'] if u['role'] == 'medecin' else '')
 
-    db.execute(
-        "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,medecin_id,notes,urgent,demande_par) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (rdv_id, pid, rdv_date, rdv_heure,
-         rdv_type, statut,
-         rdv_medecin, rdv_medecin_id, data.get('notes',''),
-         1 if urgent else 0, u['role'])
-    )
-    db.commit()
+    try:
+        db.execute(
+            "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,medecin_id,notes,urgent,demande_par) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (rdv_id, pid, rdv_date, rdv_heure,
+             rdv_type, statut,
+             rdv_medecin, rdv_medecin_id, data.get('notes',''),
+             1 if urgent else 0, u['role'])
+        )
 
-    # ── Auto-link patient to the booking doctor if not already in their list ────
-    is_new_patient_for_doctor = False
-    if rdv_medecin_id:
-        already_primary = (p.get('medecin_id') == rdv_medecin_id)
-        already_linked  = db.execute(
-            "SELECT 1 FROM patient_doctors WHERE patient_id=? AND medecin_id=?",
-            (pid, rdv_medecin_id)
-        ).fetchone()
-        if not already_primary and not already_linked:
-            db.execute(
-                "INSERT OR IGNORE INTO patient_doctors (patient_id, medecin_id) VALUES (?,?)",
+        # ── Auto-link patient to the booking doctor if not already in their list ──
+        is_new_patient_for_doctor = False
+        if rdv_medecin_id:
+            already_primary = (p.get('medecin_id') == rdv_medecin_id)
+            already_linked  = db.execute(
+                "SELECT 1 FROM patient_doctors WHERE patient_id=? AND medecin_id=?",
                 (pid, rdv_medecin_id)
-            )
-            db.commit()
-            is_new_patient_for_doctor = True
+            ).fetchone()
+            if not already_primary and not already_linked:
+                db.execute(
+                    "INSERT OR IGNORE INTO patient_doctors (patient_id, medecin_id) VALUES (?,?)",
+                    (pid, rdv_medecin_id)
+                )
+                is_new_patient_for_doctor = True
 
-    if urgent or u['role'] == 'patient':
-        if is_new_patient_for_doctor:
-            msg = (f"{'🚨 RDV URGENT' if urgent else '👤 Nouveau patient'} : "
-                   f"{p['prenom']} {p['nom']} a demandé un RDV et a été ajouté à votre liste de patients.")
-        else:
-            dr_suffix = f" (Dr. {rdv_medecin})" if rdv_medecin else ""
-            msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}{dr_suffix}"
-        add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid,
-                  {"rdv_id": rdv_id, "medecin_id": rdv_medecin_id},
-                  medecin_id=rdv_medecin_id or None)
+        if urgent or u['role'] == 'patient':
+            if is_new_patient_for_doctor:
+                msg = (f"{'🚨 RDV URGENT' if urgent else '👤 Nouveau patient'} : "
+                       f"{p['prenom']} {p['nom']} a demandé un RDV et a été ajouté à votre liste de patients.")
+            else:
+                dr_suffix = f" (Dr. {rdv_medecin})" if rdv_medecin else ""
+                msg = f"{'🚨 RDV URGENT' if urgent else 'Nouveau RDV'} demandé par {p['prenom']} {p['nom']}{dr_suffix}"
+            add_notif(db, "rdv_urgent" if urgent else "rdv_demande", msg, u['role'], pid,
+                      {"rdv_id": rdv_id, "medecin_id": rdv_medecin_id},
+                      medecin_id=rdv_medecin_id or None, commit=False)
 
-    # ── Send confirmation email/SMS when doctor books a confirmed RDV ──────────
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"add_rdv failed: {exc}")
+        return jsonify({"error": "Erreur lors de la création du rendez-vous."}), 500
+
+    # ── Send confirmation email (fire-and-forget, outside transaction) ────────
     if u['role'] == 'medecin' and statut == 'confirmé':
         _send_rdv_confirmation(p, rdv_date, rdv_heure, rdv_type, rdv_medecin)
 
@@ -184,13 +194,14 @@ def delete_rdv(rdv_id):
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    # Cancel linked post-op steps
-    db.execute("UPDATE suivi_postop SET statut='annulé' WHERE rdv_id=?", (rdv_id,))
-    # Soft-delete the RDV
-    db.execute(
-        "UPDATE rdv SET deleted=1, deleted_at=? WHERE id=?", (now, rdv_id)
-    )
-    db.commit()
+    try:
+        db.execute("UPDATE suivi_postop SET statut='annulé' WHERE rdv_id=?", (rdv_id,))
+        db.execute("UPDATE rdv SET deleted=1, deleted_at=? WHERE id=?", (now, rdv_id))
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"delete_rdv failed: {exc}")
+        return jsonify({"error": "Erreur lors de la suppression."}), 500
     return jsonify({"ok": True})
 
 
@@ -219,19 +230,29 @@ def update_rdv(rdv_id):
         if conflict:
             return jsonify({"error": f"Un rendez-vous existe déjà pour ce patient le {new_date} à {new_heure}."}), 409
 
-    db.execute(
-        "UPDATE rdv SET date=?, heure=?, type=?, statut=?, medecin=?, notes=? WHERE id=?",
-        (
-            new_date,
-            new_heure,
-            data.get('type',   row['type']),
-            data.get('statut', row['statut']),
-            data.get('medecin',row['medecin']),
-            data.get('notes',  row['notes']),
-            rdv_id
+    if new_date and not valid_date(new_date):
+        return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
+    if new_heure and not valid_heure(new_heure):
+        return jsonify({"error": "Format d'heure invalide (HH:MM attendu)."}), 400
+
+    try:
+        db.execute(
+            "UPDATE rdv SET date=?, heure=?, type=?, statut=?, medecin=?, notes=? WHERE id=?",
+            (
+                new_date,
+                new_heure,
+                data.get('type',   row['type']),
+                data.get('statut', row['statut']),
+                data.get('medecin',row['medecin']),
+                data.get('notes',  row['notes']),
+                rdv_id
+            )
         )
-    )
-    db.commit()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"update_rdv failed: {exc}")
+        return jsonify({"error": "Erreur lors de la mise à jour."}), 500
     return jsonify({"ok": True})
 
 
@@ -254,18 +275,24 @@ def valider_rdv(rdv_id):
     new_date   = data.get('date',  row['date'])
     new_heure  = data.get('heure', row['heure'])
 
-    db.execute(
-        "UPDATE rdv SET statut=?, notes=?, date=?, heure=? WHERE id=?",
-        (new_statut, new_notes, new_date, new_heure, rdv_id)
-    )
-    db.commit()
     patient_nom    = decrypt_field(row['nom']    or '')
     patient_prenom = decrypt_field(row['prenom'] or '')
-    add_notif(db, "rdv_validé",
-              f"RDV confirmé pour {patient_prenom} {patient_nom} le {new_date}",
-              u['role'], row['patient_id'])
 
-    # Send confirmation email/SMS when status changes to 'confirmé'
+    try:
+        db.execute(
+            "UPDATE rdv SET statut=?, notes=?, date=?, heure=? WHERE id=?",
+            (new_statut, new_notes, new_date, new_heure, rdv_id)
+        )
+        add_notif(db, "rdv_validé",
+                  f"RDV confirmé pour {patient_prenom} {patient_nom} le {new_date}",
+                  u['role'], row['patient_id'], commit=False)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"valider_rdv failed: {exc}")
+        return jsonify({"error": "Erreur lors de la validation."}), 500
+
+    # Send confirmation email (fire-and-forget, outside transaction)
     if new_statut == 'confirmé':
         p = db.execute("SELECT * FROM patients WHERE id=?", (row['patient_id'],)).fetchone()
         if p:

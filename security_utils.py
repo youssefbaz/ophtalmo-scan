@@ -205,6 +205,22 @@ def sanitize_rich(value, max_len: int = 2000) -> str:
     return cleaned[:max_len]
 
 
+# ─── DATE / TIME VALIDATORS ───────────────────────────────────────────────────
+
+_DATE_RE  = re.compile(r'^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$')
+_HEURE_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
+
+
+def valid_date(s) -> bool:
+    """Return True if s is a non-empty YYYY-MM-DD string."""
+    return bool(s and _DATE_RE.match(str(s).strip()))
+
+
+def valid_heure(s) -> bool:
+    """Return True if s is empty/None or a valid HH:MM string."""
+    return not s or bool(_HEURE_RE.match(str(s).strip()))
+
+
 # ─── CLINICAL FIELD ENCRYPTION ────────────────────────────────────────────────
 # Extends PII encryption to cover medical content (consultations, prescriptions,
 # patient questions) so the DB at rest contains no readable medical records.

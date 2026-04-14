@@ -53,25 +53,34 @@ def get_stats():
         _sp + [year_start]
     ).fetchone()[0]
 
-    # ── Patients per month (last 12) ───────────────────────────────────────────
-    patients_per_month = []
-    for i in range(11, -1, -1):
-        d  = (today.replace(day=1) - datetime.timedelta(days=i * 30))
-        ym = d.strftime('%Y-%m')
-        cnt = db.execute(
-            f"SELECT COUNT(*) FROM patients WHERE {_scope_p} AND strftime('%Y-%m', created_at)=?",
-            _sp + [ym]
-        ).fetchone()[0]
-        patients_per_month.append({'month': ym, 'count': cnt})
+    # ── Shared: last-12-months label list & cutoff ────────────────────────────
+    _12m = []
+    for _i in range(11, -1, -1):
+        _d = today.replace(day=1) - datetime.timedelta(days=_i * 30)
+        _12m.append(_d.strftime('%Y-%m'))
+    _12m_cutoff = (today - datetime.timedelta(days=365)).isoformat()
 
-    # ── Patients per year (last 4 years) ──────────────────────────────────────
-    patients_per_year = []
-    for y in range(today.year - 3, today.year + 1):
-        cnt = db.execute(
-            f"SELECT COUNT(*) FROM patients WHERE {_scope_p} AND strftime('%Y', created_at)=?",
-            _sp + [str(y)]
-        ).fetchone()[0]
-        patients_per_year.append({'year': str(y), 'count': cnt})
+    # ── Patients per month (last 12) — one GROUP BY instead of 12 queries ────
+    _pm_rows = db.execute(
+        f"SELECT strftime('%Y-%m', created_at) AS ym, COUNT(*) AS n "
+        f"FROM patients WHERE {_scope_p} AND created_at >= ? GROUP BY ym",
+        _sp + [_12m_cutoff]
+    ).fetchall()
+    _pm_map = {r['ym']: r['n'] for r in _pm_rows}
+    patients_per_month = [{'month': ym, 'count': _pm_map.get(ym, 0)} for ym in _12m]
+
+    # ── Patients per year (last 4) — one GROUP BY instead of 4 queries ───────
+    _yr_cutoff = f"{today.year - 3}-01-01"
+    _py_rows = db.execute(
+        f"SELECT strftime('%Y', created_at) AS yr, COUNT(*) AS n "
+        f"FROM patients WHERE {_scope_p} AND created_at >= ? GROUP BY yr",
+        _sp + [_yr_cutoff]
+    ).fetchall()
+    _py_map = {r['yr']: r['n'] for r in _py_rows}
+    patients_per_year = [
+        {'year': str(y), 'count': _py_map.get(str(y), 0)}
+        for y in range(today.year - 3, today.year + 1)
+    ]
 
     # ── Sex distribution ───────────────────────────────────────────────────────
     sex_dist = {}
@@ -121,12 +130,14 @@ def get_stats():
     rdv_week      = _rdv_count(" AND date>=?", [week_start])
     rdv_month     = _rdv_count(" AND date>=?", [month_start])
 
-    rdv_per_month = []
-    for i in range(11, -1, -1):
-        d  = (today.replace(day=1) - datetime.timedelta(days=i * 30))
-        ym = d.strftime('%Y-%m')
-        cnt = _rdv_count(" AND strftime('%Y-%m', date)=?", [ym])
-        rdv_per_month.append({'month': ym, 'count': cnt})
+    # ── RDV per month (last 12) — one GROUP BY instead of 12 queries ─────────
+    _rm_rows = db.execute(
+        f"SELECT strftime('%Y-%m', date) AS ym, COUNT(*) AS n "
+        f"FROM rdv WHERE {_scope_fk} AND date >= ? GROUP BY ym",
+        _sp + [_12m_cutoff]
+    ).fetchall()
+    _rm_map = {r['ym']: r['n'] for r in _rm_rows}
+    rdv_per_month = [{'month': ym, 'count': _rm_map.get(ym, 0)} for ym in _12m]
 
     rdv_by_type = []
     for row in db.execute(
@@ -136,12 +147,18 @@ def get_stats():
     ).fetchall():
         rdv_by_type.append({'type': row['type'], 'count': row['n']})
 
+    # ── RDV per weekday — one GROUP BY instead of 7 queries ──────────────────
     weekdays_fr = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-    rdv_per_weekday = []
-    for i in range(7):
-        sqlite_wd = (i + 1) % 7  # Mon→1 … Sun→0  (SQLite %w == PG EXTRACT(DOW))
-        cnt = _rdv_count(f" AND strftime('%w', date)=?", [str(sqlite_wd)])
-        rdv_per_weekday.append({'day': weekdays_fr[i], 'count': cnt})
+    _rw_rows = db.execute(
+        f"SELECT strftime('%w', date) AS wd, COUNT(*) AS n "
+        f"FROM rdv WHERE {_scope_fk} GROUP BY wd",
+        _sp
+    ).fetchall()
+    _rw_map = {r['wd']: r['n'] for r in _rw_rows}
+    rdv_per_weekday = [
+        {'day': weekdays_fr[i], 'count': _rw_map.get(str((i + 1) % 7), 0)}
+        for i in range(7)
+    ]
 
     # ── Consultation metrics ───────────────────────────────────────────────────
     total_consults = db.execute(
@@ -150,16 +167,14 @@ def get_stats():
 
     avg_consults = round(total_consults / total_patients, 1) if total_patients else 0
 
-    consults_per_month = []
-    for i in range(11, -1, -1):
-        d  = (today.replace(day=1) - datetime.timedelta(days=i * 30))
-        ym = d.strftime('%Y-%m')
-        cnt = db.execute(
-            f"SELECT COUNT(*) FROM historique "
-            f"WHERE strftime('%Y-%m', date)=? AND {_scope_fk}",
-            [ym] + _sp
-        ).fetchone()[0]
-        consults_per_month.append({'month': ym, 'count': cnt})
+    # ── Consults per month (last 12) — one GROUP BY instead of 12 queries ─────
+    _cm_rows = db.execute(
+        f"SELECT strftime('%Y-%m', date) AS ym, COUNT(*) AS n "
+        f"FROM historique WHERE {_scope_fk} AND date >= ? GROUP BY ym",
+        _sp + [_12m_cutoff]
+    ).fetchall()
+    _cm_map = {r['ym']: r['n'] for r in _cm_rows}
+    consults_per_month = [{'month': ym, 'count': _cm_map.get(ym, 0)} for ym in _12m]
 
     top_diagnostics = []
     for row in db.execute(
