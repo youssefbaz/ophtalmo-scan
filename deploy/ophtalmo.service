@@ -1,0 +1,39 @@
+[Unit]
+Description=OphtalmoScan — ophthalmology management system
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=ophtalmo
+Group=ophtalmo
+WorkingDirectory=/opt/ophtalmo
+EnvironmentFile=/opt/ophtalmo/.env
+
+# Gunicorn — 2 workers x 2 threads handles ~30 concurrent users comfortably
+ExecStart=/opt/ophtalmo/venv/bin/gunicorn \
+    "app:create_app()" \
+    --bind 127.0.0.1:8000 \
+    --workers 2 \
+    --threads 2 \
+    --worker-class gthread \
+    --timeout 120 \
+    --access-logfile /var/log/ophtalmo/access.log \
+    --error-logfile /var/log/ophtalmo/error.log \
+    --log-level info \
+    --capture-output
+
+# Auto-restart on crash — medical software must stay up
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/ophtalmo /var/log/ophtalmo
+
+[Install]
+WantedBy=multi-user.target

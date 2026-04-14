@@ -5,7 +5,7 @@ import uuid, datetime, logging
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, log_audit
 from routes.patients_helpers import _assert_owns_patient
-from security_utils import encrypt_clinical
+from security_utils import encrypt_clinical, valid_date
 
 logger = logging.getLogger(__name__)
 
@@ -24,27 +24,35 @@ def add_historique(pid):
         "SELECT id FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)
     ).fetchone():
         return jsonify({"error": "Patient non trouvé"}), 404
+    entry_date = data.get('date', datetime.date.today().isoformat())
+    if not valid_date(entry_date):
+        return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
+
     hid = "H" + str(uuid.uuid4())[:6].upper()
     enc = encrypt_clinical(data)
-    db.execute(
-        "INSERT INTO historique (id,patient_id,date,motif,diagnostic,traitement,"
-        "tension_od,tension_og,acuite_od,acuite_og,"
-        "refraction_od_sph,refraction_od_cyl,refraction_od_axe,"
-        "refraction_og_sph,refraction_og_cyl,refraction_og_axe,"
-        "segment_ant,notes,medecin) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (hid, pid,
-         data.get('date', datetime.date.today().isoformat()),
-         enc.get('motif',''), enc.get('diagnostic',''), enc.get('traitement',''),
-         data.get('tension_od',''), data.get('tension_og',''),
-         data.get('acuite_od',''), data.get('acuite_og',''),
-         data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
-         data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
-         enc.get('segment_ant',''), enc.get('notes',''),
-         u['nom'])
-    )
-    log_audit(db, 'INSERT', 'historique', hid, u['id'], pid, data.get('motif', ''))
-    db.commit()
+    try:
+        db.execute(
+            "INSERT INTO historique (id,patient_id,date,motif,diagnostic,traitement,"
+            "tension_od,tension_og,acuite_od,acuite_og,"
+            "refraction_od_sph,refraction_od_cyl,refraction_od_axe,"
+            "refraction_og_sph,refraction_og_cyl,refraction_og_axe,"
+            "segment_ant,notes,medecin) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (hid, pid, entry_date,
+             enc.get('motif',''), enc.get('diagnostic',''), enc.get('traitement',''),
+             data.get('tension_od',''), data.get('tension_og',''),
+             data.get('acuite_od',''), data.get('acuite_og',''),
+             data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
+             data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
+             enc.get('segment_ant',''), enc.get('notes',''),
+             u['nom'])
+        )
+        log_audit(db, 'INSERT', 'historique', hid, u['id'], pid, data.get('motif', ''))
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"add_historique failed: {exc}")
+        return jsonify({"error": "Erreur lors de la création de la consultation."}), 500
     return jsonify({"ok": True, "id": hid}), 201
 
 
@@ -61,23 +69,32 @@ def update_historique(pid, hid):
         (hid, pid)
     ).fetchone():
         return jsonify({"error": "Consultation non trouvée"}), 404
+    upd_date = data.get('date', '')
+    if upd_date and not valid_date(upd_date):
+        return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
+
     enc = encrypt_clinical(data)
-    db.execute(
-        "UPDATE historique SET date=?,motif=?,diagnostic=?,traitement=?,"
-        "tension_od=?,tension_og=?,acuite_od=?,acuite_og=?,"
-        "refraction_od_sph=?,refraction_od_cyl=?,refraction_od_axe=?,"
-        "refraction_og_sph=?,refraction_og_cyl=?,refraction_og_axe=?,"
-        "segment_ant=?,notes=? WHERE id=? AND patient_id=?",
-        (data.get('date',''), enc.get('motif',''), enc.get('diagnostic',''), enc.get('traitement',''),
-         data.get('tension_od',''), data.get('tension_og',''),
-         data.get('acuite_od',''), data.get('acuite_og',''),
-         data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
-         data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
-         enc.get('segment_ant',''), enc.get('notes',''),
-         hid, pid)
-    )
-    log_audit(db, 'UPDATE', 'historique', hid, u['id'], pid, data.get('motif', ''))
-    db.commit()
+    try:
+        db.execute(
+            "UPDATE historique SET date=?,motif=?,diagnostic=?,traitement=?,"
+            "tension_od=?,tension_og=?,acuite_od=?,acuite_og=?,"
+            "refraction_od_sph=?,refraction_od_cyl=?,refraction_od_axe=?,"
+            "refraction_og_sph=?,refraction_og_cyl=?,refraction_og_axe=?,"
+            "segment_ant=?,notes=? WHERE id=? AND patient_id=?",
+            (upd_date, enc.get('motif',''), enc.get('diagnostic',''), enc.get('traitement',''),
+             data.get('tension_od',''), data.get('tension_og',''),
+             data.get('acuite_od',''), data.get('acuite_og',''),
+             data.get('refraction_od_sph',''), data.get('refraction_od_cyl',''), data.get('refraction_od_axe',''),
+             data.get('refraction_og_sph',''), data.get('refraction_og_cyl',''), data.get('refraction_og_axe',''),
+             enc.get('segment_ant',''), enc.get('notes',''),
+             hid, pid)
+        )
+        log_audit(db, 'UPDATE', 'historique', hid, u['id'], pid, data.get('motif', ''))
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"update_historique failed: {exc}")
+        return jsonify({"error": "Erreur lors de la mise à jour de la consultation."}), 500
     return jsonify({"ok": True})
 
 
@@ -93,12 +110,17 @@ def delete_historique(pid, hid):
         (hid, pid)
     ).fetchone():
         return jsonify({"error": "Consultation non trouvée"}), 404
-    db.execute(
-        "UPDATE historique SET deleted=1, deleted_at=? WHERE id=? AND patient_id=?",
-        (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), hid, pid)
-    )
-    log_audit(db, 'DELETE', 'historique', hid, u['id'], pid)
-    db.commit()
+    try:
+        db.execute(
+            "UPDATE historique SET deleted=1, deleted_at=? WHERE id=? AND patient_id=?",
+            (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), hid, pid)
+        )
+        log_audit(db, 'DELETE', 'historique', hid, u['id'], pid)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"delete_historique failed: {exc}")
+        return jsonify({"error": "Erreur lors de la suppression."}), 500
     return jsonify({"ok": True})
 
 

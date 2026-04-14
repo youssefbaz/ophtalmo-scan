@@ -51,10 +51,14 @@ def _build_patient(db, pid, strip_images=True):
     p['antecedents'] = json.loads(p['antecedents'] or '[]')
     p['allergies']   = json.loads(p['allergies']   or '[]')
 
+    p['historique_total'] = db.execute(
+        "SELECT COUNT(*) FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0)",
+        (pid,)
+    ).fetchone()[0]
     p['historique'] = [decrypt_clinical(dict(r)) for r in
         db.execute(
             "SELECT * FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
-            "ORDER BY date DESC", (pid,)
+            "ORDER BY date DESC LIMIT 50", (pid,)
         )]
 
     rdvs = [dict(r) for r in
@@ -88,7 +92,7 @@ def _build_patient(db, pid, strip_images=True):
 
     questions = [decrypt_question_fields(dict(r)) for r in
         db.execute(
-            "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC",
+            "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC LIMIT 50",
             (pid,)
         )]
     for q in questions:
@@ -98,13 +102,13 @@ def _build_patient(db, pid, strip_images=True):
     p['ivt'] = [dict(r) for r in
         db.execute(
             "SELECT * FROM ivt WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
-            "ORDER BY date DESC, numero DESC", (pid,)
+            "ORDER BY date DESC, numero DESC LIMIT 100", (pid,)
         )]
 
     ordonnances = [decrypt_ordonnance_fields(dict(r)) for r in
         db.execute(
             "SELECT * FROM ordonnances WHERE patient_id=? AND (deleted IS NULL OR deleted=0) "
-            "ORDER BY date DESC", (pid,)
+            "ORDER BY date DESC LIMIT 50", (pid,)
         )]
     for o in ordonnances:
         try:
