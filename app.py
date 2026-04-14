@@ -309,8 +309,8 @@ def create_app():
 
     # ── APScheduler: daily reminders at 08:00 ────────────────────────────────
     # Only start scheduler in the main process (not Werkzeug reloader child)
-    if not os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or \
-            os.environ.get('FLASK_DEBUG', '0') != '1':
+    _is_debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    if not _is_debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             from routes.agenda import check_postop_gaps

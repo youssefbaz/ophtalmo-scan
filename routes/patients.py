@@ -22,19 +22,45 @@ bp = Blueprint('patients', __name__)
 
 # ─── LIST ──────────────────────────────────────────────────────────────────────
 
+# Only the columns actually used for the list view — avoids fetching (and decrypting)
+# telephone, email, allergies, and other fields that the list endpoint never returns.
+_LIST_COLS = (
+    "p.id, p.nom, p.prenom, p.ddn, p.sexe, p.medecin_id, p.antecedents, p.birth_year, "
+    "COUNT(CASE WHEN r.urgent=1 AND r.statut='en_attente' THEN 1 END) AS nb_rdv_urgent"
+)
+_LIST_JOIN = "LEFT JOIN rdv r ON r.patient_id = p.id AND (r.deleted IS NULL OR r.deleted=0)"
+_LIST_ORDER = "GROUP BY p.id ORDER BY p.nom, p.prenom"
+
+
+def _row_to_patient(row, linked_ids, mid, _df):
+    """Decrypt only the fields needed for the list response."""
+    nom       = _df(row['nom']    or '')
+    prenom    = _df(row['prenom'] or '')
+    ddn       = _df(row['ddn']    or '')
+    row_mid   = row['medecin_id'] or ''
+    is_linked = row['id'] in linked_ids and row_mid != mid
+    return {
+        "id":            row['id'],
+        "nom":           nom,
+        "prenom":        prenom,
+        "ddn":           ddn,
+        "antecedents":   json.loads(row['antecedents'] or '[]')[:2],
+        "nb_rdv_urgent": row['nb_rdv_urgent'],
+        "medecin_id":    row_mid,
+        "linked":        is_linked,
+    }
+
+
 @bp.route('/api/patients', methods=['GET'])
 def get_patients():
     u = current_user()
     if not u:
         return jsonify([]), 401
     db = get_db()
-    q = request.args.get('q', '').lower()
-
-    # Optional pagination — if `page` param present, returns paginated envelope;
-    # otherwise returns a plain array (backward-compatible).
+    q        = request.args.get('q', '').lower().strip()
     page     = request.args.get('page',     type=int, default=None)
     per_page = request.args.get('per_page', type=int, default=50)
-    per_page = max(1, min(per_page, 200))   # clamp to [1, 200]
+    per_page = max(1, min(per_page, 200))
 
     if u['role'] == 'patient':
         pid = u.get('patient_id')
@@ -43,63 +69,80 @@ def get_patients():
             (pid,)
         ).fetchone()
         if row:
-            return jsonify([decrypt_patient(dict(row))])
+            from security_utils import decrypt_field as _df
+            return jsonify([{'id': row['id'],
+                             'nom':    _df(row['nom']    or ''),
+                             'prenom': _df(row['prenom'] or '')}])
         return jsonify([])
 
+    from security_utils import decrypt_field as _df
+
     mid = u['id'] if u['role'] == 'medecin' else None
-    query = """
-        SELECT p.*,
-               COUNT(CASE WHEN r.urgent=1 AND r.statut='en_attente' THEN 1 END) AS nb_rdv_urgent
-        FROM patients p
-        LEFT JOIN rdv r ON r.patient_id = p.id AND (r.deleted IS NULL OR r.deleted=0)
-        {where}
-        GROUP BY p.id
-        ORDER BY p.nom, p.prenom
-    """
+
     if mid:
-        rows = db.execute(query.format(where="""
-            WHERE (p.medecin_id = ?
-               OR p.id IN (SELECT patient_id FROM patient_doctors WHERE medecin_id = ?))
-              AND (p.deleted IS NULL OR p.deleted = 0)
-        """), (mid, mid)).fetchall()
+        _where  = ("WHERE (p.medecin_id=? "
+                   "OR p.id IN (SELECT patient_id FROM patient_doctors WHERE medecin_id=?)) "
+                   "AND (p.deleted IS NULL OR p.deleted=0)")
+        _params = (mid, mid)
         linked_ids = {r['patient_id'] for r in db.execute(
             "SELECT patient_id FROM patient_doctors WHERE medecin_id=?", (mid,)
         ).fetchall()}
     else:
-        rows = db.execute(query.format(where="WHERE (p.deleted IS NULL OR p.deleted=0)"), ()).fetchall()
+        _where  = "WHERE (p.deleted IS NULL OR p.deleted=0)"
+        _params = ()
         linked_ids = set()
+
+    # Fast path: no search + pagination — do the count and data fetch in SQL,
+    # decrypt only the page (not the entire roster).
+    if not q and page is not None:
+        total = db.execute(
+            f"SELECT COUNT(DISTINCT p.id) FROM patients p {_LIST_JOIN} {_where}", _params
+        ).fetchone()[0]
+        offset = (page - 1) * per_page
+        rows = db.execute(
+            f"SELECT {_LIST_COLS} FROM patients p {_LIST_JOIN} {_where} "
+            f"{_LIST_ORDER} LIMIT ? OFFSET ?",
+            _params + (per_page, offset)
+        ).fetchall()
+        data = [_row_to_patient(r, linked_ids, mid, _df) for r in rows]
+        return jsonify({"data": data, "total": total, "page": page,
+                        "per_page": per_page,
+                        "pages": max(1, (total + per_page - 1) // per_page)})
+
+    # Standard path: fetch all scoped rows, decrypt only nom+prenom for filtering,
+    # defer ddn decryption to after the filter check.
+    rows = db.execute(
+        f"SELECT {_LIST_COLS} FROM patients p {_LIST_JOIN} {_where} {_LIST_ORDER}", _params
+    ).fetchall()
 
     result = []
     for row in rows:
-        p = decrypt_patient(dict(row))
-        p['antecedents'] = json.loads(p['antecedents'] or '[]')
-        if q and not (q in p['nom'].lower() or q in p['prenom'].lower() or q in p['id'].lower()):
+        nom    = _df(row['nom']    or '')
+        prenom = _df(row['prenom'] or '')
+        if q and not (q in nom.lower() or q in prenom.lower() or q in row['id'].lower()):
             continue
-        is_linked = p['id'] in linked_ids and p.get('medecin_id') != mid
+        ddn       = _df(row['ddn'] or '')
+        row_mid   = row['medecin_id'] or ''
+        is_linked = row['id'] in linked_ids and row_mid != mid
         result.append({
-            "id":             p['id'],
-            "nom":            p['nom'],
-            "prenom":         p['prenom'],
-            "ddn":            p['ddn'],
-            "antecedents":    p['antecedents'][:2],
-            "nb_rdv_urgent":  p['nb_rdv_urgent'],
-            "medecin_id":     p.get('medecin_id', ''),
-            "linked":         is_linked,
+            "id":            row['id'],
+            "nom":           nom,
+            "prenom":        prenom,
+            "ddn":           ddn,
+            "antecedents":   json.loads(row['antecedents'] or '[]')[:2],
+            "nb_rdv_urgent": row['nb_rdv_urgent'],
+            "medecin_id":    row_mid,
+            "linked":        is_linked,
         })
 
     total = len(result)
 
-    # Paginate when requested
     if page is not None:
-        offset = (page - 1) * per_page
+        offset    = (page - 1) * per_page
         paginated = result[offset: offset + per_page]
-        return jsonify({
-            "data":     paginated,
-            "total":    total,
-            "page":     page,
-            "per_page": per_page,
-            "pages":    max(1, (total + per_page - 1) // per_page),
-        })
+        return jsonify({"data": paginated, "total": total, "page": page,
+                        "per_page": per_page,
+                        "pages": max(1, (total + per_page - 1) // per_page)})
 
     return jsonify(result)
 

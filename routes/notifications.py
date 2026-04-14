@@ -83,6 +83,17 @@ def clear_notifications():
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
-    db.execute("DELETE FROM notifications")
+    # Only delete notifications visible to this doctor — mirrors the GET scope.
+    # Never wipes another doctor's notifications.
+    db.execute("""
+        DELETE FROM notifications
+        WHERE medecin_id = ?
+           OR patient_id IN (SELECT id FROM patients WHERE medecin_id = ?)
+           OR (
+               (patient_id IS NULL OR patient_id = '')
+               AND (medecin_id IS NULL OR medecin_id = '')
+               AND from_role != 'admin'
+           )
+    """, (u['id'], u['id']))
     db.commit()
     return jsonify({"ok": True})
