@@ -30,10 +30,10 @@
     <!-- ── PANEL: SE CONNECTER ── -->
     <div id="panelLogin">
       <div class="role-tabs">
-        <button class="role-tab active" onclick="setLoginRole('medecin',this)">
+        <button class="role-tab active" data-role="medecin" onclick="setLoginRole('medecin',this)">
           <span class="role-emoji">🩺</span>Médecin
         </button>
-        <button class="role-tab" onclick="setLoginRole('patient',this)">
+        <button class="role-tab" data-role="patient" onclick="setLoginRole('patient',this)">
           <span class="role-emoji">🧑</span>Patient
         </button>
       </div>

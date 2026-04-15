@@ -93,6 +93,10 @@ function applyTheme(theme) {
   document.body.classList.remove('theme-dark','theme-light','theme-clinical','theme-contrast','theme-minuit');
   if (theme !== 'dark') document.body.classList.add('theme-' + theme);
   localStorage.setItem('ophtalmo_theme', theme);
+  // Sync mobile browser chrome (address bar / status bar) with app theme
+  const bgColors = { dark:'#0f1724', light:'#f0f4f8', clinical:'#f5f7fa', contrast:'#000000' };
+  const metaTag = document.querySelector('meta[name="theme-color"]');
+  if (metaTag) metaTag.content = bgColors[theme] || '#0f1724';
 }
 
 // ─── PAGE LOAD: check for password reset token in URL ─────────────────────────

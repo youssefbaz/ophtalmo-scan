@@ -80,7 +80,9 @@ async function doLogin() {
   const u   = document.getElementById('loginUser').value.trim();
   const p   = document.getElementById('loginPass').value;
   if (!u || !p) { _authMsg('loginError','error','Veuillez remplir tous les champs.'); return; }
-  const res = await api('/login','POST',{username:u,password:p});
+  const activeTab = document.querySelector('.role-tab.active');
+  const role = activeTab ? activeTab.dataset.role : 'medecin';
+  const res = await api('/login','POST',{username:u, password:p, role});
   if (res.ok) {
     const me = await api('/me');
     USER = {...res, ...me};
@@ -93,7 +95,7 @@ async function doLogin() {
     initApp();
   } else if (res.totp_required) {
     // Server confirmed password OK but 2FA is needed — store creds and show TOTP panel
-    _pendingLoginCredentials = {username: u, password: p};
+    _pendingLoginCredentials = {username: u, password: p, role};
     showAuthPanel('totp');
   } else {
     _authMsg('loginError','error', res.error || 'Identifiants incorrects.');
