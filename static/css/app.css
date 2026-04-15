@@ -119,7 +119,11 @@ body {
 #loginScreen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: radial-gradient(ellipse at 30% 40%, var(--surface-accent) 0%, var(--bg) 70%);
+  /* Fixed rich background — independent of the app theme */
+  background:
+    radial-gradient(ellipse at 20% 60%, rgba(14,165,160,0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(59,130,246,0.12) 0%, transparent 50%),
+    linear-gradient(145deg, #071524 0%, #0d2540 55%, #091e34 100%);
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
@@ -142,15 +146,35 @@ body {
   max-width: 420px;
   -webkit-box-sizing: border-box;
           box-sizing: border-box;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: #ffffff;
+  border: 1px solid rgba(14,165,160,0.2);
   border-radius: 24px;
   padding: 48px 40px;
-  -webkit-box-shadow: 0 32px 80px rgba(0,0,0,0.6);
-          box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+  -webkit-box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(14,165,160,0.08);
+          box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(14,165,160,0.08);
   /* prevent box from sticking to screen edges on narrow viewports */
   margin: auto;
 }
+
+/* Login box — always uses light/white styling regardless of active theme */
+.login-box .login-title  { color: #0a2233; }
+.login-box .login-sub    { color: #3d6a82; }
+.login-box .form-label   { color: #3d6a82; }
+.login-box .form-input   { background: #f0f4f8; border-color: #b8ccd8; color: #0a2233; }
+.login-box .form-input::placeholder { color: #6a96b0; }
+.login-box .form-input:focus { border-color: #0ea5a0; }
+.login-box .role-tabs    { background: #e2eaf2; border-color: #b8ccd8; }
+.login-box .role-tab     { color: #3d6a82; border-color: #b8ccd8; }
+.login-box .role-tab:hover:not(.active) { background: #d4dfe9; color: #0a2233; }
+.login-box .auth-link    { color: #0ea5a0; }
+.login-box .auth-divider { color: #6a96b0; }
+/* Auth messages inside login box: use proper light-theme contrasted colors */
+.login-box .auth-msg-error   { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.login-box .auth-msg-success { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.login-box .auth-msg-info    { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
+/* TOTP panel text */
+.login-box h3 { color: #0a2233 !important; }
+.login-box p  { color: #3d6a82 !important; }
 
 .login-logo { text-align: center; margin-bottom: 36px; }
 .login-logo-icon {
