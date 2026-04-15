@@ -51,6 +51,15 @@ def login():
     if status in ('rejected', 'inactive'):
         return jsonify({"ok": False, "error": "Votre compte a été désactivé. Contactez l'administrateur."}), 403
 
+    # ── Role tab check — ensure account role matches the selected login tab ────
+    selected_role = sanitize(data.get('role', ''), max_len=20)
+    if selected_role:
+        actual_role = row['role']
+        if selected_role == 'patient' and actual_role != 'patient':
+            return jsonify({"ok": False, "error": "Ce compte n'est pas un compte patient. Veuillez sélectionner l'onglet Médecin."}), 403
+        if selected_role == 'medecin' and actual_role == 'patient':
+            return jsonify({"ok": False, "error": "Ce compte n'est pas un compte médecin. Veuillez sélectionner l'onglet Patient."}), 403
+
     # ── 2FA check (Step 3) ─────────────────────────────────────────────────────
     totp_enabled = row['totp_enabled'] if row['totp_enabled'] else 0
     if totp_enabled:
