@@ -1,3 +1,27 @@
+// ─── TOAST / SNACKBAR ─────────────────────────────────────────────────────────
+/**
+ * showToast(message, type='info', duration=3500)
+ * type: 'success' | 'error' | 'warning' | 'info'
+ */
+function showToast(message, type='info', duration=3500) {
+  const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `
+    <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+    <span class="toast-msg">${message}</span>
+    <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>`;
+  container.appendChild(t);
+  if (duration > 0) {
+    setTimeout(() => {
+      t.classList.add('out');
+      setTimeout(() => t.remove(), 280);
+    }, duration);
+  }
+}
+
 // ─── PATIENTS SIDEBAR ─────────────────────────────────────────────────────────
 let _showAllPatients = false;
 
