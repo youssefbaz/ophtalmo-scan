@@ -176,24 +176,31 @@ body {
 }
 
 /* Login box — always uses light/white styling regardless of active theme */
+.login-box { color: #0a2233; }
 .login-box .login-title  { color: #0a2233; }
 .login-box .login-sub    { color: #3d6a82; }
 .login-box .form-label   { color: #3d6a82; }
-.login-box .form-input   { background: #f0f4f8; border-color: #b8ccd8; color: #0a2233; }
+.login-box .form-input   { background: #f0f4f8; border: 1px solid #b8ccd8; color: #0a2233; }
 .login-box .form-input::placeholder { color: #6a96b0; }
 .login-box .form-input:focus { border-color: #0ea5a0; }
-.login-box .role-tabs    { background: #e2eaf2; border-color: #b8ccd8; }
-.login-box .role-tab     { color: #3d6a82; border-color: #b8ccd8; }
+.login-box .role-tabs    { background: #e2eaf2; border-color: #8ab0c4; }
+.login-box .role-tab     { color: #3d6a82; border-color: #8ab0c4; }
+.login-box .role-tab.active { background: #0ea5a0; color: #ffffff; }
 .login-box .role-tab:hover:not(.active) { background: #d4dfe9; color: #0a2233; }
+/* Buttons — pinned so they always show regardless of theme cascade */
+.login-box .btn-primary  { background: #0ea5a0; color: #ffffff; border: none; }
+.login-box .btn-primary:hover { background: #0c8a86; color: #ffffff; }
+.login-box .btn-ghost    { background: #f0f4f8; border: 1.5px solid #6a90aa; color: #2e5a78; }
+.login-box .btn-ghost:hover { background: #e2eaf2; border-color: #0ea5a0; color: #0a2233; }
 .login-box .auth-link    { color: #0ea5a0; }
 .login-box .auth-divider { color: #6a96b0; }
-/* Auth messages inside login box: use proper light-theme contrasted colors */
-.login-box .auth-msg-error   { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-.login-box .auth-msg-success { background: #dcfce7; color: #15803d; border-color: #86efac; }
-.login-box .auth-msg-info    { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
-/* TOTP panel text */
-.login-box h3 { color: #0a2233 !important; }
-.login-box p  { color: #3d6a82 !important; }
+/* Auth messages inside login box */
+.login-box .auth-msg-error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.login-box .auth-msg-success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.login-box .auth-msg-info    { background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4; }
+/* Generic text elements inside login box */
+.login-box h3 { color: #0a2233; }
+.login-box p  { color: #3d6a82; }
 
 .login-logo { text-align: center; margin-bottom: 36px; }
 .login-logo-icon {
