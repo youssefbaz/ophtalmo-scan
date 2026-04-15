@@ -101,7 +101,7 @@ function openAddRdvPatient() {
 function openRdvUrgent() {
   document.getElementById('modalRdvTitle').textContent = '🚨 Demande de RDV Urgent';
   document.getElementById('modalRdvContent').innerHTML = `
-    <div style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#fca5a5">
+    <div style="background:var(--color-red-bg);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--color-red)">
       ⚠️ Cette demande sera marquée urgente et notifiée immédiatement au médecin.
     </div>
     ${_rdvDoctorPickerHtml('08:00')}
@@ -543,7 +543,7 @@ function renderPostOpTimeline(patient) {
         <div class="jalon-day">J${j}</div>
         <div class="jalon-status">${icon}</div>
         <div class="jalon-label">${jalDate.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>
-        ${overdue ? `<div style="font-size:9px;color:#fcd34d;margin-top:2px">${Math.abs(daysDiff)}j de retard</div>` : ''}
+        ${overdue ? `<div style="font-size:9px;color:var(--color-amber);margin-top:2px">${Math.abs(daysDiff)}j de retard</div>` : ''}
         ${!done && daysDiff >= 0 ? `<div style="font-size:9px;color:var(--text3);margin-top:2px">dans ${daysDiff}j</div>` : ''}
       </div>`;
   }).join('');

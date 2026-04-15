@@ -5,23 +5,32 @@
   --bg2: #e2eaf2;
   --bg3: #d4dfe9;
   --card: #ffffff;
-  --border: #b8ccd8;
+  --border: #6a90aa;
   --surface-accent: #c5dce8;
   --teal: #0ea5a0;
   --teal2: #0c8a86;
   --teal-dim: rgba(14,165,160,0.12);
   --amber: #f59e0b;
-  --amber-dim: rgba(245,158,11,0.12);
+  --amber-dim: rgba(245,158,11,0.14);
   --red: #ef4444;
   --red-dim: rgba(239,68,68,0.12);
   --green: #22c55e;
   --green-dim: rgba(34,197,94,0.12);
   --blue: #3b82f6;
   --text: #0a2233;
-  --text2: #3d6a82;
-  --text3: #6a96b0;
+  --text2: #2e5a78;
+  --text3: #5a86a0;
   --radius: 14px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow: 0 4px 24px rgba(0,0,0,0.10);
+  /* Semantic colored text — dark values for light backgrounds */
+  --color-red:   #c41c1c;
+  --color-amber: #a85400;
+  --color-green: #15803d;
+  --color-blue:  #1d4ed8;
+  --color-red-bg:   rgba(239,68,68,0.10);
+  --color-amber-bg: rgba(180,83,9,0.10);
+  --color-green-bg: rgba(21,128,61,0.10);
+  --color-blue-bg:  rgba(29,78,216,0.10);
 }
 :root select.input option,
 :root select.form-input option {
@@ -31,10 +40,13 @@
 /* ── THEMES ── */
 body.theme-clinical {
   --bg:#f5f7fa; --bg2:#edf0f5; --bg3:#e0e6ed; --card:#ffffff;
-  --border:#c5d0dc; --text:#1a2940; --text2:#4a6285; --text3:#8a9fb5;
+  --border:#6a85a0; --text:#1a2940; --text2:#3a5c80; --text3:#6e8faa;
   --teal:#0077cc; --teal2:#005fa3; --teal-dim:rgba(0,119,204,0.10);
   --surface-accent:#d0dce8;
   --shadow:0 2px 16px rgba(0,0,0,0.07);
+  --color-red:#b91c1c; --color-amber:#92400e; --color-green:#166534; --color-blue:#1e40af;
+  --color-red-bg:rgba(185,28,28,0.10); --color-amber-bg:rgba(146,64,14,0.10);
+  --color-green-bg:rgba(22,101,52,0.10); --color-blue-bg:rgba(30,64,175,0.10);
 }
 body.theme-clinical select.input option,
 body.theme-clinical select.form-input option {
@@ -48,6 +60,10 @@ body.theme-minuit {
   --green-dim:rgba(34,197,94,0.18);
   --surface-accent:#1a2c44;
   --shadow:0 4px 32px rgba(0,0,0,0.55);
+  /* Semantic colored text — light values for dark backgrounds */
+  --color-red:#fca5a5; --color-amber:#fcd34d; --color-green:#86efac; --color-blue:#93c5fd;
+  --color-red-bg:rgba(239,68,68,0.15); --color-amber-bg:rgba(245,158,11,0.15);
+  --color-green-bg:rgba(34,197,94,0.15); --color-blue-bg:rgba(59,130,246,0.15);
 }
 body.theme-minuit select.input option,
 body.theme-minuit select.form-input option {
@@ -55,9 +71,12 @@ body.theme-minuit select.form-input option {
 }
 body.theme-contrast {
   --bg:#000000; --bg2:#0a0a0a; --bg3:#111111; --card:#161616;
-  --border:#2a2a2a; --text:#ffffff; --text2:#cccccc; --text3:#888888;
+  --border:#3a3a3a; --text:#ffffff; --text2:#cccccc; --text3:#888888;
   --teal:#00ffcc; --teal2:#00ffcc; --teal-dim:rgba(0,255,204,0.12);
   --surface-accent:#050505;
+  --color-red:#fca5a5; --color-amber:#fcd34d; --color-green:#86efac; --color-blue:#93c5fd;
+  --color-red-bg:rgba(239,68,68,0.15); --color-amber-bg:rgba(245,158,11,0.15);
+  --color-green-bg:rgba(34,197,94,0.15); --color-blue-bg:rgba(59,130,246,0.15);
 }
 body.theme-contrast select.input option,
 body.theme-contrast select.form-input option {
@@ -266,7 +285,7 @@ body {
 .rdv-weekday { font-size: 10px; text-transform: uppercase; color: var(--text3); letter-spacing: 1px; margin-bottom: 2px; }
 .rdv-daynum { font-family: 'Playfair Display', serif; font-size: 30px; color: var(--teal2); line-height: 1; }
 .rdv-date-big.past .rdv-daynum { color: var(--text3); }
-.rdv-date-big.urgent-bg .rdv-daynum { color: #fca5a5; }
+.rdv-date-big.urgent-bg .rdv-daynum { color: var(--color-red); }
 .rdv-monthyear { font-size: 11px; text-transform: uppercase; color: var(--text2); letter-spacing: 0.5px; margin-top: 2px; }
 .rdv-time-chip {
   margin-top: 5px; background: rgba(14,165,160,0.15); color: var(--teal2);
@@ -312,7 +331,7 @@ body {
 .patient-mini.active { background: var(--teal-dim); border-color: var(--teal); }
 .patient-mini .pm-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .patient-mini .pm-id { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; }
-.patient-mini .pm-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--red-dim); color: #fca5a5; margin-top: 3px; }
+.patient-mini .pm-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--color-red-bg); color: var(--color-red); margin-top: 3px; }
 
 /* ── TOPBAR ── */
 .topbar-title { font-family: 'Playfair Display', serif; font-size: 18px; flex: 1; }
@@ -417,10 +436,10 @@ body {
 /* ── BADGES ── */
 .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
 .badge-teal { background: var(--teal-dim); color: var(--teal2); border: 1px solid rgba(14,165,160,0.25); }
-.badge-red { background: var(--red-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
-.badge-amber { background: var(--amber-dim); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
-.badge-blue { background: rgba(59,130,246,0.1); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
-.badge-green { background: var(--green-dim); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+.badge-red   { background: var(--color-red-bg);   color: var(--color-red);   border: 1px solid rgba(239,68,68,0.30); }
+.badge-amber { background: var(--color-amber-bg); color: var(--color-amber); border: 1px solid rgba(245,158,11,0.30); }
+.badge-blue  { background: var(--color-blue-bg);  color: var(--color-blue);  border: 1px solid rgba(59,130,246,0.30); }
+.badge-green { background: var(--color-green-bg); color: var(--color-green); border: 1px solid rgba(34,197,94,0.30); }
 
 /* ── TABS ── */
 .tabs { display: flex; gap: 3px; margin-bottom: 18px; background: var(--bg2); padding: 3px; border-radius: 12px; width: fit-content; border: 1px solid var(--border); }
@@ -456,14 +475,14 @@ body {
 .jalon.overdue { border-color: var(--amber); background: var(--amber-dim); }
 .jalon.upcoming { border-color: var(--border); opacity: 0.6; }
 .jalon-day { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; color: var(--teal2); }
-.jalon.overdue .jalon-day { color: #fcd34d; }
+.jalon.overdue .jalon-day { color: var(--color-amber); }
 .jalon.upcoming .jalon-day { color: var(--text3); }
 .jalon-status { font-size: 18px; margin: 4px 0; }
 .jalon-label { font-size: 10px; color: var(--text3); text-align: center; }
 .jalon.done .jalon-label { color: var(--teal2); }
 
 /* ── EXPORT BUTTON ── */
-.btn-export { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #93c5fd; }
+.btn-export { background: var(--color-blue-bg); border: 1px solid rgba(59,130,246,0.35); color: var(--color-blue); }
 .btn-export:hover { background: rgba(59,130,246,0.25); }
 
 /* ── RDV ── */
@@ -478,7 +497,7 @@ body {
 .rdv-date-block { text-align: center; min-width: 50px; background: var(--teal-dim); border-radius: 10px; padding: 7px; border: 1px solid rgba(14,165,160,0.2); }
 .rdv-date-block.urgent { background: var(--red-dim); border-color: rgba(239,68,68,0.3); }
 .rdv-day { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--teal2); line-height: 1; }
-.rdv-day.urgent { color: #fca5a5; }
+.rdv-day.urgent { color: var(--color-red); }
 .rdv-month { font-size: 10px; text-transform: uppercase; color: var(--text2); letter-spacing: 1px; }
 .rdv-info { flex: 1; }
 .rdv-type { font-size: 14px; font-weight: 600; color: var(--text); }
@@ -638,9 +657,9 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   padding: 10px 14px; margin-bottom: 14px;
   line-height: 1.5; display: none;
 }
-.auth-msg-error   { background: var(--red-dim);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
-.auth-msg-success { background: var(--green-dim); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
-.auth-msg-info    { background: var(--teal-dim);  color: var(--teal2); border: 1px solid rgba(14,165,160,0.3); }
+.auth-msg-error   { background: var(--color-red-bg);   color: var(--color-red);   border: 1px solid rgba(239,68,68,0.35); }
+.auth-msg-success { background: var(--color-green-bg); color: var(--color-green); border: 1px solid rgba(34,197,94,0.35); }
+.auth-msg-info    { background: var(--teal-dim);       color: var(--teal2);       border: 1px solid rgba(14,165,160,0.35); }
 .auth-links {
   display: flex; align-items: center; justify-content: center;
   gap: 10px; flex-wrap: wrap; margin-top: 4px;
@@ -702,7 +721,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 6px; padding: 2px 9px; white-space: nowrap;
 }
-.ph-meta-chip.amber { color: #fcd34d; background: var(--amber-dim); border-color: rgba(245,158,11,0.3); }
+.ph-meta-chip.amber { color: var(--color-amber); background: var(--color-amber-bg); border-color: rgba(245,158,11,0.35); }
 .ph-contact-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
 .ph-contact-item { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
 
@@ -727,7 +746,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
 /* ── TAB COUNT BADGE ── */
 .tab-count { display: inline-flex; align-items: center; justify-content: center; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.1); color: var(--text2); margin-left: 4px; }
-.tab-count-amber { background: var(--amber-dim); color: #fcd34d; }
+.tab-count-amber { background: var(--color-amber-bg); color: var(--color-amber); }
 
 /* ── POST-OP BANNER ── */
 .postop-banner {
@@ -765,7 +784,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 }
 .user-menu-item:last-child { border-bottom: none; }
 .user-menu-item:hover { background: var(--teal-dim); color: var(--text); }
-.user-menu-item.danger:hover { background: var(--red-dim); color: #fca5a5; }
+.user-menu-item.danger:hover { background: var(--color-red-bg); color: var(--color-red); }
 
 /* ── SALLE D'ATTENTE ── */
 .checkin-card {
@@ -807,7 +826,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   align-items: center; justify-content: center;
   transition: background 0.15s, color 0.15s; z-index: 1; flex-shrink: 0;
 }
-.sidebar-close-btn:hover { background: var(--red-dim); color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+.sidebar-close-btn:hover { background: var(--color-red-bg); color: var(--color-red); border-color: rgba(239,68,68,0.35); }
 
 /* Sidebar overlay — blocks background when drawer is open */
 .sidebar-overlay {
