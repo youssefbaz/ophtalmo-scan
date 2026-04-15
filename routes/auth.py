@@ -57,7 +57,7 @@ def login():
         actual_role = row['role']
         if selected_role == 'patient' and actual_role != 'patient':
             return jsonify({"ok": False, "error": "Ce compte n'est pas un compte patient. Veuillez sélectionner l'onglet Médecin."}), 403
-        if selected_role == 'medecin' and actual_role == 'patient':
+        if selected_role == 'medecin' and actual_role not in ('medecin', 'admin'):
             return jsonify({"ok": False, "error": "Ce compte n'est pas un compte médecin. Veuillez sélectionner l'onglet Patient."}), 403
 
     # ── 2FA check (Step 3) ─────────────────────────────────────────────────────

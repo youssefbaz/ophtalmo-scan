@@ -121,7 +121,8 @@ function applyTheme(theme) {
     const tabsContainer = document.querySelector('.role-tabs');
     if (tabsContainer) tabsContainer.style.display = 'none';
     // Update demo-creds hint
-    document.getElementById('demoCreds').innerHTML = DEMO[role].hint;
+    const credsEl = document.getElementById('demoCreds');
+    if (credsEl) credsEl.innerHTML = DEMO[role] ? DEMO[role].hint : '';
     // Update subtitle
     document.getElementById('loginSubtitle').textContent =
       role === 'medecin' ? 'Espace médecin' : 'Espace patient';
