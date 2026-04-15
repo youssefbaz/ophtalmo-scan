@@ -27,7 +27,7 @@ async function renderDashboardMedecin(c) {
           <div class="rdv-date-block urgent"><div class="rdv-day urgent">${new Date(r.date).getDate()}</div><div class="rdv-month">${new Date(r.date).toLocaleString('fr-FR',{month:'short'})}</div></div>
           <div class="rdv-info">
             <div class="rdv-type">🚨 ${r.patient_prenom} ${r.patient_nom}</div>
-            <div class="rdv-meta">${_normRdvType(r.type)} · ${r.heure} · <span style="color:#fca5a5">Urgent</span></div>
+            <div class="rdv-meta">${_normRdvType(r.type)} · ${r.heure} · <span style="color:var(--color-red)">Urgent</span></div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-amber btn-sm" onclick="modifierRdv('${r.id}','${r.date}','${r.heure}')">✏ Modifier</button>

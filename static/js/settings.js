@@ -15,7 +15,7 @@ function openChangePassword() {
       <label class="lbl">Confirmer le nouveau mot de passe</label>
       <input type="password" class="input" id="cpConfirm" placeholder="Répétez le nouveau mot de passe">
     </div>
-    <div id="cpError" style="color:#fca5a5;font-size:13px;margin-top:10px;display:none"></div>
+    <div id="cpError" style="color:var(--color-red);font-size:13px;margin-top:10px;display:none"></div>
   `, async () => {
     const current  = document.getElementById('cpCurrent').value;
     const newPw    = document.getElementById('cpNew').value;

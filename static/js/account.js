@@ -128,13 +128,13 @@ async function renderTodayView(c) {
       'annulé':    ['badge-red',   'Annulé'],
     };
     const [cls, label] = map[s] || ['', s];
-    return `<span class="badge ${cls}" style="${s==='arrivé'?'background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)':''}">${label}</span>`;
+    return `<span class="badge ${cls}" style="${s==='arrivé'?'background:var(--color-blue-bg);color:var(--color-blue);border-color:rgba(59,130,246,.35)':''}">${label}</span>`;
   };
 
   const checkinButtons = r => {
     const btns = [];
     if (!['terminé','annulé'].includes(r.statut)) {
-      if (r.statut !== 'arrivé'   && r.statut !== 'en_cours') btns.push(`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#93c5fd" onclick="setCheckin('${r.id}','arrivé')">✓ Arrivé</button>`);
+      if (r.statut !== 'arrivé'   && r.statut !== 'en_cours') btns.push(`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--color-blue)" onclick="setCheckin('${r.id}','arrivé')">✓ Arrivé</button>`);
       if (r.statut !== 'en_cours' && r.statut !== 'terminé')   btns.push(`<button class="btn btn-amber btn-sm" style="font-size:11px" onclick="setCheckin('${r.id}','en_cours')">▶ En cours</button>`);
       btns.push(`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="setCheckin('${r.id}','terminé')">✓ Terminé</button>`);
     }
