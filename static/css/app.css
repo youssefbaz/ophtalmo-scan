@@ -970,13 +970,25 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
 /* ── MOBILE (≤600px) ─────────────────────────────────────────── */
 @media (max-width: 600px) {
-  /* ── Topbar ── */
-  .topbar { padding: 0 10px; gap: 8px; height: 54px; min-height: 54px; }
-  .topbar-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-  .topbar-user { padding: 5px 8px; gap: 6px; }
+  /* ── Topbar — safe-area aware for iPhone notch ── */
+  .topbar {
+    padding: env(safe-area-inset-top, 0px) 10px 0;
+    gap: 8px;
+    height: calc(54px + env(safe-area-inset-top, 0px));
+    min-height: calc(54px + env(safe-area-inset-top, 0px));
+    align-items: flex-end;
+    padding-bottom: 0;
+  }
+  /* Align topbar children to the bottom of the expanded bar */
+  .topbar > * { margin-bottom: 0; align-self: center; }
+  .topbar-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+  .topbar-user { padding: 6px 10px; gap: 6px; }
   .topbar-user-role { display: none; }
-  .topbar-user-name { font-size: 12px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-user-name { font-size: 13px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #globalSearchWrap { display: none !important; }
+
+  /* ── Sidebar — safe-area top padding ── */
+  .sidebar { padding-top: env(safe-area-inset-top, 0px); }
 
   /* ── Bottom nav ── */
   .bottom-nav {
@@ -991,8 +1003,8 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
   /* ── Content ── */
   .content {
-    padding: 12px 10px;
-    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    padding: 14px 12px;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     overflow-x: hidden;
   }
 
@@ -1006,30 +1018,45 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   /* ── Form rows → single column ── */
   .form-row { grid-template-columns: 1fr; gap: 10px; }
 
-  /* ── Login ── */
-  #loginScreen { padding: 16px 12px; align-items: flex-start; }
-  .login-box { padding: 28px 18px 36px; border-radius: 16px; }
+  /* ── Login — compact & scrollable ── */
+  #loginScreen {
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 14px
+             calc(20px + env(safe-area-inset-bottom, 0px));
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .login-box { padding: 24px 18px 28px; border-radius: 18px; }
+  .login-logo { margin-bottom: 18px; }
+  .login-logo-icon {
+    width: 52px; height: 52px; font-size: 26px;
+    margin-bottom: 10px; border-radius: 16px;
+    box-shadow: 0 6px 18px rgba(59,130,246,0.3);
+  }
+  .login-title { font-size: 21px; }
+  .login-sub { font-size: 12px; margin-top: 2px; }
+  .role-tabs { margin-bottom: 16px; }
+  .form-group { margin-bottom: 12px; }
 
   /* ── Patient header V2 → stacked ── */
   .patient-header-v2 { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
   .ph-identity { gap: 10px; }
-  .patient-avatar-lg { width: 44px; height: 44px; font-size: 15px; border-radius: 12px; flex-shrink: 0; }
+  .patient-avatar-lg { width: 46px; height: 46px; font-size: 16px; border-radius: 12px; flex-shrink: 0; }
   .patient-fullname { font-size: 15px; }
   .ph-snapshot { min-width: unset; }
   .ph-snapshot-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .ph-actions { flex-direction: row; flex-wrap: wrap; min-width: unset; gap: 5px; }
-  .ph-actions .btn { flex: 1 1 auto; min-width: calc(50% - 5px); justify-content: center; font-size: 11px; padding: 8px 8px; }
+  .ph-actions { flex-direction: row; flex-wrap: wrap; min-width: unset; gap: 6px; }
+  .ph-actions .btn { flex: 1 1 auto; min-width: calc(50% - 6px); justify-content: center; font-size: 12px; padding: 9px 8px; min-height: 40px; }
   .ph-actions-row { flex-wrap: wrap; }
-  .ph-actions-row .btn { font-size: 11px; flex: 1; }
+  .ph-actions-row .btn { font-size: 12px; flex: 1; }
 
   /* ── Tabs → horizontally scrollable ── */
   .tabs { overflow-x: auto; flex-wrap: nowrap; width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
-  .tab-btn { white-space: nowrap; flex-shrink: 0; padding: 7px 10px; font-size: 12px; min-height: 40px; }
+  .tab-btn { white-space: nowrap; flex-shrink: 0; padding: 8px 12px; font-size: 13px; min-height: 42px; }
 
   .subtabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .subtabs::-webkit-scrollbar { display: none; }
-  .subtab-btn { white-space: nowrap; flex-shrink: 0; min-height: 40px; font-size: 12px; }
+  .subtab-btn { white-space: nowrap; flex-shrink: 0; min-height: 42px; font-size: 13px; }
 
   /* ── Post-op milestones ── */
   .postop-track { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -1042,30 +1069,43 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   /* ── Modals → bottom sheet ── */
   .modal-overlay { align-items: flex-end; }
   .modal {
-    border-radius: 20px 20px 0 0 !important;
+    border-radius: 22px 22px 0 0 !important;
     width: 100% !important; max-width: 100% !important;
-    max-height: 90dvh;
-    padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    max-height: 92dvh;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
   }
-  .modal-header { margin-bottom: 12px; }
+  .modal-header { margin-bottom: 14px; }
+
+  /* Drag handle indicator for bottom sheet modals */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: -6px auto 14px;
+  }
 
   /* ── Popups → full width ── */
-  .notif-panel { left: 6px; right: 6px; width: auto; top: 60px; }
-  .user-menu { left: 6px; right: 6px; top: 60px; }
+  .notif-panel { left: 6px; right: 6px; width: auto; top: calc(60px + env(safe-area-inset-top, 0px)); }
+  .user-menu { left: 6px; right: 6px; top: calc(60px + env(safe-area-inset-top, 0px)); }
 
   /* ── Stat & cards ── */
-  .stat-value { font-size: 24px; }
-  .card { padding: 12px 10px; }
-  .card-sm { padding: 10px 12px; }
+  .stat-value { font-size: 26px; }
+  .card { padding: 14px 12px; }
+  .card-sm { padding: 12px 12px; }
 
-  /* ── Welcome banner ── */
-  .welcome-banner { flex-direction: column; gap: 10px; padding: 14px 12px; }
+  /* ── Welcome banner — stay horizontal with compact avatar ── */
+  .welcome-banner { flex-direction: row; align-items: center; gap: 12px; padding: 14px 14px; }
+  .welcome-avatar { width: 44px; height: 44px; border-radius: 12px; font-size: 18px; flex-shrink: 0; }
+  .welcome-name { font-size: 17px; }
+  .welcome-sub { font-size: 12px; margin-top: 2px; }
 
   /* ── RDV cards — wrap buttons to own line ── */
-  .rdv-card { padding: 10px; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+  .rdv-card { padding: 12px; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
   .rdv-card > div:last-child { flex-wrap: wrap !important; gap: 5px; width: 100%; justify-content: flex-end; display: flex !important; }
-  .rdv-card > div:last-child .btn { flex: 0 0 auto; padding: 7px 10px; font-size: 11px; min-height: 36px; }
+  .rdv-card > div:last-child .btn { flex: 0 0 auto; padding: 8px 12px; font-size: 12px; min-height: 38px; }
   /* Keep date+info on same line */
   .rdv-date-block, .rdv-info { flex-shrink: 1; }
   .rdv-info { min-width: 0; flex: 1; }
@@ -1081,12 +1121,12 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
   .docs-grid { grid-template-columns: 1fr 1fr !important; gap: 8px; }
 
   /* ── Section titles ── */
-  .section-title { font-size: 13px; }
+  .section-title { font-size: 13px; letter-spacing: 0.2px; }
 
   /* ── AI chat ── */
-  .ai-panel { height: calc(100dvh - 122px - env(safe-area-inset-bottom, 0px)); }
+  .ai-panel { height: calc(100dvh - 122px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   #aiMessages { min-height: 180px; }
-  .quick-q { padding: 6px 10px; font-size: 11px; min-height: 34px; }
+  .quick-q { padding: 7px 12px; font-size: 12px; min-height: 36px; }
 
   /* ── Agenda calendar — fix 1fr+300px two-column into single column ── */
   .cal-layout-wrap { grid-template-columns: 1fr !important; }
@@ -1108,9 +1148,9 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
   /* ── Misc ── */
   .badge { font-size: 10px; padding: 2px 7px; }
-  label.lbl { font-size: 12px; }
-  .btn { min-height: 40px; }
-  .btn-sm { min-height: 36px; padding: 7px 12px; font-size: 12px; }
+  label.lbl { font-size: 13px; }
+  .btn { min-height: 42px; }
+  .btn-sm { min-height: 38px; padding: 8px 14px; font-size: 13px; }
 
   /* ────────────────────────────────────────────────────────────────
      CRITICAL — iOS Safari auto-zoom prevention
@@ -1150,25 +1190,37 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
   /* ── Postop banner: stack on mobile ── */
   .postop-banner { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+  /* ── Bottom nav item text ── */
+  .bni-label { font-size: 11px; }
+  .bni-icon { font-size: 20px; }
+  .bottom-nav-item { min-height: 54px; }
 }
 
 /* ── SMALL PHONES (≤400px) ───────────────────────────────────── */
 @media (max-width: 400px) {
-  .topbar-title { max-width: 110px; font-size: 13px; }
+  .topbar-title { max-width: 110px; font-size: 14px; }
   /* Hide chevron icon in topbar user to save space */
   .topbar-user svg:last-child { display: none; }
   /* Tighten topbar right gap */
-  .topbar-user { padding: 5px 7px; gap: 5px; }
-  .login-box { padding: 22px 14px 32px; }
+  .topbar-user { padding: 5px 8px; gap: 5px; }
+
+  /* Login further tightened on tiny phones */
+  .login-logo { margin-bottom: 12px; }
+  .login-logo-icon { width: 44px; height: 44px; font-size: 22px; border-radius: 14px; }
+  .login-title { font-size: 19px; }
+  .login-sub { font-size: 11px; }
+  .login-box { padding: 20px 14px 26px; }
+
   .docs-grid { grid-template-columns: 1fr !important; }
-  .stat-value { font-size: 20px; }
-  .tab-btn { padding: 6px 8px; font-size: 11px; }
+  .stat-value { font-size: 22px; }
+  .tab-btn { padding: 7px 9px; font-size: 12px; }
   .ph-snap-value { font-size: 16px; }
-  .bni-label { font-size: 9px; }
-  .bni-icon { font-size: 18px; }
+  .bni-label { font-size: 10px; }
+  .bni-icon { font-size: 19px; }
   /* At 400px phones, 2-col ph-actions buttons are too narrow — go 1 col */
-  .ph-actions .btn { min-width: calc(100% - 0px); }
+  .ph-actions .btn { min-width: 100%; }
   /* content padding tighter */
-  .content { padding: 8px 8px; padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .content { padding: 10px 10px; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 }
 </style>
