@@ -94,7 +94,7 @@ function applyTheme(theme) {
   if (theme !== 'light') document.body.classList.add('theme-' + theme);
   localStorage.setItem('ophtalmo_theme', theme);
   // Sync mobile browser chrome (address bar / status bar) with app theme
-  const bgColors = { dark:'#0f1724', light:'#f8fafc', clinical:'#f5f7fa', contrast:'#000000' };
+  const bgColors = { dark:'#060F1A', light:'#F4F7FA', clinical:'#F5F7FA', contrast:'#000000' };
   const metaTag = document.querySelector('meta[name="theme-color"]');
   if (metaTag) metaTag.content = bgColors[theme] || '#f8fafc';
 }
