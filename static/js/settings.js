@@ -737,7 +737,7 @@ async function renderSettings(c) {
       <div class="section-title" style="margin-bottom:16px">${lx('theme')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
         ${[
-          {id:'dark',    preview:'#06111a', text:'#dff0f5', accent:'#0ea5a0'},
+          {id:'dark',    preview:'#07111c', text:'#e4f0f6', accent:'#0ea5a0'},
           {id:'light',   preview:'#f0f4f8', text:'#0a2233', accent:'#0ea5a0'},
           {id:'clinical',preview:'#f5f7fa', text:'#1a2940', accent:'#0077cc'},
           {id:'contrast',preview:'#000000', text:'#ffffff', accent:'#00ffcc'},
