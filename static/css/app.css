@@ -1,51 +1,63 @@
 <style>
+/* ── DEFAULT THEME: CLAIR (light) ── */
 :root {
-  --bg: #0c1422;
-  --bg2: #131f30;
-  --bg3: #1a2c40;
-  --card: #1f3450;
-  --border: #2e5270;
+  --bg: #f0f4f8;
+  --bg2: #e2eaf2;
+  --bg3: #d4dfe9;
+  --card: #ffffff;
+  --border: #b8ccd8;
+  --surface-accent: #c5dce8;
   --teal: #0ea5a0;
-  --teal2: #1dd8d2;
-  --teal-dim: rgba(14,165,160,0.18);
+  --teal2: #0c8a86;
+  --teal-dim: rgba(14,165,160,0.12);
   --amber: #f59e0b;
-  --amber-dim: rgba(245,158,11,0.18);
+  --amber-dim: rgba(245,158,11,0.12);
   --red: #ef4444;
-  --red-dim: rgba(239,68,68,0.18);
+  --red-dim: rgba(239,68,68,0.12);
   --green: #22c55e;
-  --green-dim: rgba(34,197,94,0.18);
+  --green-dim: rgba(34,197,94,0.12);
   --blue: #3b82f6;
-  --text: #f0f8fc;
-  --text2: #a8ccde;
-  --text3: #78afc8;
+  --text: #0a2233;
+  --text2: #3d6a82;
+  --text3: #6a96b0;
   --radius: 14px;
-  --shadow: 0 4px 32px rgba(0,0,0,0.55);
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+:root select.input option,
+:root select.form-input option {
+  background: #e2eaf2; color: #0a2233;
 }
 
 /* ── THEMES ── */
-body.theme-light {
-  --bg:#f0f4f8; --bg2:#e2eaf2; --bg3:#d4dfe9; --card:#ffffff;
-  --border:#b8ccd8; --text:#0a2233; --text2:#3d6a82; --text3:#7fa8be;
-  --shadow:0 4px 24px rgba(0,0,0,0.08);
-}
-body.theme-light select.input option,
-body.theme-light select.form-input option {
-  background: #e2eaf2; color: #0a2233;
-}
 body.theme-clinical {
   --bg:#f5f7fa; --bg2:#edf0f5; --bg3:#e0e6ed; --card:#ffffff;
   --border:#c5d0dc; --text:#1a2940; --text2:#4a6285; --text3:#8a9fb5;
-  --teal:#0077cc; --teal2:#0099ff; --teal-dim:rgba(0,119,204,0.10);
+  --teal:#0077cc; --teal2:#005fa3; --teal-dim:rgba(0,119,204,0.10);
+  --surface-accent:#d0dce8;
   --shadow:0 2px 16px rgba(0,0,0,0.07);
 }
 body.theme-clinical select.input option,
 body.theme-clinical select.form-input option {
   background: #edf0f5; color: #1a2940;
 }
+body.theme-minuit {
+  --bg:#141c2c; --bg2:#1b2638; --bg3:#223044; --card:#283852;
+  --border:#34506e; --text:#edf2f7; --text2:#a0c0d8; --text3:#7098b8;
+  --teal:#0ea5a0; --teal2:#1dd8d2; --teal-dim:rgba(14,165,160,0.18);
+  --amber-dim:rgba(245,158,11,0.18); --red-dim:rgba(239,68,68,0.18);
+  --green-dim:rgba(34,197,94,0.18);
+  --surface-accent:#1a2c44;
+  --shadow:0 4px 32px rgba(0,0,0,0.55);
+}
+body.theme-minuit select.input option,
+body.theme-minuit select.form-input option {
+  background: #223044; color: #edf2f7;
+}
 body.theme-contrast {
   --bg:#000000; --bg2:#0a0a0a; --bg3:#111111; --card:#161616;
-  --border:#2a2a2a; --text:#ffffff; --text2:#cccccc; --text3:#666666;
+  --border:#2a2a2a; --text:#ffffff; --text2:#cccccc; --text3:#888888;
   --teal:#00ffcc; --teal2:#00ffcc; --teal-dim:rgba(0,255,204,0.12);
+  --surface-accent:#050505;
 }
 body.theme-contrast select.input option,
 body.theme-contrast select.form-input option {
@@ -107,7 +119,7 @@ body {
 #loginScreen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: radial-gradient(ellipse at 30% 40%, #0a2535 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 30% 40%, var(--surface-accent) 0%, var(--bg) 70%);
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
@@ -361,7 +373,7 @@ body {
 
 /* ── PATIENT HEADER ── */
 .patient-header {
-  background: linear-gradient(135deg, #102840 0%, var(--bg2) 100%);
+  background: linear-gradient(135deg, var(--surface-accent) 0%, var(--bg2) 100%);
   border: 1px solid var(--border); border-radius: 18px;
   padding: 22px 24px; margin-bottom: 20px;
   display: flex; align-items: flex-start; gap: 20px;
@@ -588,7 +600,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
 /* ── PATIENT ROLE SPECIFIC ── */
 .patient-portal .stat-card { cursor: default; }
-.welcome-banner { background: linear-gradient(135deg, #0e3045 0%, var(--bg2) 100%); border: 1px solid var(--border); border-radius: 18px; padding: 24px 28px; margin-bottom: 22px; display: flex; align-items: center; gap: 20px; }
+.welcome-banner { background: linear-gradient(135deg, var(--surface-accent) 0%, var(--bg2) 100%); border: 1px solid var(--border); border-radius: 18px; padding: 24px 28px; margin-bottom: 22px; display: flex; align-items: center; gap: 20px; }
 .welcome-avatar { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, var(--blue), #1d4ed8); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
 .welcome-name { font-family: 'Playfair Display', serif; font-size: 20px; }
 .welcome-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
@@ -645,7 +657,7 @@ label.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; c
 
 /* ── PATIENT HEADER V2 ── */
 .patient-header-v2 {
-  background: linear-gradient(135deg, #0e2840 0%, var(--bg2) 100%);
+  background: linear-gradient(135deg, var(--surface-accent) 0%, var(--bg2) 100%);
   border: 1px solid var(--border); border-radius: 18px;
   padding: 22px 24px; margin-bottom: 22px;
   display: grid; grid-template-columns: 1fr auto auto; gap: 24px; align-items: start;

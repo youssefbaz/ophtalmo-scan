@@ -90,8 +90,8 @@ function t(key) {
 }
 
 function applyTheme(theme) {
-  document.body.classList.remove('theme-light','theme-clinical','theme-contrast');
-  if (theme !== 'dark') document.body.classList.add('theme-' + theme);
+  document.body.classList.remove('theme-light','theme-clinical','theme-contrast','theme-minuit');
+  if (theme !== 'light') document.body.classList.add('theme-' + theme);
   localStorage.setItem('ophtalmo_theme', theme);
 }
 
@@ -100,7 +100,8 @@ function applyTheme(theme) {
   initPasswordToggles(); // wire up eye-toggles on all static auth panels
 
   applyLang(_currentLang);
-  const storedTheme = localStorage.getItem('ophtalmo_theme') || 'dark';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'light';
+  if (storedTheme === 'dark') storedTheme = 'light'; // dark theme removed
   applyTheme(storedTheme);
 
   // Pre-select role based on URL path (/medecin or /patient)
