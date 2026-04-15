@@ -70,7 +70,8 @@ function _validatePasswordFrontend(pw) {
 function setLoginRole(role, btn) {
   document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('demoCreds').innerHTML = DEMO[role].hint;
+  const credsEl = document.getElementById('demoCreds');
+  if (credsEl) credsEl.innerHTML = DEMO[role] ? DEMO[role].hint : '';
 }
 
 // Store credentials temporarily during 2FA step
