@@ -91,13 +91,12 @@ function t(key) {
 
 function applyTheme(theme) {
   document.body.classList.remove('theme-dark','theme-light','theme-clinical','theme-contrast','theme-minuit');
-  // 'clinical' is the default (no class needed); 'light' is kept as an alias for compatibility
-  if (theme !== 'clinical' && theme !== 'light') document.body.classList.add('theme-' + theme);
-  localStorage.setItem('ophtalmo_theme', theme === 'light' ? 'clinical' : theme);
+  if (theme !== 'light') document.body.classList.add('theme-' + theme);
+  localStorage.setItem('ophtalmo_theme', theme);
   // Sync mobile browser chrome (address bar / status bar) with app theme
-  const bgColors = { dark:'#060F1A', clinical:'#F5F7FA', light:'#F5F7FA', contrast:'#000000' };
+  const bgColors = { dark:'#060F1A', light:'#F4F7FA', clinical:'#F5F7FA', contrast:'#000000' };
   const metaTag = document.querySelector('meta[name="theme-color"]');
-  if (metaTag) metaTag.content = bgColors[theme] || '#F5F7FA';
+  if (metaTag) metaTag.content = bgColors[theme] || '#F4F7FA';
 }
 
 // ─── PAGE LOAD: check for password reset token in URL ─────────────────────────
@@ -105,8 +104,8 @@ function applyTheme(theme) {
   initPasswordToggles(); // wire up eye-toggles on all static auth panels
 
   applyLang(_currentLang);
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
-  if (storedTheme === 'minuit' || storedTheme === 'light') storedTheme = 'clinical';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'light';
+  if (storedTheme === 'minuit') storedTheme = 'dark';
   applyTheme(storedTheme);
 
   // Pre-select role based on URL path (/medecin or /patient)
