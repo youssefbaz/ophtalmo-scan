@@ -1,52 +1,111 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    OPHTALMO-SCAN — Design System v3
-   Default theme: Dark
-   Palette: Deep navy · Teal #2DD4BF · Background #0D1117
+   Palette: Navy #0A2540 · Teal #0D9488 · Background #F4F7FA
    Fonts: Poppins (brand) + Inter (body)
    ══════════════════════════════════════════════════════════════ */
 
-/* ── DEFAULT THEME (DARK) ── */
+/* ── DEFAULT (LIGHT) THEME ── */
 :root {
   /* Primary brand */
-  --navy:       #C9D8EA;
+  --navy:       #0A2540;
+  --teal:       #0D9488;
+  --teal2:      #0B7A6E;
+  --teal3:      #096057;
+  --teal-dim:   rgba(13,148,136,0.10);
+  --teal-border:rgba(13,148,136,0.25);
+  --cyan:       #22D3EE;
+  --cyan-dim:   rgba(34,211,238,0.12);
+
+  /* Surfaces */
+  --bg:             #F4F7FA;
+  --bg2:            #EDF1F5;
+  --bg3:            #E2E8F0;
+  --card:           #FFFFFF;
+  --border:         #CBD5E1;
+  --surface-accent: #E8F4F3;
+
+  /* Sidebar — navy in light theme */
+  --sidebar-bg:     #0A2540;
+  --sidebar-border: rgba(255,255,255,0.08);
+
+  /* Text */
+  --text:  #0A2540;
+  --text1: #0A2540;
+  --text2: #476B8A;
+  --text3: #94A3B8;
+
+  /* Semantic colours */
+  --amber:   #D97706;
+  --amber-dim: rgba(217,119,6,0.10);
+  --red:     #DC2626;
+  --red-dim: rgba(220,38,38,0.09);
+  --green:   #16A34A;
+  --green-dim: rgba(22,163,74,0.09);
+  --blue:    #3B82F6;
+  --danger:  #DC2626;
+
+  /* Semantic text variants */
+  --color-red:       #B91C1C;
+  --color-amber:     #92400E;
+  --color-green:     #15803D;
+  --color-blue:      #1D4ED8;
+  --color-red-bg:    rgba(220,38,38,0.08);
+  --color-amber-bg:  rgba(180,83,9,0.08);
+  --color-green-bg:  rgba(21,128,61,0.08);
+  --color-blue-bg:   rgba(29,78,216,0.08);
+
+  /* Shape & shadow */
+  --radius:    12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow:      0 4px 24px rgba(10,37,64,0.12);
+  --shadow-sm:   0 1px 3px rgba(10,37,64,0.06), 0 4px 12px rgba(10,37,64,0.05);
+  --card-shadow: 0 1px 3px rgba(10,37,64,0.04), 0 4px 16px rgba(10,37,64,0.06);
+  --glass-bg:     rgba(255,255,255,0.92);
+  --glass-border: rgba(13,148,136,0.15);
+}
+
+:root select.input option,
+:root select.form-input option {
+  background: #EDF1F5; color: #0A2540;
+}
+
+/* ── DARK THEME ── */
+body.theme-dark {
+  --navy:       #E4EEF8;
   --teal:       #2DD4BF;
   --teal2:      #14B8A6;
   --teal3:      #0D9488;
-  --teal-dim:   rgba(45,212,191,0.12);
-  --teal-border:rgba(45,212,191,0.22);
+  --teal-dim:   rgba(45,212,191,0.10);
+  --teal-border:rgba(45,212,191,0.20);
   --cyan:       #67E8F9;
   --cyan-dim:   rgba(103,232,249,0.10);
 
-  /* Surfaces */
-  --bg:             #0D1117;
-  --bg2:            #161B22;
-  --bg3:            #21262D;
-  --card:           #161B22;
-  --border:         #30363D;
-  --surface-accent: #1C2128;
+  --bg:             #060F1A;
+  --bg2:            #0B1629;
+  --bg3:            #111E35;
+  --card:           #0F1B2F;
+  --border:         #1E3050;
+  --surface-accent: #0D1A2D;
 
-  /* Sidebar */
-  --sidebar-bg:     #090E18;
-  --sidebar-border: rgba(255,255,255,0.06);
+  --sidebar-bg:     #0B1629;
+  --sidebar-border: rgba(255,255,255,0.05);
 
-  /* Text */
-  --text:  #E6EDF3;
-  --text1: #F0F6FC;
-  --text2: #8B949E;
-  --text3: #484F58;
+  --text:  #E4EEF8;
+  --text1: #E4EEF8;
+  --text2: #7EA8CC;
+  --text3: #3D5878;
 
-  /* Semantic colours */
-  --amber:     #F0B429;
-  --amber-dim: rgba(240,180,41,0.15);
-  --red:       #EF4444;
-  --red-dim:   rgba(239,68,68,0.15);
-  --green:     #22C55E;
+  --amber:   #F59E0B;
+  --amber-dim: rgba(245,158,11,0.15);
+  --red:     #EF4444;
+  --red-dim: rgba(239,68,68,0.15);
+  --green:   #22C55E;
   --green-dim: rgba(34,197,94,0.15);
-  --blue:      #60A5FA;
-  --danger:    #EF4444;
+  --blue:    #60A5FA;
+  --danger:  #EF4444;
 
-  /* Semantic text variants */
   --color-red:       #FCA5A5;
   --color-amber:     #FCD34D;
   --color-green:     #86EFAC;
@@ -56,23 +115,40 @@
   --color-green-bg:  rgba(34,197,94,0.14);
   --color-blue-bg:   rgba(59,130,246,0.14);
 
-  /* Shape & shadow */
-  --radius:    12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
   --shadow:      0 4px 32px rgba(0,0,0,0.60);
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25);
-  --glass-bg:     rgba(13,17,23,0.88);
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+  --glass-bg:     rgba(6,15,26,0.88);
   --glass-border: rgba(45,212,191,0.15);
 }
-
-:root select.input option,
-:root select.form-input option {
-  background: #161B22; color: #E6EDF3;
+body.theme-dark select.input option,
+body.theme-dark select.form-input option {
+  background: #111E35; color: #E4EEF8;
+}
+body.theme-dark {
+  background-image:
+    radial-gradient(ellipse 70% 50% at 0% 0%,   rgba(45,212,191,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(99,102,241,0.03) 0%, transparent 55%);
 }
 
-/* body.theme-dark is now the default — variables live in :root above */
+/* ── CLINICAL THEME ── */
+body.theme-clinical {
+  --bg: #F5F7FA; --bg2: #EDF0F5; --bg3: #E0E6ED; --card: #FFFFFF;
+  --border: #B0C4D8; --text: #1A2940; --text2: #3A5C80; --text3: #6E8FAA;
+  --teal: #0077CC; --teal2: #005FA3; --teal-dim: rgba(0,119,204,0.10);
+  --surface-accent: #D0DCE8;
+  --sidebar-bg: #0A2540;
+  --sidebar-border: rgba(255,255,255,0.08);
+  --shadow: 0 2px 16px rgba(0,0,0,0.07);
+  --card-shadow: 0 1px 3px rgba(10,37,64,0.05), 0 4px 12px rgba(10,37,64,0.05);
+  --color-red: #B91C1C; --color-amber: #92400E; --color-green: #166534; --color-blue: #1E40AF;
+  --color-red-bg: rgba(185,28,28,0.10); --color-amber-bg: rgba(146,64,14,0.10);
+  --color-green-bg: rgba(22,101,52,0.10); --color-blue-bg: rgba(30,64,175,0.10);
+}
+body.theme-clinical select.input option,
+body.theme-clinical select.form-input option {
+  background: #EDF0F5; color: #1A2940;
+}
 
 /* ── HIGH CONTRAST THEME ── */
 body.theme-contrast {
@@ -105,9 +181,6 @@ body {
   overflow: hidden;
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
-  background-image:
-    radial-gradient(ellipse 70% 50% at 0% 0%,   rgba(45,212,191,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(99,102,241,0.03) 0%, transparent 55%);
 }
 
 /* ── SCROLLBARS ── */
@@ -124,10 +197,16 @@ body {
 .sidebar {
   width: 260px; min-width: 260px;
   background: var(--sidebar-bg);
-  background-image: radial-gradient(ellipse 220% 80% at 50% -10%, rgba(45,212,191,0.06) 0%, transparent 55%);
   border-right: 1px solid var(--sidebar-border);
   display: flex; flex-direction: column;
   height: 100vh; height: 100dvh; overflow: hidden;
+}
+
+/* Dark theme — sidebar blends with dark bg, lighter border */
+body.theme-dark .sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  background-image: radial-gradient(ellipse 220% 80% at 50% -10%, rgba(45,212,191,0.06) 0%, transparent 55%);
 }
 
 /* Contrast — match contrast sidebar */
@@ -310,18 +389,27 @@ body.theme-dark .sidebar .btn-ghost:hover {
 .topbar {
   height: 58px; min-height: 58px;
   border-bottom: 1px solid var(--border);
-  background: rgba(13,17,23,0.92);
+  background: rgba(244,247,250,0.95);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   display: flex; align-items: center;
   padding: 0 20px; gap: 12px;
   flex-shrink: 0;
 }
+body.theme-dark .topbar {
+  background: rgba(11,22,41,0.92);
+  border-bottom-color: rgba(255,255,255,0.05);
+}
 body.theme-contrast .topbar {
   background: rgba(0,0,0,0.95);
   border-bottom-color: #1a1a1a;
   backdrop-filter: none;
 }
+body.theme-clinical .topbar {
+  background: rgba(245,247,250,0.95);
+  border-bottom-color: var(--border);
+}
+
 .topbar-title {
   font-family: 'Poppins', 'Inter', sans-serif;
   font-size: 17px; font-weight: 600; flex: 1;
@@ -416,46 +504,59 @@ body.theme-contrast .topbar {
 #loginScreen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: #090E18;
+  background: linear-gradient(150deg, #E8F4F3 0%, #F4F7FA 50%, #EEF2FF 100%);
   display: flex; align-items: center; justify-content: center;
   z-index: 1000; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 24px 16px; box-sizing: border-box;
 }
-#loginScreen::before {
-  content: '';
-  position: absolute; inset: -20%;
-  background:
-    radial-gradient(ellipse 130% 90% at 15% 55%, rgba(45,212,191,0.14) 0%, transparent 60%),
-    radial-gradient(ellipse 90%  65% at 88% 12%, rgba(99,102,241,0.09) 0%, transparent 55%),
-    radial-gradient(ellipse 70%  55% at 55% 98%, rgba(14,165,233,0.09) 0%, transparent 50%);
-  animation: aurora-drift 14s ease-in-out infinite;
-  pointer-events: none; z-index: 0;
-}
-#loginScreen::after {
-  content: '';
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(rgba(45,212,191,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(45,212,191,0.035) 1px, transparent 1px);
-  background-size: 52px 52px;
-  pointer-events: none; z-index: 0;
-}
 
 .login-box {
   width: 100%; max-width: 420px; box-sizing: border-box;
-  background: rgba(22,27,34,0.88);
-  backdrop-filter: blur(28px) saturate(1.4);
-  -webkit-backdrop-filter: blur(28px) saturate(1.4);
-  border: 1px solid rgba(45,212,191,0.20);
+  background: #FFFFFF;
+  border: 1px solid #D9E4EF;
   border-radius: 22px;
   padding: 44px 40px;
+  box-shadow:
+    0 2px 4px rgba(10,37,64,0.04),
+    0 12px 40px rgba(13,148,136,0.12),
+    0 0 0 1px rgba(255,255,255,0.8);
+  margin: auto; position: relative; z-index: 1;
+}
+
+/* Dark login */
+body.theme-dark #loginScreen {
+  background: #030a14;
+}
+body.theme-dark #loginScreen::before {
+  content: '';
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(ellipse 130% 90% at 15% 55%, rgba(45,212,191,0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 90%  65% at 88% 12%, rgba(99,102,241,0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 70%  55% at 55% 98%, rgba(14,165,233,0.10) 0%, transparent 50%);
+  animation: aurora-drift 14s ease-in-out infinite;
+  pointer-events: none; z-index: 0;
+}
+body.theme-dark #loginScreen::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(45,212,191,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45,212,191,0.04) 1px, transparent 1px);
+  background-size: 52px 52px;
+  pointer-events: none; z-index: 0;
+}
+body.theme-dark .login-box {
+  background: rgba(10,18,32,0.82);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid rgba(45,212,191,0.18);
   box-shadow:
     0 2px 0 rgba(255,255,255,0.04) inset,
     0 32px 80px rgba(0,0,0,0.75),
     0 0 0 1px rgba(0,0,0,0.4),
-    0 0 60px rgba(45,212,191,0.07);
-  margin: auto; position: relative; z-index: 1;
+    0 0 60px rgba(45,212,191,0.05);
 }
 
 .login-logo { text-align: center; margin-bottom: 34px; }
@@ -478,12 +579,12 @@ body.theme-contrast .topbar {
 /* Role tabs */
 .role-tabs {
   display: flex; gap: 0; margin-bottom: 22px;
-  background: rgba(0,0,0,0.25); padding: 0;
-  border-radius: 11px; border: 1px solid rgba(45,212,191,0.12); overflow: hidden;
+  background: var(--bg2); padding: 0;
+  border-radius: 11px; border: 1px solid var(--border); overflow: hidden;
 }
 .role-tab {
   flex: 1; padding: 10px 8px; border-radius: 0; border: none;
-  border-right: 1px solid rgba(45,212,191,0.10);
+  border-right: 1px solid var(--border);
   background: transparent; color: var(--text2);
   font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
   cursor: pointer; transition: background 0.2s, color 0.2s; text-align: center;
@@ -495,6 +596,11 @@ body.theme-contrast .topbar {
   color: #fff; font-weight: 600;
   box-shadow: 0 2px 10px rgba(13,148,136,0.30);
 }
+body.theme-dark .role-tabs {
+  background: rgba(0,0,0,0.25);
+  border-color: rgba(45,212,191,0.12);
+}
+body.theme-dark .role-tab { border-right-color: rgba(45,212,191,0.10); }
 .role-tab .role-emoji { display: block; font-size: 18px; margin-bottom: 2px; }
 
 /* Form controls */
@@ -505,16 +611,24 @@ body.theme-contrast .topbar {
 }
 .form-input {
   width: 100%; padding: 11px 14px;
-  background: rgba(0,0,0,0.22); border: 1.5px solid rgba(45,212,191,0.15);
+  background: var(--bg2); border: 1.5px solid var(--border);
   border-radius: 10px; color: var(--text);
   font-family: 'Inter', sans-serif; font-size: 14px;
   outline: none; transition: border-color 0.2s, box-shadow 0.2s;
 }
 .form-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-dim);
+}
+.form-input::placeholder { color: var(--text3); }
+body.theme-dark .form-input {
+  background: rgba(0,0,0,0.22);
+  border-color: rgba(45,212,191,0.15);
+}
+body.theme-dark .form-input:focus {
   border-color: rgba(45,212,191,0.55);
   box-shadow: 0 0 0 3px rgba(45,212,191,0.10);
 }
-.form-input::placeholder { color: var(--text3); }
 
 .demo-creds {
   background: var(--teal-dim); border: 1px solid var(--teal-border);
@@ -1301,12 +1415,19 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
   .bottom-nav {
     display: flex;
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: rgba(13,17,23,0.95);
-    backdrop-filter: blur(18px) saturate(1.3);
-    -webkit-backdrop-filter: blur(18px) saturate(1.3);
-    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(244,247,250,0.96);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border-top: 1px solid var(--border);
     z-index: 100;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -2px 16px rgba(10,37,64,0.08);
+  }
+  body.theme-dark .bottom-nav {
+    background: rgba(11,22,41,0.95);
+    backdrop-filter: blur(18px) saturate(1.3);
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    border-top-color: rgba(255,255,255,0.06);
     box-shadow: 0 -4px 30px rgba(0,0,0,0.45);
   }
 
@@ -1325,7 +1446,11 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
              calc(20px + env(safe-area-inset-bottom, 0px));
     align-items: center; justify-content: flex-start;
   }
-  .login-box { padding: 24px 18px 28px; border-radius: 20px; backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3); }
+  .login-box { padding: 24px 18px 28px; border-radius: 20px; }
+  body.theme-dark .login-box {
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  }
   .login-logo { margin-bottom: 18px; }
   .login-logo-icon { width: 54px; height: 54px; font-size: 27px; margin-bottom: 10px; border-radius: 16px; }
   .login-title { font-size: 21px; }
