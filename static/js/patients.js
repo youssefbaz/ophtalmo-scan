@@ -169,6 +169,7 @@ async function renderPatientProfile(c, pid) {
       <div class="ph-actions">
         <button class="btn btn-primary btn-sm" onclick="openAddConsultation('${pid}')">+ Consultation</button>
         <button class="btn btn-ghost btn-sm" onclick="openAddRdv('${pid}')">📅 Rendez-vous</button>
+        <button class="btn btn-ghost btn-sm" onclick="openMessageModal('${pid}','','')">✉ Message</button>
         <button class="btn btn-ghost btn-sm" onclick="startAiContext('${pid}')">🤖 Assistant IA</button>
         <button class="btn btn-ghost btn-sm" onclick="generateConsultationSummary('${pid}')" title="Générer compte-rendu IA">📝 Compte-rendu</button>
         <div class="ph-actions-row" style="margin-top:2px">

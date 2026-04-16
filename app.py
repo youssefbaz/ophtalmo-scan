@@ -210,11 +210,13 @@ def create_app():
     from routes.stats             import bp as stats_bp
     from routes.totp              import bp as totp_bp
     from routes.consent           import bp as consent_bp
+    from routes.messages          import bp as messages_bp
 
     for blueprint in (auth_bp, patients_bp, patients_history_bp, patients_surgery_bp,
                       patients_account_bp, patients_import_bp,
                       rdv_bp, docs_bp, questions_bp, ai_bp, notifs_bp, ordonnances_bp,
-                      main_bp, ivt_bp, admin_bp, agenda_bp, stats_bp, totp_bp, consent_bp):
+                      main_bp, ivt_bp, admin_bp, agenda_bp, stats_bp, totp_bp, consent_bp,
+                      messages_bp):
         app.register_blueprint(blueprint)
 
     # ── Flask-Talisman (Step 7 — Security headers / HTTPS) ───────────────────

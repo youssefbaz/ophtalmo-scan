@@ -193,6 +193,21 @@ async function loadNotifications() {
   const cnt = document.getElementById('notifCount');
   if(unread > 0) { cnt.style.display='flex'; cnt.textContent=unread; }
   else { cnt.style.display='none'; }
+
+  // Badge unread message count on the patient Messages nav button
+  if (USER && USER.role === 'patient') {
+    const unreadMsgs = notifs.filter(n => !n.lu && n.type === 'message_medecin').length;
+    const navBtn = document.getElementById('navMesMessages');
+    if (navBtn) {
+      const existing = navBtn.querySelector('.nb');
+      if (unreadMsgs > 0) {
+        if (existing) existing.textContent = unreadMsgs;
+        else navBtn.insertAdjacentHTML('beforeend', `<span class="nb">${unreadMsgs}</span>`);
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+  }
   
   document.getElementById('notifList').innerHTML = notifs.length ?
     notifs.map(n=>`
@@ -240,6 +255,7 @@ async function handleNotifClick(nid, type, pid) {
   } else {
     // Patient side
     if (type === 'reponse' || type === 'question') showView('mes-questions');
+    else if (type === 'message_medecin')           showView('mes-messages');
     else if (type === 'rdv_validé')               showView('mes-rdv');
     else if (type === 'document_uploaded')         showView('mes-documents');
   }

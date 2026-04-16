@@ -13,6 +13,7 @@ const TRANSLATIONS = {
     'Tous les utilisateurs':'All users','Créer un médecin':'Create doctor','Créer un patient':'Create patient',
     'Mon espace':'My space','Mes rendez-vous':'My appointments',
     'Mes documents':'My documents','Questions au médecin':'Questions to doctor',
+    'Messages':'Messages','Messages du médecin':'Doctor messages',
     // Topbar titles
     'Tableau de bord médecin':'Dashboard','Mon espace santé':'My health space',
     'Agenda & Rendez-vous':'Agenda & Appointments','Questions des patients':'Patient Questions',
@@ -34,6 +35,7 @@ const TRANSLATIONS = {
     'Tous les utilisateurs':'جميع المستخدمين','Créer un médecin':'إنشاء طبيب','Créer un patient':'إنشاء مريض',
     'Mon espace':'مساحتي','Mes rendez-vous':'مواعيدي',
     'Mes documents':'وثائقي','Questions au médecin':'أسئلة للطبيب',
+    'Messages':'الرسائل','Messages du médecin':'رسائل الطبيب',
     // Topbar titles
     'Tableau de bord médecin':'لوحة التحكم','Mon espace santé':'مساحتي الصحية',
     'Agenda & Rendez-vous':'الأجندة والمواعيد','Questions des patients':'أسئلة المرضى',
@@ -73,6 +75,7 @@ function applyLang(lang) {
       'ai-assistant':'Assistant IA Ophtalmologie','patient-profile':'Dossier patient',
       'liste-patients-anon':'Liste des patients','mes-rdv':'Mes rendez-vous',
       'mes-documents':'Mes documents','mes-questions':'Questions au médecin',
+      'mes-messages':'Messages du médecin',
       'today':"Salle d'attente — Aujourd'hui",'admin-dashboard':'Tableau de bord — Administration',
       'admin-pending':'Comptes en attente de validation','admin-users':'Gestion des utilisateurs',
       'admin-create-medecin':'Créer un compte médecin','admin-create-patient':'Créer un dossier patient',

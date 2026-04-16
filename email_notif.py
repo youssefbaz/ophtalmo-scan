@@ -170,6 +170,55 @@ def _rdv_html(prenom, nom, date_str, heure, type_rdv, medecin):
 </body></html>"""
 
 
+def send_message_email(to_address: str, prenom: str, nom: str,
+                       message_text: str, doctor_name: str,
+                       rdv_info: dict | None = None,
+                       app_host: str = '') -> bool:
+    """Notify a patient that their doctor sent them a message."""
+    login_url = f"{app_host}/" if app_host else "l'application"
+    h_prenom  = html.escape(prenom)
+    h_nom     = html.escape(nom)
+    h_doctor  = html.escape(doctor_name)
+    h_msg     = html.escape(message_text).replace('\n', '<br>')
+    rdv_block = ''
+    if rdv_info:
+        h_date  = html.escape(str(rdv_info.get('date', '')))
+        h_heure = html.escape(str(rdv_info.get('heure', '')))
+        h_type  = html.escape(str(rdv_info.get('type', '')))
+        rdv_block = f"""
+    <div style="background:#f0faf9;border:1px solid #b2dfdb;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px">
+      <div style="font-weight:700;color:#0e7a76;margin-bottom:6px">📅 Concernant votre rendez-vous</div>
+      <div style="color:#374151">{h_date} à {h_heure} — {h_type}</div>
+    </div>"""
+    body = f"""
+<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:#0e7a76;padding:22px 28px">
+    <div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">Votre espace patient</div>
+  </div>
+  <div style="padding:28px">
+    <h2 style="color:#0e7a76;margin-top:0">Nouveau message de votre médecin</h2>
+    <p>Bonjour <strong>{h_prenom} {h_nom}</strong>,</p>
+    <p>Le <strong>Dr. {h_doctor}</strong> vous a envoyé un message :</p>
+    {rdv_block}
+    <div style="background:#f9fafb;border-left:4px solid #0e7a76;border-radius:0 8px 8px 0;padding:14px 16px;margin:16px 0;font-size:14px;line-height:1.6;color:#111827">
+      {h_msg}
+    </div>
+    <div style="text-align:center;margin:24px 0">
+      <a href="{html.escape(login_url)}" style="background:#0e7a76;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+        Voir le message →
+      </a>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <p style="color:#9ca3af;font-size:11px;margin:0">— OphtalmoScan · Ce message est généré automatiquement</p>
+  </div>
+</div>
+</body></html>"""
+    subject = f"Message de Dr. {doctor_name} — OphtalmoScan"
+    return send_email(to_address, subject, body)
+
+
 def send_rdv_email_reminders(app):
     """Send email reminders for tomorrow's RDVs (called by scheduler)."""
     with app.app_context():
