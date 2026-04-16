@@ -1,75 +1,75 @@
 <style>
 /* ══════════════════════════════════════════════════════════════
    OPHTALMO-SCAN — Design System v3
-   Default theme: Light
-   Palette: Navy #0A2540 · Teal #0D9488 · Background #F4F7FA
+   Default theme: Clinical
+   Palette: Navy #0A2540 · Teal #0077CC · Background #F5F7FA
    Fonts: Poppins (brand) + Inter (body)
    ══════════════════════════════════════════════════════════════ */
 
-/* ── DEFAULT (LIGHT) THEME ── */
+/* ── DEFAULT (CLINICAL) THEME ── */
 :root {
   /* Primary brand */
   --navy:       #0A2540;
-  --teal:       #0D9488;
-  --teal2:      #0B7A6E;
+  --teal:       #0077CC;
+  --teal2:      #005FA3;
   --teal3:      #096057;
-  --teal-dim:   rgba(13,148,136,0.10);
+  --teal-dim:   rgba(0,119,204,0.10);
   --teal-border:rgba(13,148,136,0.25);
   --cyan:       #22D3EE;
   --cyan-dim:   rgba(34,211,238,0.12);
 
   /* Surfaces */
-  --bg:             #F4F7FA;
-  --bg2:            #EDF1F5;
-  --bg3:            #E2E8F0;
+  --bg:             #F5F7FA;
+  --bg2:            #EDF0F5;
+  --bg3:            #E0E6ED;
   --card:           #FFFFFF;
-  --border:         #CBD5E1;
-  --surface-accent: #E8F4F3;
+  --border:         #B0C4D8;
+  --surface-accent: #D0DCE8;
 
   /* Sidebar — navy */
   --sidebar-bg:     #0A2540;
   --sidebar-border: rgba(255,255,255,0.08);
 
   /* Text */
-  --text:  #0A2540;
+  --text:  #1A2940;
   --text1: #0A2540;
-  --text2: #476B8A;
-  --text3: #94A3B8;
+  --text2: #3A5C80;
+  --text3: #6E8FAA;
 
   /* Semantic colours */
   --amber:   #D97706;
   --amber-dim: rgba(217,119,6,0.10);
-  --red:     #DC2626;
+  --red:     #B91C1C;
   --red-dim: rgba(220,38,38,0.09);
   --green:   #16A34A;
   --green-dim: rgba(22,163,74,0.09);
   --blue:    #3B82F6;
-  --danger:  #DC2626;
+  --danger:  #B91C1C;
 
   /* Semantic text variants */
   --color-red:       #B91C1C;
   --color-amber:     #92400E;
-  --color-green:     #15803D;
-  --color-blue:      #1D4ED8;
-  --color-red-bg:    rgba(220,38,38,0.08);
-  --color-amber-bg:  rgba(180,83,9,0.08);
-  --color-green-bg:  rgba(21,128,61,0.08);
-  --color-blue-bg:   rgba(29,78,216,0.08);
+  --color-green:     #166534;
+  --color-blue:      #1E40AF;
+  --color-red-bg:    rgba(185,28,28,0.10);
+  --color-amber-bg:  rgba(146,64,14,0.10);
+  --color-green-bg:  rgba(22,101,52,0.10);
+  --color-blue-bg:   rgba(30,64,175,0.10);
 
   /* Shape & shadow */
   --radius:    12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  --shadow:      0 4px 24px rgba(10,37,64,0.12);
+  --shadow:      0 2px 16px rgba(0,0,0,0.07);
   --shadow-sm:   0 1px 3px rgba(10,37,64,0.04), 0 4px 16px rgba(10,37,64,0.06);
-  --card-shadow: 0 1px 3px rgba(10,37,64,0.04), 0 4px 16px rgba(10,37,64,0.06);
+  --card-shadow: 0 1px 3px rgba(10,37,64,0.05), 0 4px 12px rgba(10,37,64,0.05);
   --glass-bg:     rgba(255,255,255,0.93);
   --glass-border: rgba(13,148,136,0.15);
 }
 
 :root select.input option,
 :root select.form-input option {
-  background: #EDF1F5; color: #0A2540;
+  background: #EDF0F5; color: #1A2940;
 }
 
 /* ── DARK THEME ── */
@@ -147,25 +147,6 @@ body.theme-contrast {
 body.theme-contrast select.input option,
 body.theme-contrast select.form-input option {
   background: #0A0A0A; color: #FFFFFF;
-}
-
-/* ── CLINICAL THEME ── */
-body.theme-clinical {
-  --bg: #F5F7FA; --bg2: #EDF0F5; --bg3: #E0E6ED; --card: #FFFFFF;
-  --border: #B0C4D8; --text: #1A2940; --text2: #3A5C80; --text3: #6E8FAA;
-  --teal: #0077CC; --teal2: #005FA3; --teal-dim: rgba(0,119,204,0.10);
-  --surface-accent: #D0DCE8;
-  --sidebar-bg: #0A2540;
-  --sidebar-border: rgba(255,255,255,0.08);
-  --shadow: 0 2px 16px rgba(0,0,0,0.07);
-  --card-shadow: 0 1px 3px rgba(10,37,64,0.05), 0 4px 12px rgba(10,37,64,0.05);
-  --color-red: #B91C1C; --color-amber: #92400E; --color-green: #166534; --color-blue: #1E40AF;
-  --color-red-bg: rgba(185,28,28,0.10); --color-amber-bg: rgba(146,64,14,0.10);
-  --color-green-bg: rgba(22,101,52,0.10); --color-blue-bg: rgba(30,64,175,0.10);
-}
-body.theme-clinical select.input option,
-body.theme-clinical select.form-input option {
-  background: #EDF0F5; color: #1A2940;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -390,7 +371,7 @@ body.theme-dark .sidebar .btn-ghost:hover {
 .topbar {
   height: 58px; min-height: 58px;
   border-bottom: 1px solid var(--border);
-  background: rgba(244,247,250,0.95);
+  background: rgba(245,247,250,0.95);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   display: flex; align-items: center;
@@ -405,10 +386,6 @@ body.theme-contrast .topbar {
   background: rgba(0,0,0,0.95);
   border-bottom-color: #1a1a1a;
   backdrop-filter: none;
-}
-body.theme-clinical .topbar {
-  background: rgba(245,247,250,0.95);
-  border-bottom-color: var(--border);
 }
 .topbar-title {
   font-family: 'Poppins', 'Inter', sans-serif;
@@ -504,7 +481,7 @@ body.theme-clinical .topbar {
 #loginScreen {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: linear-gradient(150deg, #E8F4F3 0%, #F4F7FA 50%, #EEF2FF 100%);
+  background: linear-gradient(150deg, #E8F4F3 0%, #F5F7FA 50%, #EEF2FF 100%);
   display: flex; align-items: center; justify-content: center;
   z-index: 1000; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1415,7 +1392,7 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
   .bottom-nav {
     display: flex;
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: rgba(244,247,250,0.96);
+    background: rgba(245,247,250,0.96);
     backdrop-filter: blur(18px) saturate(1.2);
     -webkit-backdrop-filter: blur(18px) saturate(1.2);
     border-top: 1px solid var(--border);
