@@ -644,7 +644,7 @@ async function renderSettings(c) {
   const profile    = await api('/api/settings/profile');
   let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
   if (storedTheme === 'minuit') storedTheme = 'dark';
-  if (storedTheme === 'light') storedTheme = 'clinical';
+  if (storedTheme === 'light') storedTheme = 'dark';
   const lang        = localStorage.getItem('ophtalmo_lang') || 'fr';
   const canEdit     = USER.role === 'medecin' || USER.role === 'admin';
   const isMedecin   = USER.role === 'medecin' || USER.role === 'admin';

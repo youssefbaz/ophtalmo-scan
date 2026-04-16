@@ -15,7 +15,7 @@
   --teal3:      #096057;
   --teal-dim:   rgba(0,119,204,0.10);
   --teal-border:rgba(13,148,136,0.25);
-  --cyan:       #22D3EE;
+  --cyan:       #19c5df;
   --cyan-dim:   rgba(34,211,238,0.12);
 
   /* Surfaces */
@@ -69,7 +69,7 @@
 
 :root select.input option,
 :root select.form-input option {
-  background: #EDF0F5; color: #1A2940;
+  background: #4e82dc; color: #1A2940;
 }
 
 /* ── DARK THEME ── */
