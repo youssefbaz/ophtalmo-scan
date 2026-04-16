@@ -18,12 +18,12 @@
   --cyan-dim:   rgba(34,211,238,0.12);
 
   /* Surfaces */
-  --bg:             #F4F7FA;
-  --bg2:            #EDF1F5;
-  --bg3:            #E2E8F0;
-  --card:           #FFFFFF;
-  --border:         #CBD5E1;
-  --surface-accent: #E8F4F3;
+  --bg:             #E8E8E8;
+  --bg2:            #DEDEDE;
+  --bg3:            #D2D2D2;
+  --card:           #F2F2F2;
+  --border:         #C4C4C4;
+  --surface-accent: #E0E0E0;
 
   /* Sidebar — navy in light theme */
   --sidebar-bg:     #0A2540;
@@ -389,7 +389,7 @@ body.theme-dark .sidebar .btn-ghost:hover {
 .topbar {
   height: 58px; min-height: 58px;
   border-bottom: 1px solid var(--border);
-  background: rgba(244,247,250,0.95);
+  background: rgba(232,232,232,0.97);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   display: flex; align-items: center;
@@ -521,8 +521,8 @@ body.theme-clinical .topbar {
 
 .login-box {
   width: 100%; max-width: 420px; box-sizing: border-box;
-  background: #FFFFFF;
-  border: 1px solid #E2EBF4;
+  background: #F0F2F5;
+  border: 1px solid #D4DBE6;
   border-radius: 22px;
   padding: 44px 40px;
   box-shadow:
@@ -575,8 +575,8 @@ body.theme-dark .login-sub { color: var(--text2); }
 /* Role tabs */
 .role-tabs {
   display: flex; gap: 0; margin-bottom: 22px;
-  background: #F1F5F9; padding: 0;
-  border-radius: 11px; border: 2px solid #CBD5E1; overflow: hidden;
+  background: #E4E8EE; padding: 0;
+  border-radius: 11px; border: 1.5px solid #C4D0DE; overflow: hidden;
 }
 .role-tab {
   flex: 1; padding: 10px 8px; border-radius: 0; border: none;
@@ -612,7 +612,7 @@ body.theme-contrast .form-label { color: var(--text2); }
 
 .form-input {
   width: 100%; padding: 11px 14px;
-  background: #FFFFFF; border: 2px solid #B8C9DC;
+  background: #FFFFFF; border: 1.5px solid #C4D0DE;
   border-radius: 10px; color: #0A2540;
   font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
   outline: none; transition: border-color 0.2s, box-shadow 0.2s;
