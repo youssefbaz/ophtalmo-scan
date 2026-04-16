@@ -806,6 +806,24 @@ def _migrate(db):
     except Exception:
         pass
 
+    # messages: doctor-initiated messages to patients, optionally linked to a RDV
+    try:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id         TEXT PRIMARY KEY,
+                patient_id TEXT NOT NULL,
+                medecin_id TEXT NOT NULL,
+                rdv_id     TEXT DEFAULT '',
+                contenu    TEXT DEFAULT '',
+                date       TEXT DEFAULT '',
+                lu         INTEGER DEFAULT 0,
+                deleted    INTEGER DEFAULT 0,
+                deleted_at TEXT DEFAULT ''
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_messages_patient ON messages(patient_id, date)")
+    except Exception:
+        pass
+
     # Medecin codes
     medecins_without_code = db.execute(
         "SELECT id FROM users WHERE role='medecin' AND (medecin_code IS NULL OR medecin_code='')"

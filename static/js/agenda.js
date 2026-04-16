@@ -154,10 +154,13 @@ function _rdvMiniCard(r) {
       </div>
       <div style="font-size:11px;color:var(--text2);margin-left:16px">${r.patient_prenom||''} ${r.patient_nom||''}</div>
       <div style="font-size:11px;color:var(--text3);margin-left:16px">${fmtDate(r.date)} · <span style="color:${col}">${r.statut}</span></div>
-      ${r.statut==='en_attente'&&USER.role==='medecin'?`
-        <div style="display:flex;gap:6px;margin-top:6px;margin-left:16px">
-          <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
-          <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','annulé')">✗ Annuler</button>
+      ${USER.role==='medecin'?`
+        <div style="display:flex;gap:6px;margin-top:6px;margin-left:16px;flex-wrap:wrap">
+          ${r.statut==='en_attente'?`
+            <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','confirmé')">✓ Confirmer</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="event.stopPropagation();validerRdv('${r.id}','annulé')">✗ Annuler</button>
+          `:''}
+          <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="event.stopPropagation();openMessageModal('${r.patient_id}','${r.id}','${escJ(_normRdvType(r.type))} — ${escJ(r.date)} ${escJ(r.heure)}')">✉ Message</button>
         </div>`:''}
     </div>`;
 }

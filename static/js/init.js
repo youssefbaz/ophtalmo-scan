@@ -89,6 +89,7 @@ function buildSidebar() {
         <button class="nav-btn" onclick="showView('mes-rdv')">📅 ${t('Mes rendez-vous')}</button>
         <button class="nav-btn" onclick="showView('mes-documents')">📎 ${t('Mes documents')}</button>
         <button class="nav-btn" onclick="showView('mes-questions')">💬 ${t('Questions au médecin')}</button>
+        <button class="nav-btn" id="navMesMessages" onclick="showView('mes-messages')">✉ ${t('Messages')}</button>
       </div>`;
   }
   document.getElementById('sidebarNav').innerHTML = html;
@@ -120,8 +121,8 @@ function buildBottomNav() {
     items = [
       { view: 'dashboard-patient', icon: '🏠', label: t('Accueil') },
       { view: 'mes-rdv',           icon: '📅', label: t('RDV') },
-      { view: 'mes-documents',     icon: '📎', label: t('Documents') },
       { view: 'mes-questions',     icon: '💬', label: t('Questions') },
+      { view: 'mes-messages',      icon: '✉',  label: t('Messages') },
       { view: 'settings',          icon: '⚙',  label: t('Réglages') },
     ];
   }
@@ -160,6 +161,7 @@ function showView(viewId, title, _fromBack) {
     'questions-medecin':'Questions des patients','ai-assistant':'Assistant IA Ophtalmologie',
     'patient-profile':'Dossier patient','liste-patients-anon':'Liste des patients',
     'mes-rdv':'Mes rendez-vous','mes-documents':'Mes documents','mes-questions':'Questions au médecin',
+    'mes-messages':'Messages du médecin',
     'today': "Salle d'attente — Aujourd'hui",
     'admin-dashboard':'Tableau de bord — Administration',
     'admin-pending':'Comptes en attente de validation',
@@ -191,6 +193,7 @@ function showView(viewId, title, _fromBack) {
   else if (viewId === 'mes-rdv') renderMesRdv(c);
   else if (viewId === 'mes-documents') renderMesDocuments(c);
   else if (viewId === 'mes-questions') renderMesQuestions(c);
+  else if (viewId === 'mes-messages') renderMesMessages(c);
   else if (viewId === 'today') renderTodayView(c);
   else if (viewId === 'admin-dashboard') renderAdminDashboard(c);
   else if (viewId === 'admin-pending') renderAdminPending(c);
