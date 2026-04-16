@@ -13,7 +13,6 @@ const TRANSLATIONS = {
     'Tous les utilisateurs':'All users','Créer un médecin':'Create doctor','Créer un patient':'Create patient',
     'Mon espace':'My space','Mes rendez-vous':'My appointments',
     'Mes documents':'My documents','Questions au médecin':'Questions to doctor',
-    'Messages':'Messages','Messages du médecin':'Doctor messages',
     // Topbar titles
     'Tableau de bord médecin':'Dashboard','Mon espace santé':'My health space',
     'Agenda & Rendez-vous':'Agenda & Appointments','Questions des patients':'Patient Questions',
@@ -35,7 +34,6 @@ const TRANSLATIONS = {
     'Tous les utilisateurs':'جميع المستخدمين','Créer un médecin':'إنشاء طبيب','Créer un patient':'إنشاء مريض',
     'Mon espace':'مساحتي','Mes rendez-vous':'مواعيدي',
     'Mes documents':'وثائقي','Questions au médecin':'أسئلة للطبيب',
-    'Messages':'الرسائل','Messages du médecin':'رسائل الطبيب',
     // Topbar titles
     'Tableau de bord médecin':'لوحة التحكم','Mon espace santé':'مساحتي الصحية',
     'Agenda & Rendez-vous':'الأجندة والمواعيد','Questions des patients':'أسئلة المرضى',
@@ -75,7 +73,6 @@ function applyLang(lang) {
       'ai-assistant':'Assistant IA Ophtalmologie','patient-profile':'Dossier patient',
       'liste-patients-anon':'Liste des patients','mes-rdv':'Mes rendez-vous',
       'mes-documents':'Mes documents','mes-questions':'Questions au médecin',
-      'mes-messages':'Messages du médecin',
       'today':"Salle d'attente — Aujourd'hui",'admin-dashboard':'Tableau de bord — Administration',
       'admin-pending':'Comptes en attente de validation','admin-users':'Gestion des utilisateurs',
       'admin-create-medecin':'Créer un compte médecin','admin-create-patient':'Créer un dossier patient',
@@ -94,13 +91,12 @@ function t(key) {
 
 function applyTheme(theme) {
   document.body.classList.remove('theme-dark','theme-light','theme-clinical','theme-contrast','theme-minuit');
-  // 'dark' is the default theme — no class needed; only contrast adds a class
-  if (theme === 'contrast') document.body.classList.add('theme-contrast');
+  if (theme !== 'light') document.body.classList.add('theme-' + theme);
   localStorage.setItem('ophtalmo_theme', theme);
   // Sync mobile browser chrome (address bar / status bar) with app theme
-  const bgColors = { dark:'#0D1117', contrast:'#000000' };
+  const bgColors = { dark:'#060F1A', light:'#F4F7FA', clinical:'#F5F7FA', contrast:'#000000' };
   const metaTag = document.querySelector('meta[name="theme-color"]');
-  if (metaTag) metaTag.content = bgColors[theme] || '#0D1117';
+  if (metaTag) metaTag.content = bgColors[theme] || '#f8fafc';
 }
 
 // ─── PAGE LOAD: check for password reset token in URL ─────────────────────────
@@ -108,10 +104,8 @@ function applyTheme(theme) {
   initPasswordToggles(); // wire up eye-toggles on all static auth panels
 
   applyLang(_currentLang);
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'dark';
-  if (storedTheme === 'minuit') storedTheme = 'dark';
-  if (storedTheme === 'light') storedTheme = 'dark';
-  if (storedTheme === 'clinical') storedTheme = 'dark';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'light';
+  if (storedTheme === 'minuit') storedTheme = 'dark'; // old minuit → dark
   applyTheme(storedTheme);
 
   // Pre-select role based on URL path (/medecin or /patient)
