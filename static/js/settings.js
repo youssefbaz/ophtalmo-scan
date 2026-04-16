@@ -642,8 +642,8 @@ function renderIVTChart(ivtList, pid) {
 async function renderSettings(c) {
   closeUserMenu();
   const profile    = await api('/api/settings/profile');
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'dark';
-  if (storedTheme === 'minuit') storedTheme = 'dark';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
+  if (storedTheme === 'minuit' || storedTheme === 'light') storedTheme = 'clinical';
   const lang        = localStorage.getItem('ophtalmo_lang') || 'fr';
   const canEdit     = USER.role === 'medecin' || USER.role === 'admin';
   const isMedecin   = USER.role === 'medecin' || USER.role === 'admin';
@@ -666,9 +666,8 @@ async function renderSettings(c) {
     exportHint: {fr:'Pour un patient individuel, ouvrez son dossier et utilisez ⬇.', en:'For a single patient, open their file and use ⬇.', ar:'لمريض واحد، افتح ملفه واستخدم ⬇.'},
     apply:      {fr:'✓ Appliquer les modifications', en:'✓ Apply changes', ar:'✓ تطبيق التغييرات'},
     themes: {
-      dark:     {fr:'Sombre',    en:'Dark',     ar:'داكن'},
-      light:    {fr:'Clair',     en:'Light',    ar:'فاتح'},
       clinical: {fr:'Clinique',  en:'Clinical', ar:'سريري'},
+      dark:     {fr:'Sombre',    en:'Dark',     ar:'داكن'},
       contrast: {fr:'Contraste', en:'Contrast', ar:'تباين'},
     },
   };
@@ -738,9 +737,8 @@ async function renderSettings(c) {
       <div class="section-title" style="margin-bottom:16px">${lx('theme')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
         ${[
-          {id:'dark',    preview:'#1e2d45', text:'#e8f0fe', accent:'#3b82f6'},
-          {id:'light',   preview:'#f0f4f8', text:'#0a1628', accent:'#2563eb'},
           {id:'clinical',preview:'#f5f7fa', text:'#1a2940', accent:'#0077cc'},
+          {id:'dark',    preview:'#0b1629', text:'#e4eef8', accent:'#2dd4bf'},
           {id:'contrast',preview:'#000000', text:'#ffffff', accent:'#00ffcc'},
         ].map(th=>`
           <div onclick="applyTheme('${th.id}');document.querySelectorAll('.theme-opt').forEach(e=>{e.style.borderColor='var(--border)';e.classList.remove('selected')});this.style.borderColor='var(--teal)';this.classList.add('selected')"
