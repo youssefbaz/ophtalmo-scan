@@ -642,9 +642,10 @@ function renderIVTChart(ivtList, pid) {
 async function renderSettings(c) {
   closeUserMenu();
   const profile    = await api('/api/settings/profile');
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'dark';
   if (storedTheme === 'minuit') storedTheme = 'dark';
   if (storedTheme === 'light') storedTheme = 'dark';
+  if (storedTheme === 'clinical') storedTheme = 'dark';
   const lang        = localStorage.getItem('ophtalmo_lang') || 'fr';
   const canEdit     = USER.role === 'medecin' || USER.role === 'admin';
   const isMedecin   = USER.role === 'medecin' || USER.role === 'admin';
@@ -667,9 +668,8 @@ async function renderSettings(c) {
     exportHint: {fr:'Pour un patient individuel, ouvrez son dossier et utilisez ⬇.', en:'For a single patient, open their file and use ⬇.', ar:'لمريض واحد، افتح ملفه واستخدم ⬇.'},
     apply:      {fr:'✓ Appliquer les modifications', en:'✓ Apply changes', ar:'✓ تطبيق التغييرات'},
     themes: {
-      dark:     {fr:'Sombre',    en:'Dark',     ar:'داكن'},
-      clinical: {fr:'Clinique',  en:'Clinical', ar:'سريري'},
-      contrast: {fr:'Contraste', en:'Contrast', ar:'تباين'},
+      dark:     {fr:'Sombre (par défaut)', en:'Dark (default)', ar:'داكن (افتراضي)'},
+      contrast: {fr:'Contraste élevé',    en:'High contrast',  ar:'تباين عالٍ'},
     },
   };
   const lx = l => (L[l] || {})[lang] || (L[l] || {})[lang] || (L[l] || {}).fr || l;
@@ -738,8 +738,7 @@ async function renderSettings(c) {
       <div class="section-title" style="margin-bottom:16px">${lx('theme')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
         ${[
-          {id:'dark',    preview:'#1e2d45', text:'#e8f0fe', accent:'#3b82f6'},
-          {id:'clinical',preview:'#f5f7fa', text:'#1a2940', accent:'#0077cc'},
+          {id:'dark',    preview:'#0D1117', text:'#E6EDF3', accent:'#2DD4BF'},
           {id:'contrast',preview:'#000000', text:'#ffffff', accent:'#00ffcc'},
         ].map(th=>`
           <div onclick="applyTheme('${th.id}');document.querySelectorAll('.theme-opt').forEach(e=>{e.style.borderColor='var(--border)';e.classList.remove('selected')});this.style.borderColor='var(--teal)';this.classList.add('selected')"
