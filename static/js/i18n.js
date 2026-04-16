@@ -104,7 +104,7 @@ function applyTheme(theme) {
   initPasswordToggles(); // wire up eye-toggles on all static auth panels
 
   applyLang(_currentLang);
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'light';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
   if (storedTheme === 'minuit') storedTheme = 'dark'; // old minuit → dark
   applyTheme(storedTheme);
 
