@@ -380,8 +380,8 @@ async function renderStatistiques(c) {
     const chartDefaults = {
       plugins: { legend: { labels: { color: 'var(--text2)', font: { size: 11 } } } },
       scales: {
-        x: { ticks: { color: 'var(--text3)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-        y: { ticks: { color: 'var(--text3)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        x: { ticks: { color: 'var(--text3)', font: { size: 10 } }, grid: { color: 'var(--border)' }, beginAtZero: true },
+        y: { ticks: { color: 'var(--text3)', font: { size: 10 } }, grid: { color: 'var(--border)' }, beginAtZero: true }
       }
     };
     const noScales = { plugins: { legend: { labels: { color: 'var(--text2)', font: { size: 11 } } } } };
