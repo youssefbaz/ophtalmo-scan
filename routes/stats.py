@@ -54,11 +54,18 @@ def get_stats():
     ).fetchone()[0]
 
     # ── Shared: last-12-months label list & cutoff ────────────────────────────
+    # Build exact month labels by arithmetic, not timedelta(days=30) which
+    # drifts and produces duplicate/missing months (e.g. Jan×2, no Feb).
     _12m = []
+    _first = today.replace(day=1)
     for _i in range(11, -1, -1):
-        _d = today.replace(day=1) - datetime.timedelta(days=_i * 30)
-        _12m.append(_d.strftime('%Y-%m'))
-    _12m_cutoff = (today - datetime.timedelta(days=365)).isoformat()
+        _m = _first.month - _i
+        _y = _first.year
+        while _m <= 0:
+            _m += 12
+            _y -= 1
+        _12m.append(f"{_y:04d}-{_m:02d}")
+    _12m_cutoff = _12m[0] + '-01'  # first day of the oldest month
 
     # ── Patients per month (last 12) — one GROUP BY instead of 12 queries ────
     _pm_rows = db.execute(
