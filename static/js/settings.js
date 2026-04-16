@@ -642,8 +642,9 @@ function renderIVTChart(ivtList, pid) {
 async function renderSettings(c) {
   closeUserMenu();
   const profile    = await api('/api/settings/profile');
-  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'dark';
+  let storedTheme = localStorage.getItem('ophtalmo_theme') || 'clinical';
   if (storedTheme === 'minuit') storedTheme = 'dark';
+  if (storedTheme === 'light') storedTheme = 'clinical';
   const lang        = localStorage.getItem('ophtalmo_lang') || 'fr';
   const canEdit     = USER.role === 'medecin' || USER.role === 'admin';
   const isMedecin   = USER.role === 'medecin' || USER.role === 'admin';
@@ -667,7 +668,6 @@ async function renderSettings(c) {
     apply:      {fr:'✓ Appliquer les modifications', en:'✓ Apply changes', ar:'✓ تطبيق التغييرات'},
     themes: {
       dark:     {fr:'Sombre',    en:'Dark',     ar:'داكن'},
-      light:    {fr:'Clair',     en:'Light',    ar:'فاتح'},
       clinical: {fr:'Clinique',  en:'Clinical', ar:'سريري'},
       contrast: {fr:'Contraste', en:'Contrast', ar:'تباين'},
     },
@@ -739,7 +739,6 @@ async function renderSettings(c) {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
         ${[
           {id:'dark',    preview:'#1e2d45', text:'#e8f0fe', accent:'#3b82f6'},
-          {id:'light',   preview:'#f0f4f8', text:'#0a1628', accent:'#2563eb'},
           {id:'clinical',preview:'#f5f7fa', text:'#1a2940', accent:'#0077cc'},
           {id:'contrast',preview:'#000000', text:'#ffffff', accent:'#00ffcc'},
         ].map(th=>`
@@ -973,4 +972,3 @@ async function settingsChangePassword() {
     msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur'}</div>`;
   }
 }
-
