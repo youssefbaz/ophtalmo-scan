@@ -1,6 +1,6 @@
 import uuid, datetime, json, logging
 from flask import Blueprint, request, jsonify
-from database import get_db, current_user, add_notif
+from database import get_db, current_user, add_notif, medecin_can_access_patient
 from llm import call_llm, LLMUnavailableError, SYSTEM_RESPONSE_DRAFT
 from security_utils import decrypt_patient, decrypt_clinical, encrypt_question_fields, decrypt_question_fields
 
@@ -17,6 +17,8 @@ def get_questions(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     rows = db.execute(
         "SELECT * FROM questions WHERE patient_id=? AND deleted=0 ORDER BY date DESC", (pid,)
     ).fetchall()
@@ -34,6 +36,8 @@ def add_question(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     if not p_row:
         return jsonify({"error": "Non trouvé"}), 404
@@ -112,6 +116,8 @@ def repondre_question(pid, qid):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     q = db.execute(
         "SELECT * FROM questions WHERE id=? AND patient_id=?", (qid, pid)
     ).fetchone()
@@ -141,6 +147,8 @@ def delete_question(pid, qid):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     q = db.execute(
         "SELECT statut FROM questions WHERE id=? AND patient_id=?", (qid, pid)
     ).fetchone()
@@ -162,6 +170,8 @@ def get_deleted_questions(pid):
     if not u or u['role'] != 'medecin':
         return jsonify([]), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify([]), 403
     rows = db.execute(
         "SELECT * FROM questions WHERE patient_id=? AND deleted=1 ORDER BY deleted_at DESC", (pid,)
     ).fetchall()

@@ -1,6 +1,6 @@
 import uuid, datetime, threading, logging
 from flask import Blueprint, request, jsonify, current_app
-from database import get_db, current_user, add_notif
+from database import get_db, current_user, add_notif, medecin_can_access_patient
 from security_utils import encrypt_field, decrypt_field, decrypt_patient
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ def send_message(pid):
         return jsonify({"error": "Accès refusé"}), 403
 
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     p_row = db.execute("SELECT * FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)).fetchone()
     if not p_row:
         return jsonify({"error": "Patient non trouvé"}), 404
@@ -115,6 +117,8 @@ def get_messages(pid):
         return jsonify({"error": "Accès refusé"}), 403
 
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     rows = db.execute(
         "SELECT * FROM messages WHERE patient_id=? AND deleted=0 ORDER BY date DESC", (pid,)
     ).fetchall()
@@ -152,7 +156,16 @@ def mark_message_lu(mid):
             "UPDATE messages SET lu=1 WHERE id=? AND patient_id=?",
             (mid, u.get('patient_id'))
         )
+    elif u['role'] == 'medecin':
+        # Médecin can only mark messages for their patients
+        msg_row = db.execute("SELECT patient_id FROM messages WHERE id=?", (mid,)).fetchone()
+        if not msg_row:
+            return jsonify({"error": "Message non trouvé"}), 404
+        if not medecin_can_access_patient(db, u['id'], msg_row['patient_id']):
+            return jsonify({"error": "Accès refusé"}), 403
+        db.execute("UPDATE messages SET lu=1 WHERE id=?", (mid,))
     else:
+        # admin
         db.execute("UPDATE messages SET lu=1 WHERE id=?", (mid,))
     db.commit()
     return jsonify({"ok": True})
@@ -176,10 +189,12 @@ def delete_message(mid):
             return jsonify({"error": "Veuillez d'abord marquer le message comme lu"}), 400
     else:
         row = db.execute(
-            "SELECT id FROM messages WHERE id=? AND deleted=0", (mid,)
+            "SELECT id, patient_id FROM messages WHERE id=? AND deleted=0", (mid,)
         ).fetchone()
         if not row:
             return jsonify({"error": "Message non trouvé"}), 404
+        if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+            return jsonify({"error": "Accès refusé"}), 403
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     db.execute(

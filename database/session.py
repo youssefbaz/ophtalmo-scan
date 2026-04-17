@@ -57,3 +57,20 @@ def next_medecin_code(db):
     return f"M{n:03d}"
 
 
+# ─── PATIENT ACCESS CONTROL ──────────────────────────────────────────────────
+
+def medecin_can_access_patient(db, medecin_id: str, patient_id: str) -> bool:
+    """True if the doctor owns the patient (primary medecin_id) or is linked
+    via the patient_doctors junction table. Used to block cross-patient IDOR."""
+    if not medecin_id or not patient_id:
+        return False
+    row = db.execute(
+        "SELECT 1 FROM patients WHERE id=? AND medecin_id=? "
+        "UNION ALL "
+        "SELECT 1 FROM patient_doctors WHERE patient_id=? AND medecin_id=? "
+        "LIMIT 1",
+        (patient_id, medecin_id, patient_id, medecin_id)
+    ).fetchone()
+    return row is not None
+
+

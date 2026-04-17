@@ -1,7 +1,15 @@
 import json, uuid, datetime, logging
+from xml.sax.saxutils import escape as _xml_escape
 from flask import Blueprint, request, jsonify, Response
-from database import get_db, current_user, require_role, log_audit
+from database import get_db, current_user, require_role, log_audit, medecin_can_access_patient
 from security_utils import decrypt_patient, encrypt_ordonnance_fields, decrypt_ordonnance_fields
+
+
+def _pdf_safe(v) -> str:
+    """Escape user-supplied text for ReportLab Paragraph XML mini-markup."""
+    if v is None:
+        return ''
+    return _xml_escape(str(v), {'"': '&quot;', "'": '&apos;'})
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +24,8 @@ def get_ordonnances(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     rows = db.execute(
         "SELECT * FROM ordonnances WHERE patient_id=? AND (deleted IS NULL OR deleted=0) ORDER BY date DESC",
         (pid,)
@@ -38,6 +48,8 @@ def add_ordonnance(pid):
         return jsonify({"error": "Accès refusé"}), 403
     data = request.json or {}
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     if not db.execute("SELECT id FROM patients WHERE id=?", (pid,)).fetchone():
         return jsonify({"error": "Patient non trouvé"}), 404
     oid = "O" + str(uuid.uuid4())[:6].upper()
@@ -63,6 +75,9 @@ def add_ordonnance(pid):
 @require_role('medecin')
 def delete_ordonnance(pid, oid):
     db = get_db()
+    u = current_user()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     if not db.execute("SELECT id FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone():
         return jsonify({"error": "Non trouvé"}), 404
     db.execute(
@@ -82,6 +97,9 @@ def delete_ordonnance(pid, oid):
 def ordonnance_pdf(pid, oid):
     """Generate a printable PDF for an ordonnance using ReportLab."""
     db = get_db()
+    u = current_user()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     ord_row = db.execute("SELECT * FROM ordonnances WHERE id=? AND patient_id=?", (oid, pid)).fetchone()
     if not p_row or not ord_row:
@@ -129,8 +147,14 @@ def ordonnance_pdf(pid, oid):
         ]
 
         # Patient block
-        elements.append(Paragraph(f"<b>Patient :</b> {p['prenom']} {p['nom']} — {age} ans — {p.get('sexe','')}", normal_style))
-        elements.append(Paragraph(f"<b>Date :</b> {ord_['date']}   <b>Médecin :</b> {ord_['medecin']}", normal_style))
+        elements.append(Paragraph(
+            f"<b>Patient :</b> {_pdf_safe(p.get('prenom',''))} {_pdf_safe(p.get('nom',''))} — {_pdf_safe(age)} ans — {_pdf_safe(p.get('sexe',''))}",
+            normal_style
+        ))
+        elements.append(Paragraph(
+            f"<b>Date :</b> {_pdf_safe(ord_.get('date',''))}   <b>Médecin :</b> {_pdf_safe(ord_.get('medecin',''))}",
+            normal_style
+        ))
         elements.append(Spacer(1, 0.4*cm))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
         elements.append(Spacer(1, 0.4*cm))
@@ -171,11 +195,11 @@ def ordonnance_pdf(pid, oid):
         else:
             # Fallback: dump raw content
             raw = json.dumps(contenu, ensure_ascii=False, indent=2) if contenu else str(contenu)
-            elements.append(Paragraph(f"<b>Contenu :</b> {raw}", normal_style))
+            elements.append(Paragraph(f"<b>Contenu :</b> {_pdf_safe(raw)}", normal_style))
 
         if ord_.get('notes'):
             elements.append(Spacer(1, 0.2*cm))
-            elements.append(Paragraph(f"<b>Notes :</b> {ord_['notes']}", normal_style))
+            elements.append(Paragraph(f"<b>Notes :</b> {_pdf_safe(ord_['notes'])}", normal_style))
 
         elements.append(Spacer(1, 1*cm))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
