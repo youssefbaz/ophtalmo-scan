@@ -41,18 +41,54 @@ async function loadPatientsSidebar(q='') {
   if (_showAllPatients) params.push('all=1');
   if (params.length) url += '?' + params.join('&');
   const patients = await api(url);
+  const list = Array.isArray(patients) ? patients : [];
+
+  // Populate quick-select dropdown
+  const sel = document.getElementById('patientQuickSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">⚡ Accès rapide…</option>' +
+      list.map(p => `<option value="${p.id}">${p.prenom} ${p.nom} (${p.id})</option>`).join('');
+  }
+
   const el = document.getElementById('patientListSidebar');
   if (!el) return;
-  el.innerHTML = (Array.isArray(patients) ? patients : []).map(p => {
+
+  const selPid = window._selPat?.id;
+  el.innerHTML = list.map(p => {
     const dr = (_showAllPatients && p.medecin_id)
       ? MEDECINS.find(m => m.id === p.medecin_id) : null;
+    const isChecked = selPid === p.id ? 'checked' : '';
     return `
-      <div class="patient-mini ${currentPatientId===p.id?'active':''}" onclick="loadPatient('${p.id}')">
-        <div class="pm-name">${p.prenom} ${p.nom}${p.linked?` <span style="font-size:9px;background:rgba(14,165,160,0.15);color:var(--teal2);padding:1px 5px;border-radius:6px;vertical-align:middle">RDV</span>`:''}</div>
-        <div class="pm-id">${p.id}${dr?` · <span style="color:var(--teal2);font-size:10px">${dr.nom}</span>`:''}</div>
+      <div class="patient-mini ${currentPatientId===p.id?'active':''}" style="display:flex;align-items:center;gap:6px;padding-left:6px">
+        <input type="checkbox" class="pat-check" id="patCheck_${p.id}" ${isChecked}
+               style="width:14px;height:14px;accent-color:var(--teal);flex-shrink:0;cursor:pointer"
+               onclick="event.stopPropagation();togglePatientSelection('${p.id}','${escJ(p.prenom+' '+p.nom)}')">
+        <div style="flex:1;min-width:0" onclick="loadPatient('${p.id}')">
+          <div class="pm-name">${p.prenom} ${p.nom}${p.linked?` <span style="font-size:9px;background:rgba(14,165,160,0.15);color:var(--teal2);padding:1px 5px;border-radius:6px;vertical-align:middle">RDV</span>`:''}</div>
+          <div class="pm-id">${p.id}${dr?` · <span style="color:var(--teal2);font-size:10px">${dr.nom}</span>`:''}</div>
+        </div>
         ${(p.nb_rdv_urgent||0)>0?`<span class="pm-badge">🚨 ${p.nb_rdv_urgent}</span>`:''}
       </div>`;
   }).join('') || '<div style="color:var(--text3);font-size:12px;padding:16px;text-align:center">Aucun patient</div>';
+}
+
+function togglePatientSelection(pid, label) {
+  const isChecked = document.getElementById(`patCheck_${pid}`)?.checked;
+  document.querySelectorAll('.pat-check').forEach(c => { if (c.id !== `patCheck_${pid}`) c.checked = false; });
+  const bar = document.getElementById('patientActionBar');
+  if (isChecked) {
+    window._selPat = { id: pid, label };
+    if (bar) bar.style.display = '';
+  } else {
+    window._selPat = null;
+    if (bar) bar.style.display = 'none';
+  }
+}
+
+async function _sidebarEditPatient() {
+  if (!window._selPat) return;
+  await loadPatient(window._selPat.id);
+  openEditPatient(window._selPat.id);
 }
 
 function searchPatients(q) { clearTimeout(window._st); window._st=setTimeout(()=>loadPatientsSidebar(q),200); }
