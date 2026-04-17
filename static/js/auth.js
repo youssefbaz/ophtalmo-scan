@@ -1,4 +1,67 @@
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
+
+const _CONSENT_ITEMS = [
+  { key: 'data_processing',     label: 'Traitement des données personnelles',      desc: 'Vos données médicales sont utilisées exclusivement pour assurer votre suivi médical.',                           required: true  },
+  { key: 'backup_storage',      label: 'Stockage chiffré et sauvegarde',           desc: 'Vos données sont chiffrées et sauvegardées de façon sécurisée.',                                                 required: true  },
+  { key: 'ai_analysis',         label: 'Analyse par intelligence artificielle',    desc: 'L\'IA peut analyser vos documents médicaux pour aider votre médecin dans son diagnostic. Vous pouvez refuser.', required: false },
+  { key: 'data_sharing',        label: 'Partage avec d\'autres professionnels',    desc: 'Partage de vos données avec d\'autres médecins impliqués dans votre prise en charge.',                          required: false },
+  { key: 'research_anonymized', label: 'Recherche médicale anonymisée',            desc: 'Utilisation de vos données de façon anonymisée à des fins de recherche médicale.',                             required: false },
+];
+
+function _launchApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'flex';
+  initApp();
+}
+
+async function _checkConsent() {
+  if (!USER || USER.role !== 'patient' || !USER.patient_id) { _launchApp(); return; }
+  const status = await api(`/api/consent/status/${USER.patient_id}`);
+  const aiConsent = Array.isArray(status?.consents) && status.consents.find(c => c.consent_type === 'ai_analysis');
+  if (aiConsent?.granted) { _launchApp(); return; }
+  _showConsentScreen();
+}
+
+function _showConsentScreen() {
+  document.getElementById('loginScreen').innerHTML = `
+    <div class="auth-card" style="max-width:500px;width:100%;padding:32px">
+      <div style="text-align:center;margin-bottom:6px;font-size:30px">🔐</div>
+      <div style="font-size:19px;font-weight:700;text-align:center;margin-bottom:8px">Consentement requis</div>
+      <p style="color:var(--text2);font-size:13px;margin-bottom:22px;text-align:center;line-height:1.6">
+        Avant d'accéder à votre espace patient, veuillez lire et accepter les conditions de traitement de vos données médicales (Loi 09-08).
+      </p>
+      <div id="consentMsg" style="margin-bottom:10px"></div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:22px;max-height:52vh;overflow-y:auto;padding-right:4px">
+        ${_CONSENT_ITEMS.map(c => `
+          <label style="display:flex;gap:12px;align-items:flex-start;cursor:${c.required ? 'default' : 'pointer'};background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <input type="checkbox" id="consent_${c.key}" ${c.required ? 'checked disabled' : ''} style="margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--teal)">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                ${c.label}
+                ${c.required ? '<span style="font-size:10px;background:var(--teal-dim);color:var(--teal2);padding:1px 8px;border-radius:20px">Obligatoire</span>' : ''}
+              </div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5">${c.desc}</div>
+            </div>
+          </label>`).join('')}
+      </div>
+      <button class="btn btn-primary" style="width:100%;font-size:14px;padding:12px" onclick="submitConsent()">
+        J'accepte et j'accède à mon espace →
+      </button>
+    </div>`;
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+async function submitConsent() {
+  const pid   = USER.patient_id;
+  const msgEl = document.getElementById('consentMsg');
+  msgEl.innerHTML = '<div style="color:var(--teal2);font-size:13px;text-align:center">Enregistrement du consentement…</div>';
+  for (const c of _CONSENT_ITEMS) {
+    const el = document.getElementById(`consent_${c.key}`);
+    if (el && el.checked) await api('/api/consent/grant', 'POST', { patient_id: pid, consent_type: c.key });
+  }
+  _launchApp();
+}
+
 const DEMO = {
   medecin: {user:'dr.martin', pass:'medecin123', hint:'🩺 Médecin: dr.martin / medecin123'},
   patient: {user:'patient.marie', pass:'patient123', hint:'🧑 Patient 1: patient.marie / patient123<br>🧑 Patient 2: patient.jp / patient123'}
@@ -91,9 +154,7 @@ async function doLogin() {
       _showForcePasswordChange();
       return;
     }
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'flex';
-    initApp();
+    _checkConsent();
   } else if (res.totp_required) {
     // Server confirmed password OK but 2FA is needed — store creds and show TOTP panel
     _pendingLoginCredentials = {username: u, password: p, role};
@@ -140,11 +201,7 @@ async function doForcePasswordChange() {
   const res = await api('/api/change-password','POST',{current_password: current, new_password: newPw});
   if (res.ok) {
     msg.innerHTML = '<div class="auth-msg auth-msg-success">Mot de passe changé. Connexion en cours…</div>';
-    setTimeout(() => {
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('mainApp').style.display = 'flex';
-      initApp();
-    }, 1000);
+    setTimeout(() => { _checkConsent(); }, 1000);
   } else {
     msg.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur lors du changement.'}</div>`;
   }
@@ -163,9 +220,7 @@ async function doLoginTotp() {
       _showForcePasswordChange();
       return;
     }
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'flex';
-    initApp();
+    _checkConsent();
   } else {
     _authMsg('totpError','error', res.error || 'Code invalide.');
     document.getElementById('totpCode').value = '';
