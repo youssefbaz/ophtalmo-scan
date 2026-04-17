@@ -99,6 +99,7 @@ function buildSidebar() {
         <button class="nav-btn" onclick="showView('admin-users')">👥 ${t('Tous les utilisateurs')}</button>
         <button class="nav-btn" onclick="showView('admin-create-medecin')">🩺 ${t('Créer un médecin')}</button>
         <button class="nav-btn" onclick="showView('admin-create-patient')">🧑 ${t('Créer un patient')}</button>
+        <button class="nav-btn" onclick="showView('admin-patients')">🗂 ${t('Gestion patients')}</button>
       </div>`;
   } else {
     html = `
@@ -219,6 +220,7 @@ function showView(viewId, title, _fromBack) {
   else if (viewId === 'admin-users') renderAdminUsers(c);
   else if (viewId === 'admin-create-medecin') renderAdminCreateMedecin(c);
   else if (viewId === 'admin-create-patient') renderAdminCreatePatient(c);
+  else if (viewId === 'admin-patients') renderAdminPatients(c);
   else if (viewId === 'settings') renderSettings(c);
   else if (viewId === 'statistiques') renderStatistiques(c);
   else if (viewId === 'unassigned-patients') renderUnassignedPatients(c);

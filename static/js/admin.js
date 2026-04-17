@@ -578,3 +578,77 @@ async function adminSubmitCreatePatient() {
   }
 }
 
+
+// ─── ADMIN: PATIENT RECORDS MANAGEMENT ───────────────────────────────────────
+async function renderAdminPatients(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const patients = await api('/api/admin/patients');
+  if (!Array.isArray(patients)) {
+    c.innerHTML = '<div style="color:var(--red);padding:20px">Erreur de chargement.</div>';
+    return;
+  }
+
+  c.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700">🗂 Dossiers patients (${patients.length})</div>
+      <input class="form-input" id="adminPatSearch" placeholder="Rechercher nom, prénom, ID…"
+             style="flex:1;min-width:180px;max-width:300px;padding:6px 12px;font-size:13px"
+             oninput="filterAdminPatients()">
+    </div>
+    <div style="font-size:12px;color:var(--amber);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:10px 14px;margin-bottom:16px">
+      ⚠️ Cette vue liste les <strong>dossiers patients</strong> (pas les comptes utilisateurs). Supprimer ici efface définitivement le dossier médical du patient.
+    </div>
+    <div id="adminPatList">
+      ${patients.map(p => _renderAdminPatCard(p)).join('')}
+    </div>`;
+  window._adminPats = patients;
+}
+
+function _renderAdminPatCard(p) {
+  const medLabel = p.medecin_label
+    ? `<span style="color:var(--teal2);font-size:11px">🩺 ${escH(p.medecin_label)}</span>`
+    : `<span style="color:var(--text3);font-size:11px">Sans médecin</span>`;
+  const accLabel = p.patient_username
+    ? `<span style="color:var(--teal2);font-size:11px">👤 ${escH(p.patient_username)}</span>`
+    : `<span style="color:var(--text3);font-size:11px">Pas de compte</span>`;
+  return `
+    <div class="card" style="margin-bottom:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap" id="adminPatCard_${p.id}">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">👤</div>
+      <div style="flex:1;min-width:160px">
+        <div style="font-weight:600;font-size:14px">${escH(p.prenom)} ${escH(p.nom)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
+          <span style="color:var(--text3);font-family:monospace">${p.id}</span>
+          ${medLabel}
+          ${accLabel}
+          <span style="color:var(--text3)">📅 ${p.created_at||'—'}</span>
+        </div>
+      </div>
+      <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3);flex-shrink:0"
+              onclick="adminDeletePatientRecord('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\'")}')">
+        🗑️ Supprimer
+      </button>
+    </div>`;
+}
+
+function filterAdminPatients() {
+  const q = (document.getElementById('adminPatSearch')?.value || '').toLowerCase();
+  const filtered = (window._adminPats || []).filter(p =>
+    !q || `${p.nom} ${p.prenom} ${p.id}`.toLowerCase().includes(q)
+  );
+  document.getElementById('adminPatList').innerHTML =
+    filtered.length ? filtered.map(p => _renderAdminPatCard(p)).join('') :
+    '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
+}
+
+async function adminDeletePatientRecord(pid, name) {
+  if (!confirm(`Supprimer définitivement le dossier patient de ${name} ?\n\nToutes les consultations, documents et rendez-vous seront supprimés. Cette action est irréversible.`)) return;
+  const res = await api(`/api/admin/patients/${pid}`, 'DELETE');
+  if (res.ok) {
+    const card = document.getElementById(`adminPatCard_${pid}`);
+    if (card) card.remove();
+    window._adminPats = (window._adminPats || []).filter(p => p.id !== pid);
+    showToast(`Dossier de ${name} supprimé`, 'success');
+  } else {
+    alert(res.error || 'Erreur lors de la suppression.');
+  }
+}

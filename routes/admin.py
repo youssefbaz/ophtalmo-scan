@@ -436,3 +436,65 @@ def admin_create_patient():
 
     add_notif(db, "patient_added", f"Nouveau patient ajouté par admin : {prenom} {nom}", "admin", pid)
     return jsonify({"ok": True, "id": pid, "credentials": creds}), 201
+
+
+# ─── ADMIN: LIST PATIENTS ─────────────────────────────────────────────────────
+
+@bp.route('/api/admin/patients', methods=['GET'])
+def admin_list_patients():
+    _, err = _require_admin()
+    if err: return err
+    import datetime as _dt
+    from security_utils import decrypt_patient
+    db = get_db()
+    q = request.args.get('q', '').lower().strip()
+    rows = db.execute(
+        "SELECT p.id, p.nom, p.prenom, p.ddn, p.sexe, p.medecin_id, p.deleted, p.created_at, "
+        "       u.username AS medecin_username, u.nom AS medecin_nom, u.prenom AS medecin_prenom, "
+        "       (SELECT username FROM users WHERE patient_id=p.id AND role='patient' LIMIT 1) AS patient_username "
+        "FROM patients p "
+        "LEFT JOIN users u ON u.id=p.medecin_id "
+        "WHERE (p.deleted IS NULL OR p.deleted=0) "
+        "ORDER BY p.created_at DESC"
+    ).fetchall()
+    result = []
+    for row in rows:
+        d    = dict(row)
+        dec  = decrypt_patient(d)
+        nom    = dec.get('nom', '') or ''
+        prenom = dec.get('prenom', '') or ''
+        if q and not (q in nom.lower() or q in prenom.lower() or q in (d['id'] or '').lower()):
+            continue
+        med_nom = ''
+        if d.get('medecin_nom') or d.get('medecin_prenom'):
+            med_nom = f"Dr. {decrypt_field(d.get('medecin_prenom') or '')} {decrypt_field(d.get('medecin_nom') or '')}".strip()
+        result.append({
+            'id':               d['id'],
+            'nom':              nom,
+            'prenom':           prenom,
+            'medecin_id':       d.get('medecin_id') or '',
+            'medecin_label':    med_nom,
+            'patient_username': d.get('patient_username') or '',
+            'created_at':       (d.get('created_at') or '')[:10],
+        })
+    return jsonify(result)
+
+
+@bp.route('/api/admin/patients/<pid>', methods=['DELETE'])
+def admin_delete_patient(pid):
+    admin, err = _require_admin()
+    if err: return err
+    import datetime as _dt
+    db  = get_db()
+    row = db.execute("SELECT id FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)).fetchone()
+    if not row:
+        return jsonify({"error": "Patient non trouvé"}), 404
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid))
+    # Also delete the linked user account if any
+    db.execute("DELETE FROM users WHERE patient_id=?", (pid,))
+    log_audit(db, 'admin_patient_deleted', 'patients', pid,
+              user_id=admin['id'], detail=f"patient_id={pid}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    return jsonify({"ok": True})
