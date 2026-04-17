@@ -209,21 +209,48 @@ async function submitAddPatient() {
 // ─── IMPORT MODAL ─────────────────────────────────────────────────────────────
 function openImport() {
   document.getElementById('modalImportContent').innerHTML = `
-    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Collez le contenu de votre fichier CSV ou copiez-collez depuis Excel. L'IA normalisera automatiquement les colonnes.</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Importez une liste de patients depuis un fichier Excel, CSV ou PDF. L'IA normalisera automatiquement les colonnes.</div>
     <textarea class="input" id="csvContent" rows="8" placeholder="nom,prenom,ddn,telephone&#10;Dupont,Marie,1975-03-15,06...&#10;..."></textarea>
-    <div style="margin-top:12px;display:flex;gap:10px">
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
       <button class="btn btn-primary" onclick="submitImportCsv()">🤖 Importer avec IA</button>
-      <label class="btn btn-ghost" style="cursor:pointer">📁 Charger fichier<input type="file" accept=".csv,.txt,.xlsx" style="display:none" onchange="loadCsvFile(this)"></label>
+      <label class="btn btn-ghost" style="cursor:pointer">📁 Charger fichier<input type="file" accept=".csv,.txt,.xlsx,.xls,.pdf" style="display:none" onchange="loadCsvFile(this)"></label>
     </div>
     <div id="importResult" style="margin-top:14px"></div>`;
   openModal('modalImport');
 }
 
-function loadCsvFile(input) {
-  const file = input.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { document.getElementById('csvContent').value = e.target.result; };
-  reader.readAsText(file);
+async function loadCsvFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const res_el = document.getElementById('importResult');
+  res_el.innerHTML = '<div style="color:var(--teal2);font-size:12px">Lecture du fichier...</div>';
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  try {
+    if (ext === 'pdf') {
+      if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js non chargé');
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(s => s.str).join(' ') + '\n';
+      }
+      document.getElementById('csvContent').value = text.trim();
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      if (typeof XLSX === 'undefined') throw new Error('SheetJS non chargé');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      document.getElementById('csvContent').value = XLSX.utils.sheet_to_csv(ws);
+    } else {
+      const text = await file.text();
+      document.getElementById('csvContent').value = text;
+    }
+    res_el.innerHTML = '';
+  } catch (err) {
+    res_el.innerHTML = `<div style="color:var(--red);font-size:12px">❌ Erreur lecture fichier: ${err.message}</div>`;
+  }
 }
 
 async function submitImportCsv() {
