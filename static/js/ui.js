@@ -50,14 +50,17 @@ async function loadPatientsSidebar(q='') {
       list.map(p => `<option value="${p.id}">${p.prenom} ${p.nom} (${p.id})</option>`).join('');
   }
 
+  window._sidebarPatients = list;
+  if (!window._selPats) window._selPats = [];
+
   const el = document.getElementById('patientListSidebar');
   if (!el) return;
 
-  const selPid = window._selPat?.id;
+  const selIds = new Set((window._selPats || []).map(p => p.id));
   el.innerHTML = list.map(p => {
     const dr = (_showAllPatients && p.medecin_id)
       ? MEDECINS.find(m => m.id === p.medecin_id) : null;
-    const isChecked = selPid === p.id ? 'checked' : '';
+    const isChecked = selIds.has(p.id) ? 'checked' : '';
     return `
       <div class="patient-mini ${currentPatientId===p.id?'active':''}" style="display:flex;align-items:center;gap:6px;padding-left:6px">
         <input type="checkbox" class="pat-check" id="patCheck_${p.id}" ${isChecked}
@@ -73,22 +76,65 @@ async function loadPatientsSidebar(q='') {
 }
 
 function togglePatientSelection(pid, label) {
-  const isChecked = document.getElementById(`patCheck_${pid}`)?.checked;
-  document.querySelectorAll('.pat-check').forEach(c => { if (c.id !== `patCheck_${pid}`) c.checked = false; });
-  const bar = document.getElementById('patientActionBar');
-  if (isChecked) {
-    window._selPat = { id: pid, label };
-    if (bar) bar.style.display = '';
+  if (!window._selPats) window._selPats = [];
+  const idx = window._selPats.findIndex(p => p.id === pid);
+  const cb = document.getElementById(`patCheck_${pid}`);
+  if (cb?.checked) {
+    if (idx === -1) window._selPats.push({ id: pid, label });
   } else {
-    window._selPat = null;
-    if (bar) bar.style.display = 'none';
+    if (idx !== -1) window._selPats.splice(idx, 1);
+  }
+  _updatePatientActionBar();
+}
+
+function _updatePatientActionBar() {
+  const count = (window._selPats || []).length;
+  const bar = document.getElementById('patientActionBar');
+  const lbl = document.getElementById('patActionLabel');
+  const singles = document.querySelectorAll('.pat-action-single');
+  if (bar) bar.style.display = count > 0 ? '' : 'none';
+  if (lbl) lbl.textContent = `✔ ${count} sélectionné(s)`;
+  singles.forEach(b => b.style.display = count === 1 ? '' : 'none');
+  // Update select-all button label
+  const btnSA = document.getElementById('btnSelectAll');
+  if (btnSA) {
+    const total = (window._sidebarPatients || []).length;
+    btnSA.textContent = (count > 0 && count === total) ? '☑ Tout désélectionner' : '☐ Tout sélectionner';
   }
 }
 
+function toggleSelectAllPatients() {
+  const list = window._sidebarPatients || [];
+  const count = (window._selPats || []).length;
+  const allSelected = count === list.length && list.length > 0;
+  if (allSelected) {
+    window._selPats = [];
+    document.querySelectorAll('.pat-check').forEach(c => c.checked = false);
+  } else {
+    window._selPats = list.map(p => ({ id: p.id, label: p.prenom + ' ' + p.nom }));
+    document.querySelectorAll('.pat-check').forEach(c => c.checked = true);
+  }
+  _updatePatientActionBar();
+}
+
+async function deleteSelectedPatients() {
+  const sel = window._selPats || [];
+  if (!sel.length) return;
+  const names = sel.map(p => p.label).join(', ');
+  if (!confirm(`Supprimer ${sel.length} patient(s) ?\n${names}`)) return;
+  for (const p of sel) {
+    await api(`/api/patients/${p.id}`, { method: 'DELETE' });
+  }
+  window._selPats = [];
+  _updatePatientActionBar();
+  loadPatientsSidebar();
+}
+
 async function _sidebarEditPatient() {
-  if (!window._selPat) return;
-  await loadPatient(window._selPat.id);
-  openEditPatient(window._selPat.id);
+  const p = (window._selPats || [])[0];
+  if (!p) return;
+  await loadPatient(p.id);
+  openEditPatient(p.id);
 }
 
 function searchPatients(q) { clearTimeout(window._st); window._st=setTimeout(()=>loadPatientsSidebar(q),200); }

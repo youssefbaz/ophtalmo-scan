@@ -79,14 +79,18 @@ function buildSidebar() {
           <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:14px;line-height:1" title="Défiler vers le bas"
                   onclick="document.getElementById('patientListSidebar').scrollBy({top:120,behavior:'smooth'})">↓</button>
         </div>
+        <div style="padding:3px 8px 2px;display:flex;justify-content:flex-end">
+          <button id="btnSelectAll" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px"
+                  onclick="toggleSelectAllPatients()">☐ ${t('Tout sélectionner')}</button>
+        </div>
         <div class="patient-list-scroll" id="patientListSidebar"></div>
         <div id="patientActionBar" style="display:none;border-top:1px solid var(--border);padding:8px;background:var(--card)">
-          <div style="font-size:11px;color:var(--teal2);font-weight:600;margin-bottom:6px">✔ Patient sélectionné</div>
+          <div style="font-size:11px;color:var(--teal2);font-weight:600;margin-bottom:6px" id="patActionLabel">✔ 0 sélectionné(s)</div>
           <div style="display:flex;gap:5px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="loadPatient(window._selPat?.id)">👁 Voir</button>
-            <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_sidebarEditPatient()">✏ Modifier</button>
-            <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openMessageModal(window._selPat?.id,'','')">✉ Message</button>
-            <button class="btn btn-sm" style="font-size:11px;background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deletePatient(window._selPat?.id,window._selPat?.label)">🗑</button>
+            <button class="btn btn-primary btn-sm pat-action-single" style="font-size:11px" onclick="loadPatient((window._selPats||[])[0]?.id)">👁 Voir</button>
+            <button class="btn btn-ghost btn-sm pat-action-single" style="font-size:11px" onclick="_sidebarEditPatient()">✏ Modifier</button>
+            <button class="btn btn-ghost btn-sm pat-action-single" style="font-size:11px" onclick="openMessageModal((window._selPats||[])[0]?.id,'','')">✉ Message</button>
+            <button class="btn btn-sm" style="font-size:11px;background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deleteSelectedPatients()">🗑 Supprimer</button>
           </div>
         </div>
       </div>`;
