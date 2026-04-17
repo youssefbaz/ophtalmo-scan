@@ -71,9 +71,13 @@ function buildSidebar() {
             <option value="">⚡ ${t('Accès rapide')}…</option>
           </select>
         </div>
-        <div style="display:flex;gap:4px;padding:4px 8px 0">
+        <div style="display:flex;gap:4px;padding:4px 8px 0;align-items:center">
           <button id="btnMesPatients" class="btn btn-sm btn-primary" style="flex:1;justify-content:center;font-size:11px" onclick="setSidebarFilter(false)">${t('Mes patients')}</button>
           <button id="btnTousPatients" class="btn btn-sm btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="setSidebarFilter(true)">${t('Tous')}</button>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:14px;line-height:1" title="Défiler vers le haut"
+                  onclick="document.getElementById('patientListSidebar').scrollBy({top:-120,behavior:'smooth'})">↑</button>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:14px;line-height:1" title="Défiler vers le bas"
+                  onclick="document.getElementById('patientListSidebar').scrollBy({top:120,behavior:'smooth'})">↓</button>
         </div>
         <div class="patient-list-scroll" id="patientListSidebar"></div>
         <div id="patientActionBar" style="display:none;border-top:1px solid var(--border);padding:8px;background:var(--card)">

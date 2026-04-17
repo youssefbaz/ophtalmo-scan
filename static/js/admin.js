@@ -120,7 +120,7 @@ async function renderAdminPending(c) {
 
 function _renderAdminUserCard(u, withActions) {
   const statusColor = {active:'badge-teal',pending:'badge-amber',inactive:'badge-red'}[u.status] || 'badge-amber';
-  const isChecked = window._selAdminUser?.id === u.id ? 'checked' : '';
+  const isChecked = (window._selAdminUsers || []).some(s => s.id === u.id) ? 'checked' : '';
   return `
     <div class="card" style="margin-bottom:14px;padding:18px 20px;transition:border-color .15s${isChecked?';border-color:var(--teal)':''}" id="userCard_${u.id}">
       <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
@@ -303,20 +303,43 @@ async function adminDeleteUser(uid, name) {
 }
 
 function toggleAdminUserSelection(uid, label) {
-  const isChecked = document.getElementById(`userCheck_${uid}`)?.checked;
-  document.querySelectorAll('.user-check').forEach(c => { if (c.id !== `userCheck_${uid}`) c.checked = false; });
-  // Remove highlight from all cards
-  document.querySelectorAll('[id^="userCard_"]').forEach(c => c.style.borderColor = '');
-  const bar = document.getElementById('adminUserActionBar');
-  if (isChecked) {
-    window._selAdminUser = { id: uid, label };
-    const card = document.getElementById(`userCard_${uid}`);
+  if (!window._selAdminUsers) window._selAdminUsers = [];
+  const checkbox = document.getElementById(`userCheck_${uid}`);
+  const card     = document.getElementById(`userCard_${uid}`);
+  if (checkbox?.checked) {
+    if (!window._selAdminUsers.find(u => u.id === uid)) window._selAdminUsers.push({ id: uid, label });
     if (card) card.style.borderColor = 'var(--teal)';
-    if (bar) { bar.style.display = 'flex'; bar.querySelector('.sel-label').textContent = label; }
   } else {
-    window._selAdminUser = null;
-    if (bar) bar.style.display = 'none';
+    window._selAdminUsers = window._selAdminUsers.filter(u => u.id !== uid);
+    if (card) card.style.borderColor = '';
   }
+  _updateAdminActionBar();
+}
+
+function _updateAdminActionBar() {
+  const bar = document.getElementById('adminUserActionBar');
+  if (!bar) return;
+  const sel = window._selAdminUsers || [];
+  if (sel.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const countEl  = bar.querySelector('.sel-count');
+  const modifyBtn = bar.querySelector('.admin-modify-btn');
+  if (countEl)  countEl.textContent = sel.length === 1 ? sel[0].label : `${sel.length} utilisateurs sélectionnés`;
+  if (modifyBtn) modifyBtn.style.display = sel.length === 1 ? '' : 'none';
+}
+
+async function adminDeleteSelected() {
+  const sel = window._selAdminUsers || [];
+  if (!sel.length) return;
+  const names = sel.map(u => u.label).join(', ');
+  const msg = sel.length === 1
+    ? `Supprimer définitivement le compte de ${names} ?`
+    : `Supprimer définitivement ces ${sel.length} comptes ?\n${names}`;
+  if (!confirm(msg + '\n\nCette action est irréversible.')) return;
+  for (const u of sel) await api(`/api/admin/users/${u.id}`, 'DELETE');
+  window._selAdminUsers = [];
+  _updatePendingBadge();
+  showView(currentView);
 }
 
 // ─── ADMIN: ALL USERS ─────────────────────────────────────────────────────────
@@ -327,16 +350,16 @@ async function renderAdminUsers(c) {
     c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Aucun utilisateur.</div>';
     return;
   }
-  window._selAdminUser = null;
+  window._selAdminUsers = [];
   const roles = ['tous','medecin','patient'];
   const roleLabels = {tous:'Tous',medecin:'Médecins',patient:'Patients'};
   c.innerHTML = `
     <div id="adminUserActionBar" style="display:none;position:sticky;top:0;z-index:10;background:var(--teal-dim);border:1px solid var(--teal-border);border-radius:10px;padding:12px 16px;margin-bottom:14px;align-items:center;gap:12px;flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:600;color:var(--teal2)">✔ <span class="sel-label"></span></span>
+      <span style="font-size:13px;font-weight:600;color:var(--teal2)">✔ <span class="sel-count"></span></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
-        <button class="btn btn-primary btn-sm" onclick="adminOpenEditUser(window._selAdminUser?.id)">✏️ Modifier</button>
+        <button class="btn btn-primary btn-sm admin-modify-btn" onclick="adminOpenEditUser(window._selAdminUsers?.[0]?.id)">✏️ Modifier</button>
         <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)"
-                onclick="adminDeleteUser(window._selAdminUser?.id,window._selAdminUser?.label)">🗑️ Supprimer</button>
+                onclick="adminDeleteSelected()">🗑️ Supprimer</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
@@ -369,13 +392,12 @@ function filterAdminUsers(role) {
   document.getElementById('adminUserList').innerHTML =
     filtered.length ? filtered.map(u => _renderAdminUserCard(u, false)).join('') :
     '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
-  // Re-highlight selected card if still visible
-  if (window._selAdminUser) {
-    const card = document.getElementById(`userCard_${window._selAdminUser.id}`);
+  // Re-highlight all selected cards still visible after filtering
+  (window._selAdminUsers || []).forEach(s => {
+    const card = document.getElementById(`userCard_${s.id}`);
     if (card) card.style.borderColor = 'var(--teal)';
-    const bar = document.getElementById('adminUserActionBar');
-    if (bar) { bar.style.display = 'flex'; bar.querySelector('.sel-label').textContent = window._selAdminUser.label; }
-  }
+  });
+  _updateAdminActionBar();
 }
 
 // ─── ADMIN: CREATE MÉDECIN ────────────────────────────────────────────────────
