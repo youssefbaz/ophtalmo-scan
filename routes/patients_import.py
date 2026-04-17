@@ -21,23 +21,36 @@ def import_csv():
     data     = request.json or {}
     csv_text = data.get('content', '')
 
+    content_preview = csv_text[:6000]
     try:
         patients_raw = list(csv.DictReader(io.StringIO(csv_text)))
-        prompt = (f"Voici des données CSV de patients:\n{csv_text[:3000]}\n\nNormalise et retourne le JSON."
+        prompt = (f"Voici des données de patients:\n{content_preview}\n\nNormalise et retourne le JSON."
                   if patients_raw
-                  else f"Extrais les patients de ce texte:\n{csv_text[:3000]}")
+                  else f"Extrais les patients de ce texte:\n{content_preview}")
     except Exception:
-        prompt = f"Extrais les patients de ce texte:\n{csv_text[:3000]}"
+        prompt = f"Extrais les patients de ce texte:\n{content_preview}"
 
     try:
-        result_str = call_llm(prompt, SYSTEM_IMPORT, max_tokens=1500)
+        result_str = call_llm(prompt, SYSTEM_IMPORT, max_tokens=3000)
     except Exception as e:
         logger.error(f"LLM import failed: {e}")
         return jsonify({"ok": False, "error": "Service IA indisponible, réessayez dans quelques minutes."}), 503
     db = get_db()
     try:
+        # Strip markdown fences then extract the first JSON array or object
         clean = re.sub(r'```(?:json)?|```', '', result_str).strip()
+        # Find outermost [...] block
+        m = re.search(r'\[.*\]', clean, re.DOTALL)
+        if m:
+            clean = m.group(0)
+        else:
+            # Maybe LLM returned a single object — wrap it
+            m2 = re.search(r'\{.*\}', clean, re.DOTALL)
+            if m2:
+                clean = f"[{m2.group(0)}]"
         patients_list = json.loads(clean)
+        if isinstance(patients_list, dict):
+            patients_list = [patients_list]
         host  = request.host_url.rstrip('/')
         added = []
         for pd_data in patients_list:
