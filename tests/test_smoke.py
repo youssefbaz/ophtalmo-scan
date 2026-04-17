@@ -17,6 +17,7 @@ def app_and_db():
     _ldenv(override=False)  # don't override if already set
 
     os.environ.setdefault("SECRET_KEY", "test-secret-key-do-not-use-in-prod")
+    os.environ.setdefault("SESSION_COOKIE_SECURE", "0")
     os.environ["RATELIMIT_ENABLED"] = "0"
     # Use a stable test-only encryption key so test patient PII round-trips correctly
     # Keep FIELD_ENCRYPTION_KEY from .env if set, else use a fixed test key

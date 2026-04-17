@@ -7,11 +7,35 @@ Usage:
 
 The backup is:
   1. A consistent snapshot (WAL checkpoint for SQLite, pg_dump for PostgreSQL)
-  2. Fernet-encrypted using FIELD_ENCRYPTION_KEY (same key as field-level encryption)
+  2. Fernet-encrypted using an ESCROWED key (BACKUP_ENCRYPTION_KEY), distinct
+     from the live FIELD_ENCRYPTION_KEY. This ensures that compromise of the
+     running application server does NOT automatically compromise historical
+     backups (an attacker with only the field-encryption key cannot decrypt
+     offsite backups).
   3. Named with a UTC timestamp: ophtalmo_backup_<YYYYMMDD_HHMMSS>.db.enc
 
-Restore:
-  python backup.py --restore backups/ophtalmo_backup_20250101_120000.db.enc
+Key handling:
+  - BACKUP_ENCRYPTION_KEY: 44-char urlsafe base64 Fernet key, stored OUT OF
+    BAND from the app server (KMS, HSM, offline hardware token, paper escrow).
+    The app does not need this key to run — only the operator running a
+    restore does. This is the 'escrowed' property.
+  - If BACKUP_ENCRYPTION_KEY is unset, backup falls back to
+    FIELD_ENCRYPTION_KEY with a loud warning. That fallback means backups are
+    only as safe as the live key — acceptable only for dev, never for prod.
+
+Rotation:
+  - MAX_BACKUPS controls retention on the backup destination directory.
+
+Restore procedure (documented — see also tests/test_backup_restore.py):
+  1. Provision a recovery host with python + requirements.txt installed.
+  2. Retrieve BACKUP_ENCRYPTION_KEY from escrow (KMS / offline / paper).
+  3. Export it in that shell session only (never to the app server env):
+       export BACKUP_ENCRYPTION_KEY="<escrowed key>"
+  4. Decrypt:
+       python backup.py --restore /path/to/ophtalmo_backup_<ts>.db.enc
+  5. Inspect the restored file (sqlite3 restored.db ".tables") before
+     swapping it into the running deployment.
+  6. Stop the app, move the restored .db into place, start the app.
 
 Cron example (daily 2 AM):
   0 2 * * * cd /opt/ophtalmo && python backup.py --dest /mnt/offsite
@@ -32,7 +56,28 @@ MAX_BACKUPS = 30  # keep last 30 encrypted backups (≈ 1 month of daily runs)
 
 
 def _get_fernet():
-    """Get Fernet instance using the same key as security_utils."""
+    """Return a Fernet instance for backup encryption.
+
+    Prefers BACKUP_ENCRYPTION_KEY (escrowed, stored separately from the app).
+    Falls back to FIELD_ENCRYPTION_KEY with a warning so existing deployments
+    don't break the instant this is introduced — but production ops should
+    migrate to a distinct backup key.
+    """
+    from cryptography.fernet import Fernet
+    backup_key = os.environ.get("BACKUP_ENCRYPTION_KEY", "").strip()
+    if backup_key:
+        try:
+            return Fernet(backup_key.encode("utf-8"))
+        except Exception as e:
+            raise RuntimeError(
+                f"BACKUP_ENCRYPTION_KEY is set but invalid: {e}. "
+                "Expected a 44-character urlsafe base64 Fernet key."
+            ) from e
+    logger.warning(
+        "BACKUP_ENCRYPTION_KEY is not set — falling back to FIELD_ENCRYPTION_KEY. "
+        "In production, set a distinct escrowed key so that a live-key compromise "
+        "does not expose historical backups."
+    )
     from security_utils import _get_fernet as _su_fernet
     return _su_fernet()
 

@@ -434,7 +434,13 @@ def admin_create_patient():
         if creds:
             db.commit()
 
+    u_admin = current_user()
+    log_audit(db, 'admin_patient_created', 'patients', pid,
+              user_id=u_admin['id'] if u_admin else None,
+              ip_address=get_client_ip(), user_agent=get_user_agent(),
+              detail=f"medecin_id={medecin_id}")
     add_notif(db, "patient_added", f"Nouveau patient ajouté par admin : {prenom} {nom}", "admin", pid)
+    db.commit()
     return jsonify({"ok": True, "id": pid, "credentials": creds}), 201
 
 

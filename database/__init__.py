@@ -17,7 +17,8 @@ Sub-modules:
 # Re-export everything that was previously importable from the flat database.py
 from database.connection    import (get_db, close_db, DB_PATH, DATABASE,
                                      _USE_PG, _open_pg)
-from database.session       import (current_user, require_role, next_medecin_code)
+from database.session       import (current_user, require_role, next_medecin_code,
+                                     medecin_can_access_patient)
 from database.audit         import (log_audit, audit_read)
 from database.notifications import (add_notif,)
 from database.lockout       import (record_login_attempt, is_account_locked,
@@ -26,7 +27,7 @@ from database.migrations    import (init_db,)
 
 __all__ = [
     "get_db", "close_db", "DB_PATH", "DATABASE",
-    "current_user", "require_role", "next_medecin_code",
+    "current_user", "require_role", "next_medecin_code", "medecin_can_access_patient",
     "log_audit", "audit_read",
     "add_notif",
     "record_login_attempt", "is_account_locked", "MAX_ATTEMPTS", "LOCKOUT_MINUTES",

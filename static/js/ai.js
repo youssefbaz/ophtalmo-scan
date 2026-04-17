@@ -46,7 +46,7 @@ async function sendAiMsg() {
   const lid='l'+Date.now();
   document.getElementById('aiMessages').innerHTML+=`<div class="msg msg-ai" id="${lid}"><div class="msg-sender">🤖</div><div class="msg-bubble"><span class="loading-dots"><span></span><span></span><span></span></span></div></div>`;
   scrollAi();
-  const res = await api('/api/ai/question','POST',{question:q,context:aiContext});
+  const res = await api('/api/ai/question','POST',{question:q,context:aiContext,patient_id:aiContextPid});
   document.getElementById(lid)?.remove();
   addMsg('ai', res.answer||res.error||'Erreur');
   btn.disabled=false;
@@ -62,6 +62,7 @@ function scrollAi(){const d=document.getElementById('aiMessages');if(d)d.scrollT
 async function startAiContext(pid) {
   const p = await api(`/api/patients/${pid}`);
   aiContext = `Patient: ${p.prenom} ${p.nom}, ${new Date().getFullYear()-new Date(p.ddn).getFullYear()} ans. Antécédents: ${p.antecedents.join(', ')}. Dernier traitement: ${p.historique[0]?.traitement||'NC'}`;
+  aiContextPid = pid;
   showView('ai-assistant');
   setTimeout(()=>addMsg('ai',`Contexte chargé pour ${p.prenom} ${p.nom}.\nAntécédents: ${p.antecedents.join(', ')}\nDernier traitement: ${p.historique[0]?.traitement||'NC'}\n\nQuelle est votre question ?`),100);
 }

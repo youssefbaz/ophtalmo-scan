@@ -1,6 +1,6 @@
 import uuid, datetime, logging, re
 from flask import Blueprint, request, jsonify
-from database import get_db, current_user, add_notif
+from database import get_db, current_user, add_notif, medecin_can_access_patient
 from security_utils import decrypt_field, decrypt_patient, valid_date, valid_heure
 
 # Detect Fernet tokens accidentally stored in plain-text fields
@@ -64,6 +64,10 @@ def add_rdv():
         return jsonify({"error": "Patient non trouvé"}), 404
     p = decrypt_patient(dict(_p))
     if u['role'] == 'patient' and u.get('patient_id') != pid:
+        return jsonify({"error": "Accès refusé"}), 403
+    # Médecins can only book for their own patients (primary or linked).
+    # A patient booking with a new doctor is allowed — they auto-link below.
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
         return jsonify({"error": "Accès refusé"}), 403
 
     rdv_date  = data.get('date', '')
@@ -193,6 +197,9 @@ def delete_rdv(rdv_id):
     ).fetchone()
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
+    # Must either own the RDV directly (medecin_id) or have access to the patient
+    if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+        return jsonify({"error": "Accès refusé"}), 403
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         db.execute("UPDATE suivi_postop SET statut='annulé' WHERE rdv_id=?", (rdv_id,))
@@ -215,6 +222,8 @@ def update_rdv(rdv_id):
     row = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
+    if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+        return jsonify({"error": "Accès refusé"}), 403
 
     new_date  = data.get('date',  row['date'])
     new_heure = data.get('heure', row['heure'])
@@ -269,6 +278,8 @@ def valider_rdv(rdv_id):
     ).fetchone()
     if not row:
         return jsonify({"error": "RDV non trouvé"}), 404
+    if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+        return jsonify({"error": "Accès refusé"}), 403
 
     new_statut = data.get('statut', 'confirmé')
     new_notes  = data.get('notes', row['notes'])

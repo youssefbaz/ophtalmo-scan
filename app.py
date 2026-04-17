@@ -98,14 +98,28 @@ def create_app():
     app.config['SESSION_IDLE_TIMEOUT']       = idle_minutes
     app.config['SESSION_COOKIE_HTTPONLY']    = True
     app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
-    # Set SESSION_COOKIE_SECURE=1 in production (HTTPS only).
-    # Defaults to False so cookies are sent over plain HTTP in development.
-    secure_cookies = os.environ.get('SESSION_COOKIE_SECURE', '0') == '1'
+    # Fail-closed: SESSION_COOKIE_SECURE must be explicitly set to 0 or 1.
+    # Leaving it unset is almost always a deployment mistake, so we refuse to
+    # start rather than silently ship cookies over plain HTTP.
+    #   SESSION_COOKIE_SECURE=1 → production (HTTPS only)
+    #   SESSION_COOKIE_SECURE=0 → explicit opt-in for local/dev/test
+    _secure_raw = os.environ.get('SESSION_COOKIE_SECURE')
+    if _secure_raw is None:
+        raise RuntimeError(
+            "SESSION_COOKIE_SECURE is not set. Refusing to start — this must be "
+            "explicit. Set SESSION_COOKIE_SECURE=1 in production (requires HTTPS), "
+            "or SESSION_COOKIE_SECURE=0 for local development."
+        )
+    if _secure_raw not in ('0', '1'):
+        raise RuntimeError(
+            f"SESSION_COOKIE_SECURE must be '0' or '1', got {_secure_raw!r}."
+        )
+    secure_cookies = (_secure_raw == '1')
     app.config['SESSION_COOKIE_SECURE'] = secure_cookies
-    if not secure_cookies and not app.debug:
+    if not secure_cookies:
         logging.getLogger(__name__).warning(
-            "SESSION_COOKIE_SECURE is not set — cookies will be sent over plain HTTP. "
-            "Set SESSION_COOKIE_SECURE=1 in production (requires HTTPS)."
+            "SESSION_COOKIE_SECURE=0 — cookies will be sent over plain HTTP. "
+            "Acceptable only for local development."
         )
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
@@ -224,7 +238,7 @@ def create_app():
     # In development (plain HTTP) Talisman is initialised but HTTPS is not forced.
     try:
         from flask_talisman import Talisman
-        _force_https = os.environ.get('SESSION_COOKIE_SECURE', '0') == '1'
+        _force_https = app.config.get('SESSION_COOKIE_SECURE', False)
         Talisman(
             app,
             force_https=_force_https,
@@ -310,9 +324,28 @@ def create_app():
         return jsonify({"ok": True, "sent": sent, "message": f"{sent} rappel(s) email envoyé(s)"})
 
     # ── APScheduler: daily reminders at 08:00 ────────────────────────────────
-    # Only start scheduler in the main process (not Werkzeug reloader child)
+    # Multi-worker safety: under gunicorn, every worker imports the app and
+    # would start its own scheduler → each cron job fires N times. Require an
+    # explicit opt-in (ENABLE_SCHEDULER=1) on exactly one worker or a dedicated
+    # singleton process. In dev, keep the old behavior: main process only.
     _is_debug = os.environ.get('FLASK_DEBUG', '0') == '1'
-    if not _is_debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    _enable_sched_raw = os.environ.get('ENABLE_SCHEDULER', '').strip()
+    _sched_log_preinit = logging.getLogger('apscheduler.startup')
+    if _enable_sched_raw == '1':
+        _should_run_scheduler = True
+    elif _enable_sched_raw == '0':
+        _should_run_scheduler = False
+    elif _is_debug:
+        _should_run_scheduler = (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
+    else:
+        _should_run_scheduler = False
+        _sched_log_preinit.warning(
+            "APScheduler not started — set ENABLE_SCHEDULER=1 on exactly one "
+            "worker or a dedicated singleton process to enable scheduled jobs. "
+            "Running multiple workers with ENABLE_SCHEDULER=1 will fire each "
+            "cron job multiple times per day."
+        )
+    if _should_run_scheduler:
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             from routes.agenda import check_postop_gaps

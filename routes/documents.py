@@ -1,6 +1,6 @@
 import uuid, datetime, json, logging, threading, base64, io, os
 from flask import Blueprint, request, jsonify, current_app
-from database import get_db, current_user, add_notif, require_role, audit_read
+from database import get_db, current_user, add_notif, require_role, audit_read, medecin_can_access_patient
 from llm import call_llm, LLMUnavailableError, SYSTEM_OPHTHALMO
 from security_utils import decrypt_patient, encrypt_field, decrypt_field, decrypt_clinical
 from extensions import limiter
@@ -135,6 +135,8 @@ def upload_document(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     _p = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     if not _p:
         return jsonify({"error": "Patient non trouvé"}), 404
@@ -193,6 +195,8 @@ def get_documents(pid):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
 
     _has_image_expr = (
         "(CASE WHEN (image_b64 != '' AND image_b64 IS NOT NULL) "
@@ -224,6 +228,8 @@ def get_deleted_documents(pid):
     if not u or u['role'] != 'medecin':
         return jsonify([]), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify([]), 403
     rows = db.execute(
         "SELECT id,patient_id,type,date,description,uploaded_by,valide,notes,analyse_ia,source,deleted,deleted_at,"
         "(CASE WHEN (image_b64 != '' AND image_b64 IS NOT NULL) "
@@ -242,6 +248,8 @@ def get_document(pid, doc_id):
     if u['role'] == 'patient' and u.get('patient_id') != pid:
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     row = db.execute(
         "SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)
     ).fetchone()
@@ -261,6 +269,8 @@ def analyze_document(pid, doc_id):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     doc   = db.execute("SELECT * FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone()
     if not p_row or not doc:
@@ -285,13 +295,7 @@ def analyze_document(pid, doc_id):
     if current_status == 'pending':
         return jsonify({"ok": True, "status": "pending", "message": "Analyse déjà en cours…"})
 
-    antecedents = json.loads(p.get('antecedents') or '[]')
-    age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
-    context = (f"Patient : {p['prenom']} {p['nom']}, {age} ans. "
-               f"Antécédents : {', '.join(antecedents) or 'aucun renseigné'}")
-    uploader = "le patient" if doc['uploaded_by'] == 'patient' else "le médecin"
-
-    def _safe_llm(val):
+    def _safe_llm(val, max_len=200):
         """Strip prompt-injection markers from free-text fields before inserting into LLM prompt."""
         if val is None:
             return ''
@@ -301,7 +305,14 @@ def analyze_document(pid, doc_id):
                 .replace('|>', '')
                 .replace('[INST]', '')
                 .replace('[/INST]', '')
-                .replace('###', ''))[:200]
+                .replace('###', ''))[:max_len]
+
+    antecedents = json.loads(p.get('antecedents') or '[]')
+    age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
+    safe_antecedents = ', '.join(_safe_llm(a, 80) for a in antecedents) or 'aucun renseigné'
+    context = (f"Patient : {_safe_llm(p.get('prenom'), 60)} {_safe_llm(p.get('nom'), 60)}, {age} ans. "
+               f"Antécédents : {safe_antecedents}")
+    uploader = "le patient" if doc['uploaded_by'] == 'patient' else "le médecin"
 
     safe_type = _safe_llm(doc['type'])
 
@@ -338,6 +349,8 @@ def validate_document(pid, doc_id):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     if not db.execute("SELECT id FROM documents WHERE id=? AND patient_id=?", (doc_id, pid)).fetchone():
         return jsonify({"error": "Non trouvé"}), 404
     db.execute("UPDATE documents SET valide=1 WHERE id=?", (doc_id,))
@@ -359,7 +372,10 @@ def delete_document(pid, doc_id):
     if u['role'] == 'patient':
         if u.get('patient_id') != pid or row['uploaded_by'] != 'patient':
             return jsonify({"error": "Accès refusé"}), 403
-    elif u['role'] != 'medecin':
+    elif u['role'] == 'medecin':
+        if not medecin_can_access_patient(db, u['id'], pid):
+            return jsonify({"error": "Accès refusé"}), 403
+    else:
         return jsonify({"error": "Accès refusé"}), 403
     db.execute(
         "UPDATE documents SET deleted=1, deleted_at=? WHERE id=?",
@@ -375,6 +391,8 @@ def restore_document(pid, doc_id):
     if not u or u['role'] != 'medecin':
         return jsonify({"error": "Accès refusé"}), 403
     db = get_db()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     db.execute(
         "UPDATE documents SET deleted=0, deleted_at='' WHERE id=? AND patient_id=?",
         (doc_id, pid)
@@ -390,6 +408,9 @@ def restore_document(pid, doc_id):
 def consultation_summary(pid):
     """Generate an AI-written clinical summary from the latest consultation."""
     db = get_db()
+    u = current_user()
+    if not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
     p_row = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
     if not p_row:
         return jsonify({"error": "Patient non trouvé"}), 404
@@ -431,28 +452,36 @@ def consultation_summary(pid):
     allergies   = json.loads(p.get('allergies')   or '[]')
     age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else 0
 
-    def _safe(val):
-        """Strip prompt-injection attempts from free-text DB fields."""
+    def _safe(val, max_len=500):
+        """Strip prompt-injection markers and cap length for free-text DB fields."""
         if val is None:
             return ''
-        return str(val).replace('```', '').replace('<|', '').replace('|>', '')
+        return (str(val)
+                .replace('```', '')
+                .replace('<|', '')
+                .replace('|>', '')
+                .replace('[INST]', '')
+                .replace('[/INST]', '')
+                .replace('###', ''))[:max_len]
 
+    safe_antecedents = ', '.join(_safe(a, 80) for a in antecedents) or 'aucun renseigné'
+    safe_allergies   = ', '.join(_safe(a, 80) for a in allergies) if allergies else 'Aucune'
     prompt = (
         "Génère un compte-rendu de consultation ophtalmologique structuré et professionnel "
         "à partir des données cliniques suivantes (données issues du dossier médical) :\n\n"
         f"[DONNÉES PATIENT]\n"
-        f"Nom : {p['prenom']} {p['nom']}\n"
+        f"Nom : {_safe(p.get('prenom'), 60)} {_safe(p.get('nom'), 60)}\n"
         f"Age : {age} ans\n"
-        f"Sexe : {p['sexe']}\n"
-        f"Antécédents : {', '.join(antecedents) or 'aucun renseigné'}\n"
-        f"Allergies : {', '.join(allergies) if allergies else 'Aucune'}\n\n"
+        f"Sexe : {_safe(p.get('sexe'), 20)}\n"
+        f"Antécédents : {safe_antecedents}\n"
+        f"Allergies : {safe_allergies}\n\n"
         f"[DONNÉES CONSULTATION]\n"
-        f"Date : {h['date']}\n"
+        f"Date : {_safe(h.get('date'), 20)}\n"
         f"Motif : {_safe(h['motif'])}\n"
-        f"Acuité OD : {_safe(h['acuite_od'])} | OG : {_safe(h['acuite_og'])}\n"
-        f"Tonus OD : {_safe(h['tension_od'])} mmHg | OG : {_safe(h['tension_og'])} mmHg\n"
-        f"Réfraction OD : S {_safe(h['refraction_od_sph'])} C {_safe(h['refraction_od_cyl'])} Axe {_safe(h['refraction_od_axe'])}\n"
-        f"Réfraction OG : S {_safe(h['refraction_og_sph'])} C {_safe(h['refraction_og_cyl'])} Axe {_safe(h['refraction_og_axe'])}\n"
+        f"Acuité OD : {_safe(h['acuite_od'], 50)} | OG : {_safe(h['acuite_og'], 50)}\n"
+        f"Tonus OD : {_safe(h['tension_od'], 20)} mmHg | OG : {_safe(h['tension_og'], 20)} mmHg\n"
+        f"Réfraction OD : S {_safe(h['refraction_od_sph'], 20)} C {_safe(h['refraction_od_cyl'], 20)} Axe {_safe(h['refraction_od_axe'], 20)}\n"
+        f"Réfraction OG : S {_safe(h['refraction_og_sph'], 20)} C {_safe(h['refraction_og_cyl'], 20)} Axe {_safe(h['refraction_og_axe'], 20)}\n"
         f"Segment antérieur : {_safe(h['segment_ant']) or 'non renseigné'}\n"
         f"Diagnostic : {_safe(h['diagnostic'])}\n"
         f"Traitement : {_safe(h['traitement'])}\n"

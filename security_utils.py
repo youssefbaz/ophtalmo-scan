@@ -113,24 +113,31 @@ def _get_fernet() -> Fernet:
 
 
 def encrypt_field(value: str) -> str:
-    """Encrypt a plaintext string. Returns empty string for empty input."""
+    """Encrypt a plaintext string. Returns empty string for empty input.
+
+    Fail-closed: if encryption fails (key missing, Fernet error), raise rather
+    than silently writing plaintext PII to the database.
+    """
     if not value:
         return value
-    try:
-        return _get_fernet().encrypt(value.encode("utf-8")).decode("ascii")
-    except Exception as e:
-        logger.error(f"Encryption failed: {e}")
-        return value  # fail-open to prevent data loss; log the issue
+    return _get_fernet().encrypt(value.encode("utf-8")).decode("ascii")
 
 
 def decrypt_field(value: str) -> str:
-    """Decrypt a Fernet-encrypted string. Returns original on failure (already plaintext or error)."""
+    """Decrypt a Fernet-encrypted string.
+
+    If the input is not a valid Fernet token (legacy plaintext from before
+    field-level encryption was rolled out), return it unchanged — this is the
+    only backward-compat fallback. Any other failure (missing key, unicode
+    decode error) raises, because silently returning ciphertext would let
+    broken data flow to the UI as if it were plaintext PII.
+    """
     if not value:
         return value
     try:
         return _get_fernet().decrypt(value.encode("ascii")).decode("utf-8")
-    except (InvalidToken, Exception):
-        return value  # already plaintext (pre-encryption data) or corrupted
+    except InvalidToken:
+        return value  # legacy plaintext written before encryption was enabled
 
 
 def decrypt_patient(row: dict) -> dict:
