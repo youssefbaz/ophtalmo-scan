@@ -50,7 +50,7 @@ def send_message(pid):
         return jsonify({"error": "Accès refusé"}), 403
 
     db = get_db()
-    p_row = db.execute("SELECT * FROM patients WHERE id=? AND deleted=0", (pid,)).fetchone()
+    p_row = db.execute("SELECT * FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)).fetchone()
     if not p_row:
         return jsonify({"error": "Patient non trouvé"}), 404
     p = decrypt_patient(dict(p_row))

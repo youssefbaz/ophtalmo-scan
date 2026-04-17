@@ -120,11 +120,17 @@ async function renderAdminPending(c) {
 
 function _renderAdminUserCard(u, withActions) {
   const statusColor = {active:'badge-teal',pending:'badge-amber',inactive:'badge-red'}[u.status] || 'badge-amber';
+  const isChecked = window._selAdminUser?.id === u.id ? 'checked' : '';
   return `
-    <div class="card" style="margin-bottom:14px;padding:18px 20px" id="userCard_${u.id}">
+    <div class="card" style="margin-bottom:14px;padding:18px 20px;transition:border-color .15s${isChecked?';border-color:var(--teal)':''}" id="userCard_${u.id}">
       <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
-        <div style="width:44px;height:44px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
-          ${u.role === 'medecin' ? '🩺' : '👤'}
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
+          <input type="checkbox" id="userCheck_${u.id}" class="user-check" ${isChecked}
+                 style="width:16px;height:16px;accent-color:var(--teal);cursor:pointer"
+                 onclick="toggleAdminUserSelection('${u.id}','${(u.prenom||'').replace(/'/g,"\\'")} ${(u.nom||'').replace(/'/g,"\\'")}')">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:20px">
+            ${u.role === 'medecin' ? '🩺' : '👤'}
+          </div>
         </div>
         <div style="flex:1;min-width:200px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
@@ -296,6 +302,23 @@ async function adminDeleteUser(uid, name) {
   }
 }
 
+function toggleAdminUserSelection(uid, label) {
+  const isChecked = document.getElementById(`userCheck_${uid}`)?.checked;
+  document.querySelectorAll('.user-check').forEach(c => { if (c.id !== `userCheck_${uid}`) c.checked = false; });
+  // Remove highlight from all cards
+  document.querySelectorAll('[id^="userCard_"]').forEach(c => c.style.borderColor = '');
+  const bar = document.getElementById('adminUserActionBar');
+  if (isChecked) {
+    window._selAdminUser = { id: uid, label };
+    const card = document.getElementById(`userCard_${uid}`);
+    if (card) card.style.borderColor = 'var(--teal)';
+    if (bar) { bar.style.display = 'flex'; bar.querySelector('.sel-label').textContent = label; }
+  } else {
+    window._selAdminUser = null;
+    if (bar) bar.style.display = 'none';
+  }
+}
+
 // ─── ADMIN: ALL USERS ─────────────────────────────────────────────────────────
 async function renderAdminUsers(c) {
   c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
@@ -304,10 +327,18 @@ async function renderAdminUsers(c) {
     c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Aucun utilisateur.</div>';
     return;
   }
-  // Filter tabs
+  window._selAdminUser = null;
   const roles = ['tous','medecin','patient'];
   const roleLabels = {tous:'Tous',medecin:'Médecins',patient:'Patients'};
   c.innerHTML = `
+    <div id="adminUserActionBar" style="display:none;position:sticky;top:0;z-index:10;background:var(--teal-dim);border:1px solid var(--teal-border);border-radius:10px;padding:12px 16px;margin-bottom:14px;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600;color:var(--teal2)">✔ <span class="sel-label"></span></span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+        <button class="btn btn-primary btn-sm" onclick="adminOpenEditUser(window._selAdminUser?.id)">✏️ Modifier</button>
+        <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)"
+                onclick="adminDeleteUser(window._selAdminUser?.id,window._selAdminUser?.label)">🗑️ Supprimer</button>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
       ${roles.map(r => `
         <button class="btn ${r==='tous'?'btn-primary':'btn-ghost'} btn-sm" id="filterBtn_${r}"
@@ -338,6 +369,13 @@ function filterAdminUsers(role) {
   document.getElementById('adminUserList').innerHTML =
     filtered.length ? filtered.map(u => _renderAdminUserCard(u, false)).join('') :
     '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
+  // Re-highlight selected card if still visible
+  if (window._selAdminUser) {
+    const card = document.getElementById(`userCard_${window._selAdminUser.id}`);
+    if (card) card.style.borderColor = 'var(--teal)';
+    const bar = document.getElementById('adminUserActionBar');
+    if (bar) { bar.style.display = 'flex'; bar.querySelector('.sel-label').textContent = window._selAdminUser.label; }
+  }
 }
 
 // ─── ADMIN: CREATE MÉDECIN ────────────────────────────────────────────────────

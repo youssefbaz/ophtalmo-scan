@@ -65,11 +65,26 @@ function buildSidebar() {
         <div class="sidebar-patient-search">
           <input type="text" placeholder="${t('Rechercher un patient...')}" oninput="searchPatients(this.value)">
         </div>
+        <div style="padding:4px 8px 0">
+          <select id="patientQuickSelect" class="input" style="font-size:12px;width:100%;padding:5px 8px"
+                  onchange="if(this.value){loadPatient(this.value);this.value=''}">
+            <option value="">⚡ ${t('Accès rapide')}…</option>
+          </select>
+        </div>
         <div style="display:flex;gap:4px;padding:4px 8px 0">
           <button id="btnMesPatients" class="btn btn-sm btn-primary" style="flex:1;justify-content:center;font-size:11px" onclick="setSidebarFilter(false)">${t('Mes patients')}</button>
           <button id="btnTousPatients" class="btn btn-sm btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="setSidebarFilter(true)">${t('Tous')}</button>
         </div>
         <div class="patient-list-scroll" id="patientListSidebar"></div>
+        <div id="patientActionBar" style="display:none;border-top:1px solid var(--border);padding:8px;background:var(--card)">
+          <div style="font-size:11px;color:var(--teal2);font-weight:600;margin-bottom:6px">✔ Patient sélectionné</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="loadPatient(window._selPat?.id)">👁 Voir</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_sidebarEditPatient()">✏ Modifier</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openMessageModal(window._selPat?.id,'','')">✉ Message</button>
+            <button class="btn btn-sm" style="font-size:11px;background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3)" onclick="deletePatient(window._selPat?.id,window._selPat?.label)">🗑</button>
+          </div>
+        </div>
       </div>`;
   } else if (USER.role === 'admin') {
     html = `
