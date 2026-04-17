@@ -177,6 +177,15 @@ def admin_delete_user(uid):
               user_id=admin['id'], detail=f"target={uid} username={row['username']} role={row['role']}",
               ip_address=get_client_ip(), user_agent=get_user_agent())
     db.execute("DELETE FROM users WHERE id=?", (uid,))
+    # If this user is a patient, soft-delete the patient record so it
+    # disappears from all médecin patient lists immediately.
+    if row['role'] == 'patient' and row.get('patient_id'):
+        import datetime as _dt
+        now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        db.execute(
+            "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?",
+            (now, row['patient_id'])
+        )
     db.commit()
     add_notif(db, "compte_supprime",
               f"🗑️ Compte supprimé : {u_prenom} {u_nom} ({row['username']})",
