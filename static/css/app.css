@@ -264,6 +264,15 @@ body.theme-dark .sidebar-logo-role { color: var(--text3); }
 }
 body.theme-dark .logo-status-dot { border-color: var(--bg2); }
 
+/* ── NAV WRAPPER — must fill remaining sidebar height and constrain scroll ── */
+#sidebarNav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* ── NAV SECTIONS ── */
 .nav-section { padding: 10px 8px 4px; flex-shrink: 0; }
 .nav-section-label {
@@ -340,7 +349,8 @@ body.theme-dark .sidebar-patient-search input {
 }
 body.theme-dark .sidebar-patient-search input::placeholder { color: var(--text3); }
 
-.patient-list-scroll { flex: 1; overflow-y: auto; padding: 0 8px 10px; }
+.patient-list-scroll { flex: 1; overflow-y: auto; padding: 0 8px 10px; min-height: 0; }
+#patientActionBar { flex-shrink: 0; }
 
 .patient-mini {
   padding: 8px 9px; border-radius: 9px; cursor: pointer;
