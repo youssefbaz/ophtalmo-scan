@@ -83,6 +83,29 @@ document.addEventListener('click', e => {
 
 // ─── PDF ORDONNANCE DOWNLOAD ──────────────────────────────────────────────────
 
+async function downloadPatientPDF(pid) {
+  try {
+    showToast('Génération de la fiche PDF…', 'info', 3000);
+    const resp = await fetch(`/api/patients/${pid}/pdf`, {
+      credentials: 'include',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      showToast(err.error || `Erreur ${resp.status}`, 'error');
+      return;
+    }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `patient_${pid}.pdf`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(e) {
+    showToast('Erreur lors du téléchargement', 'error');
+  }
+}
+
 async function downloadOrdonnancePDF(pid, oid) {
   try {
     const resp = await fetch(`/api/patients/${pid}/ordonnances/${oid}/pdf`);
@@ -795,7 +818,7 @@ async function renderSettings(c) {
           {id:'clinical',preview:'#f5f7fa', text:'#1a2940', accent:'#0077cc'},
           {id:'contrast',preview:'#000000', text:'#ffffff', accent:'#00ffcc'},
         ].map(th=>`
-          <div onclick="applyTheme('${th.id}');document.querySelectorAll('.theme-opt').forEach(e=>{e.style.borderColor='var(--border)';e.classList.remove('selected')});this.style.borderColor='var(--teal)';this.classList.add('selected')"
+          <div onclick="applyTheme('${th.id}', true);document.querySelectorAll('.theme-opt').forEach(e=>{e.style.borderColor='var(--border)';e.classList.remove('selected')});this.style.borderColor='var(--teal)';this.classList.add('selected')"
                class="theme-opt${storedTheme===th.id?' selected':''}"
                style="cursor:pointer;border-radius:10px;overflow:hidden;border:2px solid ${storedTheme===th.id?'var(--teal)':'var(--border)'};transition:border-color .15s">
             <div style="height:48px;background:${th.preview};display:flex;align-items:center;justify-content:center;gap:6px">

@@ -1,5 +1,5 @@
-import re, json
-from flask import Blueprint, jsonify
+import re, json, time
+from flask import Blueprint, jsonify, Response, stream_with_context, request
 from database import get_db, current_user
 from security_utils import decrypt_field
 
@@ -64,6 +64,66 @@ def get_notifications():
             n['data'] = {}
         result.append(n)
     return jsonify(result)
+
+
+@bp.route('/api/stream/notifications', methods=['GET'])
+def stream_notifications():
+    """Server-Sent Events stream — pushes new notifications every 15 s.
+
+    Clients open an EventSource to this endpoint and receive a 'notifications'
+    event whenever there are unread items. This replaces the JS polling loop.
+    """
+    u = current_user()
+    if not u:
+        return Response('data: {"error":"unauthenticated"}\n\n',
+                        mimetype='text/event-stream', status=401)
+
+    def _generate():
+        last_seen_id = None
+        while True:
+            try:
+                db = get_db()
+                if u['role'] == 'medecin':
+                    rows = db.execute("""
+                        SELECT id, lu FROM notifications n
+                        WHERE n.medecin_id = ?
+                           OR n.patient_id IN (SELECT id FROM patients WHERE medecin_id = ?)
+                           OR (
+                               (n.patient_id IS NULL OR n.patient_id = '')
+                               AND (n.medecin_id IS NULL OR n.medecin_id = '')
+                               AND n.from_role != 'admin'
+                           )
+                        ORDER BY n.date DESC LIMIT 1
+                    """, (u['id'], u['id'])).fetchall()
+                else:
+                    rows = db.execute(
+                        "SELECT id, lu FROM notifications WHERE patient_id=? AND from_role='medecin' "
+                        "ORDER BY date DESC LIMIT 1",
+                        (u.get('patient_id'),)
+                    ).fetchall()
+
+                latest_id = rows[0]['id'] if rows else None
+                unread    = sum(1 for r in db.execute(
+                    "SELECT COUNT(*) FROM notifications WHERE lu=0"
+                ).fetchall())
+
+                if latest_id != last_seen_id:
+                    last_seen_id = latest_id
+                    payload = json.dumps({"unread": unread, "latest": latest_id})
+                    yield f"event: notifications\ndata: {payload}\n\n"
+                else:
+                    # Heartbeat to keep connection alive
+                    yield ": heartbeat\n\n"
+            except Exception:
+                yield ": error\n\n"
+            time.sleep(15)
+
+    return Response(stream_with_context(_generate()),
+                    mimetype='text/event-stream',
+                    headers={
+                        'Cache-Control': 'no-cache',
+                        'X-Accel-Buffering': 'no',
+                    })
 
 
 @bp.route('/api/notifications/<nid>/lu', methods=['POST'])

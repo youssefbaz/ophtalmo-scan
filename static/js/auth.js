@@ -150,6 +150,7 @@ async function doLogin() {
   if (res.ok) {
     const me = await api('/me');
     USER = {...res, ...me};
+    if (me.theme) applyTheme(me.theme);
     if (res.force_password_change || me.force_password_change) {
       _showForcePasswordChange();
       return;
@@ -217,6 +218,7 @@ async function doLoginTotp() {
     _pendingLoginCredentials = null;
     const me = await api('/me');
     USER = {...res, ...me};
+    if (me.theme) applyTheme(me.theme);
     if (res.force_password_change || me.force_password_change) {
       _showForcePasswordChange();
       return;

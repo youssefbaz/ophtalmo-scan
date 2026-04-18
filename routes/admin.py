@@ -269,6 +269,50 @@ def admin_reset_password(uid):
     return jsonify({"ok": True})
 
 
+# ─── SECURITY EVENTS ─────────────────────────────────────────────────────────
+
+_SECURITY_ACTIONS = {
+    'login_failed', 'login_totp_failed', 'login_backup_code_used',
+    'login_trusted_device', 'totp_regen_failed', 'totp_backup_codes_regenerated',
+    'admin_password_reset', 'admin_user_deleted', 'admin_account_deactivated',
+    'patient_deleted_gdpr', 'GDPR_PURGE', 'compte_verrouille',
+}
+
+@bp.route('/api/admin/security-events', methods=['GET'])
+def admin_security_events():
+    admin, err = _require_admin()
+    if err: return err
+    db = get_db()
+    limit = min(int(request.args.get('limit', 200)), 500)
+    action_filter = request.args.get('action', '')
+    where = "WHERE action IN ({})".format(
+        ','.join('?' for _ in _SECURITY_ACTIONS)
+    )
+    params = list(_SECURITY_ACTIONS)
+    if action_filter and action_filter in _SECURITY_ACTIONS:
+        where = "WHERE action = ?"
+        params = [action_filter]
+    rows = db.execute(
+        f"SELECT id, action, table_name, record_id, user_id, patient_id, "
+        f"detail, ip_address, user_agent, created_at "
+        f"FROM audit_log {where} ORDER BY created_at DESC LIMIT ?",
+        params + [limit]
+    ).fetchall()
+    events = []
+    for r in rows:
+        d = dict(r)
+        # Look up username for the actor
+        if d.get('user_id'):
+            u_row = db.execute(
+                "SELECT username, role FROM users WHERE id=?", (d['user_id'],)
+            ).fetchone()
+            d['actor'] = f"{u_row['username']} ({u_row['role']})" if u_row else d['user_id']
+        else:
+            d['actor'] = '—'
+        events.append(d)
+    return jsonify(events)
+
+
 # ─── SMTP STATUS + TEST ───────────────────────────────────────────────────────
 
 @bp.route('/api/admin/smtp-status', methods=['GET'])

@@ -620,6 +620,7 @@ def _migrate(db):
         ("medecin_code",          "TEXT DEFAULT ''"),
         ("email",                 "TEXT DEFAULT ''"),
         ("force_password_change", "INTEGER DEFAULT 0"),
+        ("theme",                 "TEXT DEFAULT 'clinical'"),
     ]
     for col, typedef in new_user_cols:
         try:

@@ -207,6 +207,7 @@ def me():
         "session_idle_timeout":  int(_app.config.get('SESSION_IDLE_TIMEOUT', 60)),
         "last_login_at":         last_login_at,
         "last_login_ip":         last_login_ip,
+        "theme":                 u.get('theme') or 'clinical',
     }
     if u['role'] == 'patient':
         info['patient_id'] = u.get('patient_id')
@@ -681,7 +682,7 @@ def settings_get_profile():
         return jsonify({"error": "Non connecté"}), 401
     db  = get_db()
     row = db.execute(
-        "SELECT id,username,nom,prenom,email,organisation,medecin_code,role,totp_enabled FROM users WHERE id=?",
+        "SELECT id,username,nom,prenom,email,organisation,medecin_code,role,totp_enabled,theme FROM users WHERE id=?",
         (u['id'],)
     ).fetchone()
     profile = dict(row)
@@ -704,6 +705,17 @@ def settings_update_profile():
     prenom   = sanitize(data.get('prenom',   ''), max_len=100)
     email    = sanitize(data.get('email',    ''), max_len=200)
     username = sanitize(data.get('username', ''), max_len=100)
+    theme    = sanitize(data.get('theme',    ''), max_len=20)
+    allowed_themes = ('dark', 'light', 'clinical', 'contrast', '')
+    if theme not in allowed_themes:
+        theme = ''
+
+    # Theme-only update (no nom/prenom/username required)
+    if theme and not nom and not username:
+        db = get_db()
+        db.execute("UPDATE users SET theme=? WHERE id=?", (theme, u['id']))
+        db.commit()
+        return jsonify({"ok": True})
 
     if not nom or not prenom:
         return jsonify({"error": "Nom et prénom sont requis"}), 400
@@ -723,8 +735,8 @@ def settings_update_profile():
     ).fetchone()
 
     db.execute(
-        "UPDATE users SET nom=?, prenom=?, email=?, username=? WHERE id=?",
-        (nom, prenom, email, username, u['id'])
+        "UPDATE users SET nom=?, prenom=?, email=?, username=?, theme=? WHERE id=?",
+        (nom, prenom, email, username, theme or 'clinical', u['id'])
     )
     log_audit(db, 'profile_updated', 'users', u['id'], user_id=u['id'], ip_address=get_client_ip(), user_agent=get_user_agent())
     db.commit()

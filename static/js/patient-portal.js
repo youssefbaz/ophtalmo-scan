@@ -88,6 +88,14 @@ async function renderMesDocuments(c) {
         <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF</div>
       </div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="uploadPatientDoc(this)">
+      <div id="docPreviewWrap" style="display:none;margin-top:10px;text-align:center">
+        <img id="docPreviewImg" src="" alt="" style="max-width:100%;max-height:200px;border-radius:8px;border:2px solid var(--teal);object-fit:contain">
+      </div>
+      <div id="docUploadProgress" style="display:none;margin-top:8px">
+        <div style="height:6px;background:var(--bg2);border-radius:4px;overflow:hidden">
+          <div id="docUploadProgressBar" style="height:100%;background:var(--teal);width:0%;transition:width .15s"></div>
+        </div>
+      </div>
 
       <div id="docTypePickerWrap" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px">
         <div id="docUploadFilename" style="font-size:12px;color:var(--teal2);margin-bottom:12px;font-weight:600"></div>

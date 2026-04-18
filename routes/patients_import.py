@@ -210,6 +210,152 @@ def get_audit(pid):
     return jsonify([dict(r) for r in rows])
 
 
+@bp.route('/api/patients/<pid>/pdf', methods=['GET'])
+@require_role('medecin', 'admin')
+def patient_pdf(pid):
+    """Generate a one-page printable patient handover PDF using ReportLab."""
+    from database import medecin_can_access_patient
+    u  = current_user()
+    db = get_db()
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
+    p = _build_patient(db, pid)
+    if not p:
+        return jsonify({"error": "Non trouvé"}), 404
+
+    try:
+        import io as _io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+        from xml.sax.saxutils import escape as _esc
+
+        def s(v): return _esc(str(v or '').strip())
+
+        buf  = _io.BytesIO()
+        doc  = SimpleDocTemplate(buf, pagesize=A4,
+                                 rightMargin=2*cm, leftMargin=2*cm,
+                                 topMargin=2*cm, bottomMargin=2*cm)
+        styl = getSampleStyleSheet()
+        teal = colors.HexColor('#0e7a76')
+
+        h1 = ParagraphStyle('h1', parent=styl['Heading1'], textColor=teal,
+                             alignment=TA_CENTER, fontSize=16, spaceAfter=4)
+        sub = ParagraphStyle('sub', parent=styl['Normal'], textColor=colors.grey,
+                             alignment=TA_CENTER, fontSize=9, spaceAfter=8)
+        sec = ParagraphStyle('sec', parent=styl['Heading2'], textColor=teal,
+                             fontSize=11, spaceBefore=10, spaceAfter=4)
+        normal = styl['Normal']
+        small  = ParagraphStyle('sm', parent=normal, fontSize=9, leading=12)
+
+        now = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
+        age = datetime.datetime.now().year - int(p['ddn'][:4]) if (p.get('ddn') and p['ddn'][:4].isdigit()) else '?'
+
+        els = [
+            Paragraph("👁  OphtalmoScan", h1),
+            Paragraph(f"Fiche patient — Généré le {now}", sub),
+            HRFlowable(width='100%', thickness=1, color=teal, spaceAfter=8),
+        ]
+
+        # Patient identity
+        rows_id = [
+            ['Nom / Prénom', f"{s(p['prenom'])} {s(p['nom'])}",
+             'Date naissance', f"{s(p['ddn'])} ({age} ans)"],
+            ['Identifiant', s(p['id']),
+             'Sexe', s(p.get('sexe',''))],
+            ['Téléphone', s(p.get('telephone','')),
+             'Email', s(p.get('email',''))],
+        ]
+        t_id = Table(rows_id, colWidths=[3.5*cm,6*cm,3.5*cm,4*cm])
+        t_id.setStyle(TableStyle([
+            ('FONTSIZE',  (0,0), (-1,-1), 9),
+            ('TEXTCOLOR', (0,0), (0,-1), colors.grey),
+            ('TEXTCOLOR', (2,0), (2,-1), colors.grey),
+            ('FONTNAME',  (1,0), (1,-1), 'Helvetica-Bold'),
+            ('FONTNAME',  (3,0), (3,-1), 'Helvetica-Bold'),
+            ('GRID',      (0,0), (-1,-1), 0.3, colors.HexColor('#dde7e6')),
+            ('BACKGROUND',(0,0), (-1,-1), colors.HexColor('#f0faf9')),
+            ('TOPPADDING',(0,0),(-1,-1),4),
+            ('BOTTOMPADDING',(0,0),(-1,-1),4),
+        ]))
+        els += [t_id, Spacer(1, 0.3*cm)]
+
+        # Antécédents
+        ants = p.get('antecedents') or []
+        if ants:
+            els.append(Paragraph("Antécédents", sec))
+            els.append(Paragraph(', '.join(s(a) for a in ants), small))
+
+        # Last 5 consultations
+        histo = p.get('historique') or []
+        if histo:
+            els.append(Paragraph("Consultations récentes", sec))
+            histo_sorted = sorted(histo, key=lambda x: x.get('date',''), reverse=True)[:5]
+            h_rows = [['Date','Motif','Traitement','AV OD','AV OG']]
+            for h in histo_sorted:
+                h_rows.append([
+                    s(h.get('date','')), s(h.get('motif','')),
+                    s(h.get('traitement','')),
+                    s(h.get('acuite_od','')), s(h.get('acuite_og',''))
+                ])
+            t_h = Table(h_rows, colWidths=[2.5*cm,4*cm,5*cm,2*cm,2*cm])
+            t_h.setStyle(TableStyle([
+                ('BACKGROUND',(0,0),(-1,0),teal),
+                ('TEXTCOLOR',(0,0),(-1,0),colors.white),
+                ('FONTNAME', (0,0),(-1,0),'Helvetica-Bold'),
+                ('FONTSIZE', (0,0),(-1,-1),8),
+                ('GRID',     (0,0),(-1,-1),0.3,colors.HexColor('#dde7e6')),
+                ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f8fefe')]),
+                ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ]))
+            els += [t_h, Spacer(1,0.2*cm)]
+
+        # Ordonnances summary
+        ords = p.get('ordonnances') or []
+        if ords:
+            els.append(Paragraph("Ordonnances (5 dernières)", sec))
+            for o in sorted(ords, key=lambda x: x.get('date',''), reverse=True)[:5]:
+                try:
+                    c_data = json.loads(o.get('contenu') or '{}')
+                    meds_txt = '; '.join(
+                        s(m.get('medicament','')) for m in (c_data.get('medicaments') or []) if m.get('medicament')
+                    ) or '—'
+                except Exception:
+                    meds_txt = '—'
+                els.append(Paragraph(f"<b>{s(o.get('date',''))}</b> — {s(o.get('type',''))} : {meds_txt}", small))
+
+        # Upcoming RDV
+        rdvs = [r for r in (p.get('rdv') or []) if r.get('date','') >= datetime.date.today().isoformat()][:5]
+        if rdvs:
+            els.append(Paragraph("Prochains rendez-vous", sec))
+            for r in sorted(rdvs, key=lambda x: x.get('date','')):
+                els.append(Paragraph(f"{s(r['date'])} {s(r.get('heure',''))} — {s(r.get('type',''))} ({s(r.get('statut',''))})", small))
+
+        # Signature block
+        els += [
+            Spacer(1, 1*cm),
+            HRFlowable(width='100%', thickness=0.5, color=colors.grey),
+            Paragraph("Signature du médecin : ______________________", small),
+        ]
+
+        doc.build(els)
+        buf.seek(0)
+        fname = f"patient_{pid}_{datetime.date.today().isoformat()}.pdf"
+        return Response(
+            buf.read(), mimetype='application/pdf',
+            headers={'Content-Disposition': f'attachment; filename="{fname}"'}
+        )
+    except ImportError:
+        return jsonify({"error": "ReportLab non installé"}), 501
+    except Exception as e:
+        logger.error("patient_pdf failed: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.route('/api/postop-gaps', methods=['GET'])
 @require_role('medecin')
 def get_postop_gaps():
