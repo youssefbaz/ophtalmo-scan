@@ -618,11 +618,6 @@ function _renderAdminPatCard(p) {
   const accLabel = p.patient_username
     ? `<span style="color:var(--teal2);font-size:11px">👤 ${escH(p.patient_username)}</span>`
     : `<span style="color:var(--text3);font-size:11px">Pas de compte</span>`;
-  const medecins = window._adminMedecins || [];
-  const medSelect = `<select id="medSel_${p.id}" class="form-input" style="font-size:12px;padding:4px 8px;height:auto;max-width:200px">
-    <option value="">— Choisir un médecin —</option>
-    ${medecins.map(m => `<option value="${m.id}" ${m.id === p.medecin_id ? 'selected' : ''}>${escH(m.label)}</option>`).join('')}
-  </select>`;
   return `
     <div class="card" style="margin-bottom:10px;padding:14px 18px;flex-wrap:wrap;gap:12px" id="adminPatCard_${p.id}">
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
@@ -636,19 +631,13 @@ function _renderAdminPatCard(p) {
             <span style="color:var(--text3)">📅 ${p.created_at||'—'}</span>
           </div>
         </div>
-        <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3);flex-shrink:0"
-                onclick="adminDeletePatientRecord('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\\'")}')">
-          🗑️ Supprimer
-        </button>
-      </div>
-      <!-- Médecin assignment row -->
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border);margin-top:4px">
-        <span style="font-size:12px;color:var(--text3);white-space:nowrap">Médecin :</span>
-        ${medSelect}
-        <button class="btn btn-primary btn-sm" style="font-size:12px"
-                onclick="adminAssignMedecin('${p.id}')">✓ Affecter</button>
-        ${p.medecin_id ? `<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)"
-                onclick="adminDetachMedecin('${p.id}','${escH(p.medecin_label)}')">✕ Détacher</button>` : ''}
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" onclick="adminEditPatient('${p.id}')">✏️ Modifier</button>
+          <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3)"
+                  onclick="adminDeletePatientRecord('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\\'")}')">
+            🗑️ Supprimer
+          </button>
+        </div>
       </div>
     </div>`;
 }
@@ -663,32 +652,74 @@ function filterAdminPatients() {
     '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
 }
 
-async function adminAssignMedecin(pid) {
-  const sel = document.getElementById(`medSel_${pid}`);
-  const mid = sel?.value || '';
+async function adminEditPatient(pid) {
+  const medecins = window._adminMedecins || [];
+  showModal('✏️ Modifier le patient', '<div style="color:var(--text3);text-align:center;padding:20px">Chargement…</div>');
+
+  const p = await api(`/api/admin/patients/${pid}`);
+  if (p.error) { showToast(p.error, 'error'); closeModal(); return; }
+
+  const medOptions = medecins.map(m =>
+    `<option value="${m.id}" ${m.id === p.medecin_id ? 'selected' : ''}>${escH(m.label)}</option>`
+  ).join('');
+
+  const body = document.getElementById('modalDynBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700">${escH(p.prenom)} ${escH(p.nom)}</div>
+      <div style="font-size:12px;color:var(--text3);font-family:monospace">${p.id}</div>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">🩺 Médecin responsable</div>
+      ${p.medecin_id
+        ? `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+             <div style="font-size:13px;color:var(--teal2);font-weight:600">${escH(p.medecin_label || p.medecin_id)}</div>
+             <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)"
+                     onclick="adminDetachMedecin('${pid}','${escH(p.medecin_label)}',true)">
+               ✕ Détacher ce médecin
+             </button>
+           </div>`
+        : `<div style="font-size:12px;color:var(--amber);margin-bottom:10px">⚠ Aucun médecin affecté</div>`
+      }
+
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">${p.medecin_id ? 'Changer de médecin' : 'Affecter un médecin'}</label>
+        <select class="form-input" id="adminPatMedSel">
+          <option value="">— Sélectionner —</option>
+          ${medOptions}
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="adminAssignMedecin('${pid}',true)">
+        ✓ ${p.medecin_id ? 'Changer le médecin' : 'Affecter ce médecin'}
+      </button>
+    </div>
+  `;
+}
+
+async function adminAssignMedecin(pid, fromModal = false) {
+  const selId = fromModal ? 'adminPatMedSel' : `medSel_${pid}`;
+  const sel   = document.getElementById(selId);
+  const mid   = sel?.value || '';
   if (!mid) { showToast('Sélectionnez un médecin dans la liste.', 'warning'); return; }
   const res = await api(`/api/admin/patients/${pid}/medecin`, 'PUT', {medecin_id: mid});
   if (res.ok) {
     const med = (window._adminMedecins || []).find(m => m.id === mid);
     showToast(`Médecin affecté : Dr. ${escH(med?.label || mid)}`, 'success');
-    // Update local state and re-render this card
-    const p = (window._adminPats || []).find(p => p.id === pid);
-    if (p) {
-      p.medecin_id    = mid;
-      p.medecin_label = `Dr. ${med?.label || ''}`;
-      document.getElementById(`adminPatCard_${pid}`)?.outerHTML;
-      renderAdminPatients(document.getElementById('viewContent'));
-    }
+    if (fromModal) closeModal();
+    renderAdminPatients(document.getElementById('viewContent'));
   } else {
     showToast(res.error || 'Erreur lors de l\'affectation', 'error');
   }
 }
 
-async function adminDetachMedecin(pid, medecinLabel) {
-  if (!confirm(`Détacher ${medecinLabel} de ce patient ?`)) return;
+async function adminDetachMedecin(pid, medecinLabel, fromModal = false) {
+  if (!confirm(`Détacher "${medecinLabel}" de ce patient ?\nLe patient n'apparaîtra plus dans la liste de ce médecin.`)) return;
   const res = await api(`/api/admin/patients/${pid}/medecin`, 'DELETE');
   if (res.ok) {
-    showToast('Médecin détaché', 'success');
+    showToast('Médecin détaché — le patient passe en liste non-affectée.', 'success');
+    if (fromModal) closeModal();
     renderAdminPatients(document.getElementById('viewContent'));
   } else {
     showToast(res.error || 'Erreur lors du détachement', 'error');
