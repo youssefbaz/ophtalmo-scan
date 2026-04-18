@@ -40,6 +40,7 @@ def get_rdv():
             WHERE (r.medecin_id = ?
                OR ((r.medecin_id IS NULL OR r.medecin_id = '') AND p.medecin_id = ?))
               AND (r.deleted IS NULL OR r.deleted = 0)
+              AND (p.deleted IS NULL OR p.deleted = 0)
             ORDER BY r.date, r.heure
         """, (u['id'], u['id'])).fetchall()
     result = [dict(r) for r in rows]
