@@ -248,8 +248,10 @@ def update_rdv(rdv_id):
     if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
         return jsonify({"error": "Accès refusé"}), 403
 
-    new_date  = data.get('date',  row['date'])
-    new_heure = data.get('heure', row['heure'])
+    old_date  = row['date']
+    old_heure = row['heure']
+    new_date  = data.get('date',  old_date)
+    new_heure = data.get('heure', old_heure)
 
     # Conflict check when date or time changes
     if (new_date != row['date'] or new_heure != row['heure']) and new_date and new_heure:
@@ -285,7 +287,88 @@ def update_rdv(rdv_id):
         db.rollback()
         logger.error(f"update_rdv failed: {exc}")
         return jsonify({"error": "Erreur lors de la mise à jour."}), 500
-    return jsonify({"ok": True})
+
+    date_changed = (new_date != old_date or new_heure != old_heure)
+    return jsonify({
+        "ok":           True,
+        "date_changed": date_changed,
+        "old_date":     old_date,
+        "old_heure":    old_heure,
+        "new_date":     new_date,
+        "new_heure":    new_heure,
+        "patient_id":   row['patient_id'],
+        "rdv_type":     data.get('type', row['type']),
+    })
+
+
+@bp.route('/api/rdv/<rdv_id>/notify-change', methods=['POST'])
+def notify_rdv_change(rdv_id):
+    """Send an email to the patient informing them that their RDV date changed."""
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    data = request.json or {}
+    db   = get_db()
+    row  = db.execute("SELECT * FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "RDV non trouvé"}), 404
+    if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+        return jsonify({"error": "Accès refusé"}), 403
+
+    from security_utils import decrypt_patient
+    p_row = db.execute("SELECT * FROM patients WHERE id=?", (row['patient_id'],)).fetchone()
+    if not p_row:
+        return jsonify({"error": "Patient introuvable"}), 404
+    p = decrypt_patient(dict(p_row))
+    email = p.get('email', '')
+    if not email or '@' not in email:
+        return jsonify({"error": "Aucune adresse email valide pour ce patient"}), 400
+
+    old_date  = data.get('old_date',  '')
+    old_heure = data.get('old_heure', '')
+    new_date  = row['date']
+    new_heure = row['heure']
+    rdv_type  = row['type'] or 'Rendez-vous'
+
+    import html as _html, threading
+    def _send():
+        try:
+            from email_notif import send_email
+            h_prenom  = _html.escape(p.get('prenom') or '')
+            h_nom     = _html.escape(p.get('nom')    or '')
+            h_type    = _html.escape(rdv_type)
+            h_old     = _html.escape(f"{old_date} à {old_heure}") if old_date else ''
+            h_new     = _html.escape(f"{new_date} à {new_heure}")
+            h_medecin = _html.escape(row.get('medecin') or '')
+            old_block = (f'<tr><td style="padding:10px 14px;color:#9ca3af;border-bottom:1px solid #e5e7eb">📅 Ancienne date</td>'
+                         f'<td style="padding:10px 14px;color:#9ca3af;text-decoration:line-through;border-bottom:1px solid #e5e7eb">{h_old}</td></tr>'
+                         if h_old else '')
+            body = f"""<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+  <div style="background:#0e7a76;padding:22px 28px">
+    <div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px">Votre espace patient</div>
+  </div>
+  <div style="padding:28px">
+    <h2 style="color:#0e7a76;margin-top:0">Modification de votre rendez-vous</h2>
+    <p>Bonjour <strong>{h_prenom} {h_nom}</strong>,</p>
+    <p>La date de votre rendez-vous a été modifiée :</p>
+    <table style="width:100%;background:#f0faf9;border-radius:8px;border:1px solid #b2dfdb;border-collapse:collapse;margin:18px 0">
+      {old_block}
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">🔬 Type</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{h_type}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">📅 Nouvelle date</td><td style="padding:10px 14px;font-weight:700;color:#0e7a76;border-bottom:1px solid #b2dfdb">{h_new}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555">👨‍⚕️ Médecin</td><td style="padding:10px 14px">{h_medecin}</td></tr>
+    </table>
+    <p style="color:#6b7280;font-size:13px">En cas de question ou d'empêchement, merci de contacter le cabinet.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <p style="color:#9ca3af;font-size:11px;margin:0">— OphtalmoScan · Ce message est généré automatiquement</p>
+  </div>
+</div></body></html>"""
+            send_email(email, f"Modification de votre RDV — {new_date}", body)
+        except Exception as e:
+            logger.warning(f"notify_rdv_change email failed: {e}")
+    threading.Thread(target=_send, daemon=True).start()
+    return jsonify({"ok": True, "message": f"Email envoyé à {email}"})
 
 
 @bp.route('/api/rdv/<rdv_id>/valider', methods=['POST'])
