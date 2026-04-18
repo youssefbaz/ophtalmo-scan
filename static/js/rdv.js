@@ -471,7 +471,18 @@ function renderSuiviTab(suivi, patient, pid) {
   };
 
   const stepCards = steps.map(s => {
-    const lbl = _suiviLabel(s.etape);
+    const lbl      = _suiviLabel(s.etape);
+    const hasRdv   = Boolean(s.rdv_id);
+    const rdvBtn   = hasRdv
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--teal-dim);color:var(--teal2);border:1px solid var(--teal);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:default"
+           title="RDV planifié le ${s.date_prevue} à ${s.heure||'09:00'}">
+           📅 RDV planifié
+         </span>`
+      : `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--teal2);border-color:var(--teal)"
+           id="bookBtn_${s.id}"
+           onclick="bookSuiviRdv('${s.id}','${pid}','${lbl}','${s.date_prevue}','${s.heure||'09:00'}')">
+           📅 Ajouter au planning
+         </button>`;
     return `
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;${cardBorder(s)}">
       <div style="min-width:54px;height:54px;border-radius:12px;background:var(--teal-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:var(--teal2);border:1px solid rgba(14,165,160,0.25);padding:0 6px;text-align:center;line-height:1.2">
@@ -485,6 +496,7 @@ function renderSuiviTab(suivi, patient, pid) {
         <div style="font-size:11px;color:var(--text3)">Prévu : ${new Date(s.date_prevue).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>
         ${s.date_reelle ? `<div style="font-size:11px;color:var(--green)">Réalisé : ${new Date(s.date_reelle).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</div>` : ''}
         ${s.notes ? `<div style="font-size:11px;color:var(--text2);margin-top:3px;font-style:italic">📝 ${s.notes}</div>` : ''}
+        <div style="margin-top:6px">${rdvBtn}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         ${s.statut !== 'fait' ? `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="markSuiviDone('${s.id}','${pid}','${s.etape}',this)">✓ Fait</button>` : ''}
@@ -533,6 +545,44 @@ function _normRdvType(type) {
   return (type || '').replace(/Suivi post-op (\S+)/, (_, code) =>
     'Suivi post-op ' + (_SUIVI_LEGACY[code] || code)
   );
+}
+
+async function bookSuiviRdv(sid, pid, lbl, datePrevue, heure) {
+  // Let the doctor confirm / adjust date+time before booking
+  showModal(`📅 Planifier le contrôle ${lbl}`, `
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Un rendez-vous <strong>Contrôle post-op ${escH(lbl)}</strong> sera ajouté à votre agenda.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div>
+        <label class="form-label">Date</label>
+        <input type="date" class="form-input" id="bookRdvDate" value="${datePrevue}">
+      </div>
+      <div>
+        <label class="form-label">Heure</label>
+        <input type="time" class="form-input" id="bookRdvHeure" value="${heure}">
+      </div>
+    </div>
+  `, async () => {
+    const date  = document.getElementById('bookRdvDate')?.value  || datePrevue;
+    const heure = document.getElementById('bookRdvHeure')?.value || '09:00';
+    const btn   = document.getElementById(`bookBtn_${sid}`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+    const res = await api(`/api/patients/${pid}/suivi/${sid}/book-rdv`, 'POST', {date, heure});
+    closeModal();
+    if (res.ok) {
+      const msg = res.already_exists
+        ? `Un RDV existait déjà pour ce contrôle (${res.date} à ${res.heure}).`
+        : `RDV ajouté à l'agenda pour le ${fmtDate(res.date)} à ${res.heure}.`;
+      showToast(msg, 'success');
+      // Reload patient to refresh suivi panel
+      loadPatient(pid);
+    } else {
+      showToast(res.error || 'Erreur lors de la création du RDV', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '📅 Ajouter au planning'; }
+    }
+  });
 }
 
 async function markSuiviDone(sid, pid, etape, btn) {

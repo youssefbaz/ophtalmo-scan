@@ -142,3 +142,57 @@ def delete_suivi(pid, sid):
     db.execute("DELETE FROM suivi_postop WHERE id=?", (sid,))
     db.commit()
     return jsonify({"ok": True})
+
+
+# ─── BOOK RDV FOR A SUIVI STEP ────────────────────────────────────────────────
+
+@bp.route('/api/patients/<pid>/suivi/<sid>/book-rdv', methods=['POST'])
+def book_suivi_rdv(pid, sid):
+    """Create an agenda RDV for a suivi step that has none (rdv_id empty).
+    If one already exists, return it without creating a duplicate.
+    """
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+
+    row = db.execute(
+        "SELECT * FROM suivi_postop WHERE id=? AND patient_id=?", (sid, pid)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Étape de suivi introuvable"}), 404
+
+    # Already linked — return existing
+    if row['rdv_id']:
+        existing = db.execute(
+            "SELECT id, date, heure, statut FROM rdv WHERE id=? AND (deleted IS NULL OR deleted=0)",
+            (row['rdv_id'],)
+        ).fetchone()
+        if existing:
+            return jsonify({"ok": True, "rdv_id": existing['id'],
+                            "already_exists": True, "date": existing['date'], "heure": existing['heure']})
+
+    from security_utils import decrypt_field
+    data      = request.json or {}
+    heure     = data.get('heure', row['heure'] or '09:00')
+    date_rdv  = data.get('date',  row['date_prevue'])
+    lbl       = row['etape']
+
+    # Resolve doctor name for the RDV
+    u_row = db.execute("SELECT nom, prenom FROM users WHERE id=?", (u['id'],)).fetchone()
+    medecin_nom = f"Dr. {decrypt_field(u_row['prenom'] or '') if u_row else ''} {decrypt_field(u_row['nom'] or '') if u_row else ''}".strip()
+
+    rdv_id  = "RDV" + str(uuid.uuid4())[:6].upper()
+    type_rdv = f"Contrôle post-op {lbl}"
+    db.execute(
+        "INSERT INTO rdv (id,patient_id,date,heure,type,statut,medecin,notes,urgent,medecin_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (rdv_id, pid, date_rdv, heure, type_rdv, 'programmé',
+         medecin_nom, f"Suivi post-opératoire automatique — {lbl}", 0, u['id'])
+    )
+    db.execute(
+        "UPDATE suivi_postop SET rdv_id=? WHERE id=?", (rdv_id, sid)
+    )
+    db.commit()
+    return jsonify({"ok": True, "rdv_id": rdv_id, "already_exists": False,
+                    "date": date_rdv, "heure": heure})
