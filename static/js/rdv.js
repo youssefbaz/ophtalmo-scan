@@ -742,6 +742,20 @@ function _openChirurgieModal(pid, currentDate, currentType) {
                value="${isOther ? currentType : ''}">
       </div>
       <div id="chirMsg" style="margin-bottom:10px"></div>
+      <!-- Agenda opt-in -->
+      <div style="background:var(--teal-dim);border:1px solid var(--teal);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+          <input type="checkbox" id="chirAddAgenda" checked
+                 style="margin-top:2px;width:16px;height:16px;accent-color:var(--teal);flex-shrink:0">
+          <div>
+            <div style="font-weight:600;font-size:13px;color:var(--teal2)">📅 Ajouter les suivis post-opératoires à l'agenda</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">
+              Crée automatiquement les RDV de suivi (J+2, J+7, 1 mois, 3 mois…) dans votre agenda.
+              Vous pourrez les modifier ou les ajouter individuellement depuis l'onglet Suivi.
+            </div>
+          </div>
+        </label>
+      </div>
       <div style="display:flex;gap:10px;margin-top:4px">
         <button class="btn btn-primary" style="flex:1;justify-content:center"
                 onclick="submitChirurgie('${pid}')">Enregistrer</button>
@@ -757,15 +771,28 @@ function onChirTypeChange() {
 }
 
 async function submitChirurgie(pid) {
-  const date = document.getElementById('chirDate').value;
-  let   type = document.getElementById('chirType').value;
+  const date       = document.getElementById('chirDate').value;
+  let   type       = document.getElementById('chirType').value;
   if (type === 'Autre') type = document.getElementById('chirAutre').value.trim();
-  const msgEl = document.getElementById('chirMsg');
+  const addAgenda  = document.getElementById('chirAddAgenda')?.checked ?? true;
+  const msgEl      = document.getElementById('chirMsg');
   if (!date) { msgEl.innerHTML = '<div class="auth-msg auth-msg-error">La date est requise.</div>'; return; }
   if (!type) { msgEl.innerHTML = '<div class="auth-msg auth-msg-error">Le type d\'opération est requis.</div>'; return; }
-  const res = await api(`/api/patients/${pid}/chirurgie`, 'POST', {date_chirurgie: date, type_chirurgie: type});
-  if (res.ok) { closeModal('modalChirurgie'); loadPatient(pid); }
-  else msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur inconnue'}</div>`;
+  const res = await api(`/api/patients/${pid}/chirurgie`, 'POST',
+    {date_chirurgie: date, type_chirurgie: type, add_to_agenda: addAgenda});
+  if (res.ok) {
+    closeModal('modalChirurgie');
+    loadPatient(pid);
+    if (res.agenda_added) {
+      showToast(`Chirurgie enregistrée — ${res.suivi_created} RDV de suivi ajoutés à l'agenda`, 'success', 5000);
+    } else if (res.suivi_created > 0) {
+      showToast(`Chirurgie enregistrée — ${res.suivi_created} étapes de suivi créées (sans agenda)`, 'info', 5000);
+    } else {
+      showToast('Chirurgie enregistrée', 'success');
+    }
+  } else {
+    msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur inconnue'}</div>`;
+  }
 }
 
 function copyPatientPortalLink(username, patientName) {

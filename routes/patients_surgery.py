@@ -24,18 +24,29 @@ def set_chirurgie(pid):
         (data.get('date_chirurgie',''), data.get('type_chirurgie',''), pid)
     )
     db.commit()
-    date_chir   = data.get('date_chirurgie', '')
-    type_chir   = data.get('type_chirurgie', '')
-    medecin_nom = f"{u.get('prenom','')} {u.get('nom','')}".strip()
+    date_chir      = data.get('date_chirurgie', '')
+    type_chir      = data.get('type_chirurgie', '')
+    add_to_agenda  = bool(data.get('add_to_agenda', True))
+    from security_utils import decrypt_field as _df
+    u_row       = db.execute("SELECT nom, prenom FROM users WHERE id=?", (u['id'],)).fetchone()
+    medecin_nom = f"{_df(u_row['prenom'] or '') if u_row else ''} {_df(u_row['nom'] or '') if u_row else ''}".strip()
+    created = 0
     if date_chir:
-        _generate_suivi(db, pid, date_chir, medecin_nom=medecin_nom, type_chirurgie=type_chir)
+        created = _generate_suivi(
+            db, pid, date_chir,
+            medecin_nom=medecin_nom,
+            type_chirurgie=type_chir,
+            add_to_agenda=add_to_agenda,
+            medecin_id=u['id'],
+        )
     p = db.execute("SELECT prenom, nom FROM patients WHERE id=?", (pid,)).fetchone()
     if p:
         p_dec = decrypt_patient(dict(p))
+        agenda_txt = f" — {created} RDV ajoutés à l'agenda" if add_to_agenda and created else ""
         add_notif(db, "chirurgie",
-                  f"✂️ Chirurgie planifiée pour {p_dec['prenom']} {p_dec['nom']} : {date_chir} — RDV post-op créés",
+                  f"✂️ Chirurgie planifiée pour {p_dec['prenom']} {p_dec['nom']} : {date_chir}{agenda_txt}",
                   "medecin", pid)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "suivi_created": created, "agenda_added": add_to_agenda and created > 0})
 
 
 @bp.route('/api/patients/<pid>/chirurgie', methods=['DELETE'])
