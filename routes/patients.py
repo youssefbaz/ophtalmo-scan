@@ -300,6 +300,13 @@ def delete_patient(pid):
     db.execute(
         "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid)
     )
+    # Soft-delete all future RDVs so they disappear from the médecin agenda.
+    # Past RDVs (date < today) are left intact for medical history continuity.
+    today = datetime.date.today().isoformat()
+    db.execute(
+        "UPDATE rdv SET deleted=1, deleted_at=? WHERE patient_id=? AND date >= ? AND (deleted IS NULL OR deleted=0)",
+        (now, pid, today)
+    )
     # GDPR scrub of nominative detail in audit trail. Patient record itself stays
     # soft-deleted (restorable); only the audit_log.detail strings are scrubbed.
     db.execute(
@@ -328,6 +335,12 @@ def restore_patient(pid):
     if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
         return jsonify({"error": "Accès refusé"}), 403
     db.execute("UPDATE patients SET deleted=0, deleted_at=NULL WHERE id=?", (pid,))
+    # Restore future RDVs that were soft-deleted together with the patient.
+    today = datetime.date.today().isoformat()
+    db.execute(
+        "UPDATE rdv SET deleted=0, deleted_at=NULL WHERE patient_id=? AND date >= ? AND deleted=1",
+        (pid, today)
+    )
     log_audit(db, 'patient_restored', 'patients', pid, u['id'], pid,
               f"patient_id={pid} restored_by={u['id']}")
     db.commit()

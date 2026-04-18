@@ -582,7 +582,14 @@ async function adminSubmitCreatePatient() {
 // ─── ADMIN: PATIENT RECORDS MANAGEMENT ───────────────────────────────────────
 async function renderAdminPatients(c) {
   c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
-  const patients = await api('/api/admin/patients');
+  // Pre-load médecins list for the assignment dropdowns
+  const [patients, medRows] = await Promise.all([
+    api('/api/admin/patients'),
+    api('/api/admin/users?role=medecin'),
+  ]);
+  window._adminMedecins = Array.isArray(medRows)
+    ? medRows.map(m => ({ id: m.id, label: `${m.prenom||''} ${m.nom||''}`.trim() || m.username }))
+    : [];
   if (!Array.isArray(patients)) {
     c.innerHTML = '<div style="color:var(--red);padding:20px">Erreur de chargement.</div>';
     return;
@@ -607,26 +614,42 @@ async function renderAdminPatients(c) {
 function _renderAdminPatCard(p) {
   const medLabel = p.medecin_label
     ? `<span style="color:var(--teal2);font-size:11px">🩺 ${escH(p.medecin_label)}</span>`
-    : `<span style="color:var(--text3);font-size:11px">Sans médecin</span>`;
+    : `<span style="color:var(--amber);font-size:11px">⚠ Sans médecin</span>`;
   const accLabel = p.patient_username
     ? `<span style="color:var(--teal2);font-size:11px">👤 ${escH(p.patient_username)}</span>`
     : `<span style="color:var(--text3);font-size:11px">Pas de compte</span>`;
+  const medecins = window._adminMedecins || [];
+  const medSelect = `<select id="medSel_${p.id}" class="form-input" style="font-size:12px;padding:4px 8px;height:auto;max-width:200px">
+    <option value="">— Choisir un médecin —</option>
+    ${medecins.map(m => `<option value="${m.id}" ${m.id === p.medecin_id ? 'selected' : ''}>${escH(m.label)}</option>`).join('')}
+  </select>`;
   return `
-    <div class="card" style="margin-bottom:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap" id="adminPatCard_${p.id}">
-      <div style="width:38px;height:38px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">👤</div>
-      <div style="flex:1;min-width:160px">
-        <div style="font-weight:600;font-size:14px">${escH(p.prenom)} ${escH(p.nom)}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
-          <span style="color:var(--text3);font-family:monospace">${p.id}</span>
-          ${medLabel}
-          ${accLabel}
-          <span style="color:var(--text3)">📅 ${p.created_at||'—'}</span>
+    <div class="card" style="margin-bottom:10px;padding:14px 18px;flex-wrap:wrap;gap:12px" id="adminPatCard_${p.id}">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--teal-dim);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">👤</div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-weight:600;font-size:14px">${escH(p.prenom)} ${escH(p.nom)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
+            <span style="color:var(--text3);font-family:monospace">${p.id}</span>
+            ${medLabel}
+            ${accLabel}
+            <span style="color:var(--text3)">📅 ${p.created_at||'—'}</span>
+          </div>
         </div>
+        <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3);flex-shrink:0"
+                onclick="adminDeletePatientRecord('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\\'")}')">
+          🗑️ Supprimer
+        </button>
       </div>
-      <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.3);flex-shrink:0"
-              onclick="adminDeletePatientRecord('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\'")}')">
-        🗑️ Supprimer
-      </button>
+      <!-- Médecin assignment row -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border);margin-top:4px">
+        <span style="font-size:12px;color:var(--text3);white-space:nowrap">Médecin :</span>
+        ${medSelect}
+        <button class="btn btn-primary btn-sm" style="font-size:12px"
+                onclick="adminAssignMedecin('${p.id}')">✓ Affecter</button>
+        ${p.medecin_id ? `<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)"
+                onclick="adminDetachMedecin('${p.id}','${escH(p.medecin_label)}')">✕ Détacher</button>` : ''}
+      </div>
     </div>`;
 }
 
@@ -638,6 +661,38 @@ function filterAdminPatients() {
   document.getElementById('adminPatList').innerHTML =
     filtered.length ? filtered.map(p => _renderAdminPatCard(p)).join('') :
     '<div style="color:var(--text3);padding:20px;text-align:center">Aucun résultat.</div>';
+}
+
+async function adminAssignMedecin(pid) {
+  const sel = document.getElementById(`medSel_${pid}`);
+  const mid = sel?.value || '';
+  if (!mid) { showToast('Sélectionnez un médecin dans la liste.', 'warning'); return; }
+  const res = await api(`/api/admin/patients/${pid}/medecin`, 'PUT', {medecin_id: mid});
+  if (res.ok) {
+    const med = (window._adminMedecins || []).find(m => m.id === mid);
+    showToast(`Médecin affecté : Dr. ${escH(med?.label || mid)}`, 'success');
+    // Update local state and re-render this card
+    const p = (window._adminPats || []).find(p => p.id === pid);
+    if (p) {
+      p.medecin_id    = mid;
+      p.medecin_label = `Dr. ${med?.label || ''}`;
+      document.getElementById(`adminPatCard_${pid}`)?.outerHTML;
+      renderAdminPatients(document.getElementById('viewContent'));
+    }
+  } else {
+    showToast(res.error || 'Erreur lors de l\'affectation', 'error');
+  }
+}
+
+async function adminDetachMedecin(pid, medecinLabel) {
+  if (!confirm(`Détacher ${medecinLabel} de ce patient ?`)) return;
+  const res = await api(`/api/admin/patients/${pid}/medecin`, 'DELETE');
+  if (res.ok) {
+    showToast('Médecin détaché', 'success');
+    renderAdminPatients(document.getElementById('viewContent'));
+  } else {
+    showToast(res.error || 'Erreur lors du détachement', 'error');
+  }
 }
 
 async function adminDeletePatientRecord(pid, name) {
