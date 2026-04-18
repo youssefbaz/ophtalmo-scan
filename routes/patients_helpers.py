@@ -161,32 +161,46 @@ SUIVI_ETAPES = [
 
 # ─── SURGERY / POST-OP ─────────────────────────────────────────────────────────
 
-def _generate_suivi(db, pid, date_chirurgie_str, medecin_nom='', type_chirurgie=''):
-    """Create the post-op follow-up steps and their confirmed RDVs. Skips existing ones."""
+def _generate_suivi(db, pid, date_chirurgie_str, medecin_nom='', type_chirurgie='',
+                    add_to_agenda=True, medecin_id=''):
+    """Create post-op follow-up steps, optionally also creating linked agenda RDVs.
+
+    add_to_agenda=True  → also insert a confirmed RDV for each step (original behaviour).
+    add_to_agenda=False → create suivi steps only; rdv_id stays empty. Doctor can book
+                          individual steps later via the "Ajouter au planning" button.
+    Skips etapes that already exist for this patient.
+    Returns the number of new steps created.
+    """
     try:
         base = datetime.date.fromisoformat(date_chirurgie_str)
     except ValueError:
-        return
+        return 0
     existing = {r['etape'] for r in
                 db.execute("SELECT etape FROM suivi_postop WHERE patient_id=?", (pid,)).fetchall()}
+    created = 0
     for etape, calc in SUIVI_ETAPES:
         if etape in existing:
             continue
         sid         = "S" + str(uuid.uuid4())[:7].upper()
-        rdv_id      = "RDV" + str(uuid.uuid4())[:6].upper()
         date_prevue = calc(base).isoformat()
-        type_rdv    = f"Suivi post-op {etape}"
-        notes_rdv   = f"Suivi post-opératoire {etape} — {type_chirurgie or 'chirurgie'}"
-        db.execute(
-            "INSERT INTO rdv (id, patient_id, date, heure, type, statut, medecin, notes, urgent, demande_par) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (rdv_id, pid, date_prevue, '09:00', type_rdv, 'confirmé', medecin_nom, notes_rdv, 0, 'system')
-        )
+        rdv_id      = ''
+        if add_to_agenda:
+            rdv_id    = "RDV" + str(uuid.uuid4())[:6].upper()
+            type_rdv  = f"Suivi post-op {etape}"
+            notes_rdv = f"Suivi post-opératoire {etape} — {type_chirurgie or 'chirurgie'}"
+            db.execute(
+                "INSERT INTO rdv (id, patient_id, date, heure, type, statut, medecin, notes, urgent, demande_par, medecin_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (rdv_id, pid, date_prevue, '09:00', type_rdv, 'confirmé',
+                 medecin_nom, notes_rdv, 0, 'system', medecin_id)
+            )
         db.execute(
             "INSERT INTO suivi_postop (id, patient_id, etape, date_prevue, statut, rdv_id) VALUES (?,?,?,?,?,?)",
             (sid, pid, etape, date_prevue, 'a_faire', rdv_id)
         )
+        created += 1
     db.commit()
+    return created
 
 
 # ─── ACCOUNT AUTO-CREATION ─────────────────────────────────────────────────────
