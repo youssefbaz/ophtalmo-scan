@@ -179,12 +179,18 @@ def admin_delete_user(uid):
     db.execute("DELETE FROM users WHERE id=?", (uid,))
     # If this user is a patient, soft-delete the patient record so it
     # disappears from all médecin patient lists immediately.
-    if row['role'] == 'patient' and row.get('patient_id'):
+    patient_id = row['patient_id'] if 'patient_id' in row.keys() else None
+    if row['role'] == 'patient' and patient_id:
         import datetime as _dt
         now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         db.execute(
             "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?",
-            (now, row['patient_id'])
+            (now, patient_id)
+        )
+        # GDPR: scrub nominative detail in audit_log for this patient
+        db.execute(
+            "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
+            (patient_id,)
         )
     db.commit()
     add_notif(db, "compte_supprime",
@@ -486,6 +492,47 @@ def admin_list_patients():
     return jsonify(result)
 
 
+@bp.route('/api/admin/patients/deleted', methods=['GET'])
+def admin_list_deleted_patients():
+    """Trash view — soft-deleted patients that admins can restore or hard-purge."""
+    _, err = _require_admin()
+    if err: return err
+    from security_utils import decrypt_patient
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, nom, prenom, ddn, sexe, medecin_id, deleted_at "
+        "FROM patients WHERE deleted=1 ORDER BY deleted_at DESC"
+    ).fetchall()
+    result = []
+    for row in rows:
+        d   = dict(row)
+        dec = decrypt_patient(d)
+        result.append({
+            'id':         d['id'],
+            'nom':        dec.get('nom', '') or '',
+            'prenom':     dec.get('prenom', '') or '',
+            'medecin_id': d.get('medecin_id') or '',
+            'deleted_at': d.get('deleted_at') or '',
+        })
+    return jsonify(result)
+
+
+@bp.route('/api/admin/patients/<pid>/restore', methods=['POST'])
+def admin_restore_patient(pid):
+    admin, err = _require_admin()
+    if err: return err
+    db  = get_db()
+    row = db.execute("SELECT id FROM patients WHERE id=? AND deleted=1", (pid,)).fetchone()
+    if not row:
+        return jsonify({"error": "Patient non supprimé ou introuvable"}), 404
+    db.execute("UPDATE patients SET deleted=0, deleted_at=NULL WHERE id=?", (pid,))
+    log_audit(db, 'admin_patient_restored', 'patients', pid,
+              user_id=admin['id'], detail=f"patient_id={pid}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route('/api/admin/patients/<pid>', methods=['DELETE'])
 def admin_delete_patient(pid):
     admin, err = _require_admin()
@@ -499,6 +546,11 @@ def admin_delete_patient(pid):
     db.execute("UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid))
     # Also delete the linked user account if any
     db.execute("DELETE FROM users WHERE patient_id=?", (pid,))
+    # GDPR: scrub any nominative detail previously recorded in audit_log
+    db.execute(
+        "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
+        (pid,)
+    )
     log_audit(db, 'admin_patient_deleted', 'patients', pid,
               user_id=admin['id'], detail=f"patient_id={pid}",
               ip_address=get_client_ip(), user_agent=get_user_agent())

@@ -61,6 +61,7 @@ async function loadPatientsSidebar(q='') {
     const dr = (_showAllPatients && p.medecin_id)
       ? MEDECINS.find(m => m.id === p.medecin_id) : null;
     const isChecked = selIds.has(p.id) ? 'checked' : '';
+    const lastConsultBadge = _lastConsultBadge(p.last_consult);
     return `
       <div class="patient-mini ${currentPatientId===p.id?'active':''}" style="display:flex;align-items:center;gap:6px;padding-left:6px">
         <input type="checkbox" class="pat-check" id="patCheck_${p.id}" ${isChecked}
@@ -68,11 +69,25 @@ async function loadPatientsSidebar(q='') {
                onclick="event.stopPropagation();togglePatientSelection('${p.id}','${escJ(p.prenom+' '+p.nom)}')">
         <div style="flex:1;min-width:0" onclick="loadPatient('${p.id}')">
           <div class="pm-name">${p.prenom} ${p.nom}${p.linked?` <span style="font-size:9px;background:rgba(14,165,160,0.15);color:var(--teal2);padding:1px 5px;border-radius:6px;vertical-align:middle">RDV</span>`:''}</div>
-          <div class="pm-id">${p.id}${dr?` · <span style="color:var(--teal2);font-size:10px">${dr.nom}</span>`:''}</div>
+          <div class="pm-id">${p.id}${dr?` · <span style="color:var(--teal2);font-size:10px">${dr.nom}</span>`:''}${lastConsultBadge}</div>
         </div>
         ${(p.nb_rdv_urgent||0)>0?`<span class="pm-badge">🚨 ${p.nb_rdv_urgent}</span>`:''}
       </div>`;
   }).join('') || '<div style="color:var(--text3);font-size:12px;padding:16px;text-align:center">Aucun patient</div>';
+}
+
+function _lastConsultBadge(isoDate) {
+  if (!isoDate) return '';
+  const d = new Date(isoDate);
+  if (isNaN(d)) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  let txt, color;
+  if (days <= 0)         { txt = "aujourd'hui"; color = 'var(--teal2)'; }
+  else if (days === 1)   { txt = 'hier';        color = 'var(--teal2)'; }
+  else if (days < 30)    { txt = `il y a ${days}j`; color = 'var(--teal2)'; }
+  else if (days < 180)   { txt = `il y a ${Math.round(days/30)} mois`; color = 'var(--text3)'; }
+  else                   { txt = `il y a ${Math.round(days/365)} an${days>=730?'s':''}`; color = 'var(--amber,#f59e0b)'; }
+  return ` · <span style="color:${color};font-size:10px" title="Dernière consultation : ${isoDate}">${txt}</span>`;
 }
 
 function togglePatientSelection(pid, label) {
@@ -123,7 +138,7 @@ async function deleteSelectedPatients() {
   const names = sel.map(p => p.label).join(', ');
   if (!confirm(`Supprimer ${sel.length} patient(s) ?\n${names}`)) return;
   for (const p of sel) {
-    await api(`/api/patients/${p.id}`, { method: 'DELETE' });
+    await api(`/api/patients/${p.id}`, 'DELETE');
   }
   window._selPats = [];
   _updatePatientActionBar();
@@ -214,9 +229,15 @@ async function validerRdv(rdvId, statut) {
 
 async function deleteRdv(rdvId) {
   if (!confirm('Supprimer ce rendez-vous ?')) return;
-  await api(`/api/rdv/${rdvId}`, 'DELETE');
+  const res = await api(`/api/rdv/${rdvId}`, 'DELETE');
+  if (res && res.error) { alert(res.error); return; }
   showView(currentView);
   loadNotifications();
+  showUndoToast('Rendez-vous supprimé.', async () => {
+    await api(`/api/rdv/${rdvId}/restore`, 'POST');
+    showView(currentView);
+    loadNotifications();
+  });
 }
 
 function openEditPatient(pid) {
@@ -521,6 +542,97 @@ function closeMobileSidebar() {
   document.getElementById('sidebar').classList.remove('mobile-open');
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
+
+// ─── UNDO TOAST (for reversible deletes) ─────────────────────────────────────
+/**
+ * showUndoToast(message, onUndo, duration=8000)
+ * Renders a toast with an "Annuler" button. If clicked within `duration` ms,
+ * calls onUndo(). After the window expires the toast fades out.
+ */
+function showUndoToast(message, onUndo, duration = 8000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const t = document.createElement('div');
+  t.className = 'toast toast-info';
+  t.innerHTML = `
+    <span class="toast-icon">↶</span>
+    <span class="toast-msg" style="flex:1">${escH(message)}</span>
+    <button class="btn btn-ghost btn-sm" style="padding:3px 10px;font-weight:600" data-undo>Annuler</button>
+    <button class="toast-close" data-close>×</button>`;
+  let called = false;
+  const finish = () => {
+    if (called) return; called = true;
+    t.classList.add('out');
+    setTimeout(() => t.remove(), 280);
+  };
+  t.querySelector('[data-undo]').addEventListener('click', async () => {
+    if (called) return; called = true;
+    try { await onUndo(); } catch(e) { console.error('undo failed', e); }
+    t.classList.add('out');
+    setTimeout(() => t.remove(), 280);
+  });
+  t.querySelector('[data-close]').addEventListener('click', finish);
+  container.appendChild(t);
+  setTimeout(finish, duration);
+}
+
+// ─── SESSION IDLE-TIMEOUT WARNING ────────────────────────────────────────────
+// Shows a banner 2 min before the server-side session expires and lets the
+// user extend by pinging /me. Reset on any meaningful user activity.
+(function initSessionWarning() {
+  let lastActivity = Date.now();
+  let warningEl    = null;
+  const WARN_BEFORE_MS = 2 * 60 * 1000;
+  const markActive = () => { lastActivity = Date.now(); if (warningEl) dismissWarn(); };
+  ['mousedown','keydown','scroll','touchstart'].forEach(ev =>
+    document.addEventListener(ev, markActive, { passive: true })
+  );
+  function dismissWarn() {
+    if (warningEl) { warningEl.remove(); warningEl = null; }
+  }
+  async function extendSession() {
+    dismissWarn();
+    lastActivity = Date.now();
+    await api('/me');   // any authed response refreshes the server-side idle stamp
+  }
+  function showWarn(secondsLeft) {
+    if (warningEl) return;
+    warningEl = document.createElement('div');
+    warningEl.style.cssText =
+      'position:fixed;top:16px;left:50%;transform:translateX(-50%);' +
+      'background:var(--amber-dim,#fff8e1);border:1px solid var(--amber,#f59e0b);' +
+      'color:#92400e;padding:12px 18px;border-radius:10px;z-index:10000;' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.15);display:flex;gap:12px;align-items:center;font-size:13px';
+    warningEl.setAttribute('role', 'alert');
+    warningEl.innerHTML = `
+      <span>⏱ Votre session expirera dans ${Math.ceil(secondsLeft/60)} min.</span>
+      <button class="btn btn-primary btn-sm" id="sessionExtendBtn">Rester connecté</button>`;
+    document.body.appendChild(warningEl);
+    warningEl.querySelector('#sessionExtendBtn').onclick = extendSession;
+  }
+  setInterval(() => {
+    if (typeof USER === 'undefined' || !USER || !USER.authenticated) return;
+    const idleMin = Number(USER.session_idle_timeout || 60);
+    const idleMs  = idleMin * 60 * 1000;
+    const elapsed = Date.now() - lastActivity;
+    const remaining = idleMs - elapsed;
+    if (remaining <= 0) { dismissWarn(); return; }         // backend will clear
+    if (remaining <= WARN_BEFORE_MS) showWarn(remaining / 1000);
+  }, 15000);
+})();
+
+// ─── GLOBAL KEYBOARD SHORTCUTS (Ctrl/Cmd+K opens global search) ──────────────
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    const input = document.getElementById('globalSearchInput');
+    const wrap  = document.getElementById('globalSearchWrap');
+    if (input && wrap && wrap.style.display !== 'none') {
+      e.preventDefault();
+      input.focus();
+      input.select();
+    }
+  }
+});
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function fmtDate(d) { return new Date(d).toLocaleDateString('fr-FR'); }

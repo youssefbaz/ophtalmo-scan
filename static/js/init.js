@@ -104,6 +104,7 @@ function buildSidebar() {
         <button class="nav-btn" onclick="showView('admin-create-medecin')">🩺 ${t('Créer un médecin')}</button>
         <button class="nav-btn" onclick="showView('admin-create-patient')">🧑 ${t('Créer un patient')}</button>
         <button class="nav-btn" onclick="showView('admin-patients')">🗂 ${t('Gestion patients')}</button>
+        <button class="nav-btn" onclick="showView('admin-trash')">🗑️ ${t('Corbeille')}</button>
       </div>`;
   } else {
     html = `
@@ -190,6 +191,7 @@ function showView(viewId, title, _fromBack) {
     'admin-dashboard':'Tableau de bord — Administration',
     'admin-pending':'Comptes en attente de validation',
     'admin-users':'Gestion des utilisateurs',
+    'admin-trash':'Corbeille — Dossiers supprimés',
     'admin-create-medecin':'Créer un compte médecin',
     'admin-create-patient':'Créer un dossier patient',
     'settings':'Paramètres',
@@ -225,6 +227,7 @@ function showView(viewId, title, _fromBack) {
   else if (viewId === 'admin-create-medecin') renderAdminCreateMedecin(c);
   else if (viewId === 'admin-create-patient') renderAdminCreatePatient(c);
   else if (viewId === 'admin-patients') renderAdminPatients(c);
+  else if (viewId === 'admin-trash') renderAdminTrash(c);
   else if (viewId === 'settings') renderSettings(c);
   else if (viewId === 'statistiques') renderStatistiques(c);
   else if (viewId === 'unassigned-patients') renderUnassignedPatients(c);

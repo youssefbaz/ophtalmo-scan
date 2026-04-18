@@ -93,7 +93,7 @@ def create_app():
     # Idle timeout: clear session after N minutes of inactivity (default 30).
     # Absolute lifetime is set higher so a legitimately active session is never
     # cut short by the cookie expiry before the idle check fires.
-    idle_minutes = int(os.environ.get('SESSION_IDLE_TIMEOUT', '30'))
+    idle_minutes = int(os.environ.get('SESSION_IDLE_TIMEOUT', '60'))
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=max(idle_minutes, 30))
     app.config['SESSION_IDLE_TIMEOUT']       = idle_minutes
     app.config['SESSION_COOKIE_HTTPONLY']    = True

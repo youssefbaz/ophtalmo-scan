@@ -211,7 +211,8 @@ async function doLoginTotp() {
   if (!_pendingLoginCredentials) { showAuthPanel('login'); return; }
   const token = document.getElementById('totpCode').value.trim();
   if (!token || token.length < 6) { _authMsg('totpError','error','Veuillez entrer le code à 6 chiffres.'); return; }
-  const res = await api('/login','POST',{..._pendingLoginCredentials, totp_token: token});
+  const remember = !!document.getElementById('totpRememberDevice')?.checked;
+  const res = await api('/login','POST',{..._pendingLoginCredentials, totp_token: token, remember_device: remember});
   if (res.ok) {
     _pendingLoginCredentials = null;
     const me = await api('/me');

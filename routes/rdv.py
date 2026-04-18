@@ -160,19 +160,26 @@ def _send_rdv_confirmation(p, date_str, heure, type_rdv, medecin):
         if not p.get('email') or '@' not in p['email']:
             return
         try:
+            import html as _html
             from email_notif import send_email
+            h_prenom  = _html.escape(p.get('prenom') or '')
+            h_nom     = _html.escape(p.get('nom') or '')
+            h_date    = _html.escape(str(date_str))
+            h_heure   = _html.escape(str(heure))
+            h_type    = _html.escape(str(type_rdv))
+            h_medecin = _html.escape(str(medecin))
             body = f"""<html><body style="font-family:Arial,sans-serif;color:#222;background:#f5f5f5;padding:24px">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
   <div style="background:#0e7a76;padding:22px 28px"><div style="font-size:22px;font-weight:bold;color:#fff">👁 OphtalmoScan</div></div>
   <div style="padding:28px">
     <h2 style="color:#0e7a76;margin-top:0">Confirmation de rendez-vous</h2>
-    <p>Bonjour <strong>{p['prenom']} {p['nom']}</strong>,</p>
+    <p>Bonjour <strong>{h_prenom} {h_nom}</strong>,</p>
     <p>Votre rendez-vous a été confirmé :</p>
     <table style="width:100%;background:#f0faf9;border-radius:8px;border:1px solid #b2dfdb;border-collapse:collapse;margin:18px 0">
-      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">📅 Date</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{date_str}</td></tr>
-      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">⏰ Heure</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{heure}</td></tr>
-      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">🔬 Type</td><td style="padding:10px 14px;border-bottom:1px solid #b2dfdb">{type_rdv}</td></tr>
-      <tr><td style="padding:10px 14px;color:#555">👨‍⚕️ Médecin</td><td style="padding:10px 14px">{medecin}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">📅 Date</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{h_date}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">⏰ Heure</td><td style="padding:10px 14px;font-weight:700;border-bottom:1px solid #b2dfdb">{h_heure}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555;border-bottom:1px solid #b2dfdb">🔬 Type</td><td style="padding:10px 14px;border-bottom:1px solid #b2dfdb">{h_type}</td></tr>
+      <tr><td style="padding:10px 14px;color:#555">👨‍⚕️ Médecin</td><td style="padding:10px 14px">{h_medecin}</td></tr>
     </table>
     <p style="color:#6b7280;font-size:13px">En cas d'empêchement, merci de nous contacter dès que possible.</p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
@@ -209,6 +216,22 @@ def delete_rdv(rdv_id):
         db.rollback()
         logger.error(f"delete_rdv failed: {exc}")
         return jsonify({"error": "Erreur lors de la suppression."}), 500
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/rdv/<rdv_id>/restore', methods=['POST'])
+def restore_rdv(rdv_id):
+    u = current_user()
+    if not u or u['role'] != 'medecin':
+        return jsonify({"error": "Accès refusé"}), 403
+    db = get_db()
+    row = db.execute("SELECT * FROM rdv WHERE id=? AND deleted=1", (rdv_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "RDV non trouvé"}), 404
+    if row['medecin_id'] != u['id'] and not medecin_can_access_patient(db, u['id'], row['patient_id']):
+        return jsonify({"error": "Accès refusé"}), 403
+    db.execute("UPDATE rdv SET deleted=0, deleted_at=NULL WHERE id=?", (rdv_id,))
+    db.commit()
     return jsonify({"ok": True})
 
 

@@ -26,7 +26,9 @@ bp = Blueprint('patients', __name__)
 # telephone, email, allergies, and other fields that the list endpoint never returns.
 _LIST_COLS = (
     "p.id, p.nom, p.prenom, p.ddn, p.sexe, p.medecin_id, p.antecedents, p.birth_year, "
-    "COUNT(CASE WHEN r.urgent=1 AND r.statut='en_attente' THEN 1 END) AS nb_rdv_urgent"
+    "COUNT(CASE WHEN r.urgent=1 AND r.statut='en_attente' THEN 1 END) AS nb_rdv_urgent, "
+    "(SELECT MAX(h.date) FROM historique h "
+    " WHERE h.patient_id = p.id AND (h.deleted IS NULL OR h.deleted=0)) AS last_consult"
 )
 _LIST_JOIN = "LEFT JOIN rdv r ON r.patient_id = p.id AND (r.deleted IS NULL OR r.deleted=0)"
 _LIST_ORDER = "GROUP BY p.id ORDER BY p.nom, p.prenom"
@@ -48,6 +50,7 @@ def _row_to_patient(row, linked_ids, mid, _df):
         "nb_rdv_urgent": row['nb_rdv_urgent'],
         "medecin_id":    row_mid,
         "linked":        is_linked,
+        "last_consult":  row['last_consult'] or '',
     }
 
 
@@ -133,6 +136,7 @@ def get_patients():
             "nb_rdv_urgent": row['nb_rdv_urgent'],
             "medecin_id":    row_mid,
             "linked":        is_linked,
+            "last_consult":  row['last_consult'] or '',
         })
 
     total = len(result)
@@ -293,19 +297,39 @@ def delete_patient(pid):
     if not patient:
         return jsonify({"error": "Non trouvé"}), 404
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    # Soft-delete the patient record
     db.execute(
         "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid)
     )
-    # RGPD — droit à l'effacement : anonymise les références nominatives dans audit_log
-    # On remplace les champs detail qui contiennent l'identifiant patient
-    # pour ne pas laisser le nom en clair dans les journaux d'audit.
+    # GDPR scrub of nominative detail in audit trail. Patient record itself stays
+    # soft-deleted (restorable); only the audit_log.detail strings are scrubbed.
     db.execute(
         "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
         (pid,)
     )
     log_audit(db, 'patient_deleted_gdpr', 'patients', pid, u['id'], pid,
               f"patient_id={pid} deleted_by={u['id']}")
+    db.commit()
+    return jsonify({"ok": True})
+
+
+# ─── RESTORE (undo soft-delete) ────────────────────────────────────────────────
+
+@bp.route('/api/patients/<pid>/restore', methods=['POST'])
+@require_role('medecin', 'admin')
+def restore_patient(pid):
+    u = current_user()
+    db = get_db()
+    row = db.execute(
+        "SELECT id, medecin_id FROM patients WHERE id=? AND deleted=1", (pid,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Patient non supprimé ou introuvable"}), 404
+    # Médecins can only restore patients they owned/were linked to
+    if u['role'] == 'medecin' and not medecin_can_access_patient(db, u['id'], pid):
+        return jsonify({"error": "Accès refusé"}), 403
+    db.execute("UPDATE patients SET deleted=0, deleted_at=NULL WHERE id=?", (pid,))
+    log_audit(db, 'patient_restored', 'patients', pid, u['id'], pid,
+              f"patient_id={pid} restored_by={u['id']}")
     db.commit()
     return jsonify({"ok": True})
 

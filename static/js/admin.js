@@ -641,14 +641,70 @@ function filterAdminPatients() {
 }
 
 async function adminDeletePatientRecord(pid, name) {
-  if (!confirm(`Supprimer définitivement le dossier patient de ${name} ?\n\nToutes les consultations, documents et rendez-vous seront supprimés. Cette action est irréversible.`)) return;
+  if (!confirm(`Supprimer le dossier patient de ${name} ?\n\nLe dossier sera masqué (soft-delete) et restaurable depuis la corbeille.`)) return;
   const res = await api(`/api/admin/patients/${pid}`, 'DELETE');
   if (res.ok) {
     const card = document.getElementById(`adminPatCard_${pid}`);
     if (card) card.remove();
     window._adminPats = (window._adminPats || []).filter(p => p.id !== pid);
-    showToast(`Dossier de ${name} supprimé`, 'success');
+    showUndoToast(`Dossier de ${name} supprimé`, async () => {
+      const r = await api(`/api/admin/patients/${pid}/restore`, 'POST');
+      if (r.ok) {
+        showToast('Dossier restauré — rechargez la vue', 'success');
+        renderAdminPatients(document.getElementById('viewContent'));
+      } else {
+        showToast(r.error || 'Restauration impossible', 'error');
+      }
+    });
   } else {
     alert(res.error || 'Erreur lors de la suppression.');
+  }
+}
+
+// ─── ADMIN: TRASH VIEW (soft-deleted patients) ───────────────────────────────
+async function renderAdminTrash(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const rows = await api('/api/admin/patients/deleted');
+  if (!Array.isArray(rows)) {
+    c.innerHTML = '<div style="color:var(--red);padding:20px">Erreur de chargement.</div>';
+    return;
+  }
+  c.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700">🗑️ Corbeille — dossiers supprimés (${rows.length})</div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px">
+      Restaurez ici les patients supprimés par erreur. Les détails du journal d'audit restent anonymisés (RGPD) même après restauration.
+    </div>
+    <div id="adminTrashList">
+      ${rows.length ? rows.map(p => _renderTrashCard(p)).join('')
+                    : '<div style="color:var(--text3);padding:20px;text-align:center">Aucun dossier supprimé.</div>'}
+    </div>`;
+}
+
+function _renderTrashCard(p) {
+  return `
+    <div class="card" style="margin-bottom:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap" id="trashCard_${p.id}">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🗑️</div>
+      <div style="flex:1;min-width:160px">
+        <div style="font-weight:600;font-size:14px">${escH(p.prenom)} ${escH(p.nom)}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:3px">
+          <span style="font-family:monospace">${p.id}</span> · Supprimé le ${p.deleted_at || '—'}
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="adminRestorePatient('${p.id}','${(p.prenom+' '+p.nom).replace(/'/g,"\\'")}')">
+        ↶ Restaurer
+      </button>
+    </div>`;
+}
+
+async function adminRestorePatient(pid, name) {
+  const res = await api(`/api/admin/patients/${pid}/restore`, 'POST');
+  if (res.ok) {
+    const card = document.getElementById(`trashCard_${pid}`);
+    if (card) card.remove();
+    showToast(`${name} restauré`, 'success');
+  } else {
+    showToast(res.error || 'Erreur', 'error');
   }
 }

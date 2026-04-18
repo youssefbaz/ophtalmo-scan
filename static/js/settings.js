@@ -51,7 +51,25 @@ let _userMenuOpen = false;
 function toggleUserMenu(e) {
   e.stopPropagation();
   _userMenuOpen = !_userMenuOpen;
-  document.getElementById('userMenu').classList.toggle('open', _userMenuOpen);
+  const menu = document.getElementById('userMenu');
+  menu.classList.toggle('open', _userMenuOpen);
+  if (_userMenuOpen) _renderLastLogin(menu);
+}
+
+function _renderLastLogin(menu) {
+  if (typeof USER === 'undefined' || !USER || !USER.last_login_at) return;
+  let el = document.getElementById('userMenuLastLogin');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'userMenuLastLogin';
+    el.style.cssText = 'padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.5';
+    menu.insertBefore(el, menu.firstChild);
+  }
+  const when = new Date(USER.last_login_at).toLocaleString('fr-FR', {
+    day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+  });
+  const ip = USER.last_login_ip ? ` · IP ${USER.last_login_ip}` : '';
+  el.innerHTML = `<span style="display:block;font-weight:600;color:var(--text2)">Dernière connexion</span>${when}${ip}`;
 }
 
 function closeUserMenu() {
@@ -129,12 +147,12 @@ async function generateConsultationSummary(pid) {
     // Show Retry button when the failure is transient; Config button otherwise
     if (res.temporary !== false) {
       btnDiv.innerHTML = `
-        <button class="btn btn-primary btn-sm" onclick="generateSummary('${pid}')">🔄 Réessayer</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal')">✕ Fermer</button>`;
+        <button class="btn btn-primary btn-sm" onclick="generateConsultationSummary('${pid}')">🔄 Réessayer</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕ Fermer</button>`;
     } else {
       btnDiv.innerHTML = `
         <button class="btn btn-ghost btn-sm" onclick="showView('settings')">⚙ Paramètres API</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal')">✕ Fermer</button>`;
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕ Fermer</button>`;
     }
     el.parentElement.appendChild(btnDiv);
   }
@@ -147,32 +165,66 @@ function summaryCopy() {
 }
 
 function summaryOpenPage() {
-  const text = window._lastSummaryText;
-  const patient = window._currentPatient;
-  const patientName = patient ? `${patient.prenom} ${patient.nom}` : 'Patient';
+  const text    = window._lastSummaryText || '';
+  const patient = window._currentPatient || {};
+  const patientName = patient.prenom || patient.nom ? `${patient.prenom||''} ${patient.nom||''}`.trim() : 'Patient';
+  const ddn     = patient.ddn || '';
+  const age     = ddn ? Math.max(0, new Date().getFullYear() - parseInt(ddn.slice(0,4),10)) : '';
+  const pid     = patient.id || '';
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const doctor = (typeof USER !== 'undefined' && USER) ? `Dr. ${USER.prenom||''} ${USER.nom||''}`.trim() : '';
   const w = window.open('', '_blank', 'width=800,height=900');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Compte-rendu IA — ${patientName}</title>
+  w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+  <title>Compte-rendu — ${esc(patientName)}</title>
   <style>
-    body{font-family:Georgia,serif;padding:40px 60px;color:#111;font-size:14px;line-height:1.8;max-width:750px;margin:0 auto}
-    h1{font-size:20px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:20px}
-    .meta{font-size:12px;color:#666;margin-bottom:24px}
-    .content{white-space:pre-wrap;font-size:13.5px;line-height:1.9}
-    .footer{margin-top:40px;font-size:11px;color:#999;border-top:1px solid #ddd;padding-top:10px}
-    .no-print{display:flex;gap:10px;margin-bottom:28px}
-    @media print{.no-print{display:none!important}body{padding:20mm 25mm}}
+    @page { size: A4; margin: 18mm 22mm; }
+    body{font-family:Georgia,'Times New Roman',serif;padding:24px 40px 40px;color:#111;font-size:13px;line-height:1.7;max-width:760px;margin:0 auto;background:#f5f5f5}
+    .sheet{background:#fff;padding:36px 44px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0e7a76;padding-bottom:12px;margin-bottom:20px}
+    .brand{font-size:18px;font-weight:700;color:#0e7a76;letter-spacing:.5px}
+    .brand-sub{font-size:11px;color:#777;margin-top:2px}
+    .date{font-size:11px;color:#666;text-align:right}
+    h1{font-size:17px;margin:0 0 12px;color:#0e7a76}
+    .pat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 24px;background:#f8faf9;border:1px solid #d9e8e6;border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:12px}
+    .pat-grid .k{color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+    .pat-grid .v{font-weight:600;color:#111;margin-bottom:4px}
+    .content{white-space:pre-wrap;font-size:13px;line-height:1.8}
+    .sig{margin-top:38px;display:flex;justify-content:space-between;align-items:flex-end}
+    .sig-block{width:46%;border-top:1px solid #333;padding-top:6px;font-size:11px;color:#555;text-align:center}
+    .footer{margin-top:30px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:8px;text-align:center}
+    .no-print{display:flex;gap:10px;margin-bottom:20px;justify-content:flex-end}
     button{padding:8px 20px;border-radius:6px;border:1px solid #ccc;cursor:pointer;font-size:13px}
     button.primary{background:#0e7a76;color:#fff;border-color:#0e7a76}
+    @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border-radius:0;padding:0}.no-print{display:none!important}}
   </style>
   </head><body>
   <div class="no-print">
     <button class="primary" onclick="window.print()">🖨 Imprimer</button>
     <button onclick="window.close()">✕ Fermer</button>
   </div>
-  <h1>Compte-rendu de consultation — ${patientName}</h1>
-  <div class="meta">Généré le ${new Date().toLocaleDateString('fr-FR', {weekday:'long',year:'numeric',month:'long',day:'numeric'})} — OphtalmoScan</div>
-  <div class="content">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-  <div class="footer">Document généré automatiquement par OphtalmoScan · À valider par le médecin</div>
+  <div class="sheet">
+    <div class="hdr">
+      <div>
+        <div class="brand">👁 OphtalmoScan</div>
+        <div class="brand-sub">Compte-rendu de consultation</div>
+      </div>
+      <div class="date">${new Date().toLocaleDateString('fr-FR', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+    </div>
+    <h1>Patient</h1>
+    <div class="pat-grid">
+      <div><div class="k">Nom complet</div><div class="v">${esc(patientName)}</div></div>
+      <div><div class="k">Identifiant</div><div class="v">${esc(pid)}</div></div>
+      ${ddn ? `<div><div class="k">Date de naissance</div><div class="v">${esc(ddn)}${age?` (${age} ans)`:''}</div></div>` : ''}
+      ${doctor ? `<div><div class="k">Médecin</div><div class="v">${esc(doctor)}</div></div>` : ''}
+    </div>
+    <h1>Compte-rendu</h1>
+    <div class="content">${esc(text)}</div>
+    <div class="sig">
+      <div class="sig-block">Date · Cachet</div>
+      <div class="sig-block">Signature du médecin</div>
+    </div>
+    <div class="footer">Document généré par OphtalmoScan · À valider par le médecin</div>
+  </div>
   </body></html>`);
   w.document.close();
 }
@@ -792,9 +844,18 @@ async function renderSettings(c) {
           <input class="form-input" id="totpDisableToken" placeholder="000000" maxlength="6" inputmode="numeric">
         </div>
       </div>
-      <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red);margin-top:8px" onclick="settingsDisableTotp()">
-        Désactiver la 2FA
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="settingsDisableTotp()">
+          Désactiver la 2FA
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="settingsRegenBackupCodes()">
+          🔄 Régénérer les codes de secours
+        </button>
+      </div>
+      <div id="totpBackupCodesArea" style="display:none;margin-top:14px;background:var(--bg2);border:1px solid var(--teal);border-radius:10px;padding:14px">
+        <div style="font-weight:600;margin-bottom:8px;color:var(--teal2)">⚠️ Sauvegardez ces codes maintenant — ils ne seront plus affichés.</div>
+        <pre id="totpBackupCodesList" style="font-family:var(--mono,monospace);font-size:14px;background:var(--bg3);padding:10px;border-radius:6px;white-space:pre-wrap"></pre>
+      </div>
       ` : `
       <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">
         Protégez votre compte avec une application d'authentification (Google Authenticator, Authy, etc.).<br>
@@ -948,6 +1009,22 @@ async function settingsDisableTotp() {
     msgEl.innerHTML = `<div class="auth-msg auth-msg-success">${res.message}</div>`;
     setTimeout(() => renderSettings(document.getElementById('viewContent')), 1500);
   } else {
+    msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur'}</div>`;
+  }
+}
+
+async function settingsRegenBackupCodes() {
+  const msgEl = document.getElementById('totpSettingsMsg');
+  const password = prompt('Confirmez votre mot de passe pour régénérer les codes de secours :');
+  if (!password) return;
+  const res = await api('/api/totp/backup-codes/regenerate', 'POST', {password});
+  if (res.ok) {
+    const area = document.getElementById('totpBackupCodesArea');
+    const list = document.getElementById('totpBackupCodesList');
+    if (list) list.textContent = (res.backup_codes || []).join('\n');
+    if (area) area.style.display = '';
+    if (msgEl) msgEl.innerHTML = `<div class="auth-msg auth-msg-success">${res.message || 'Codes régénérés.'}</div>`;
+  } else if (msgEl) {
     msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur'}</div>`;
   }
 }
