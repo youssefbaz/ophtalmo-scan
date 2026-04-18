@@ -187,6 +187,12 @@ def admin_delete_user(uid):
             "UPDATE patients SET deleted=1, deleted_at=? WHERE id=?",
             (now, patient_id)
         )
+        # Soft-delete future RDVs
+        today = _dt.date.today().isoformat()
+        db.execute(
+            "UPDATE rdv SET deleted=1, deleted_at=? WHERE patient_id=? AND date >= ? AND (deleted IS NULL OR deleted=0)",
+            (now, patient_id, today)
+        )
         # GDPR: scrub nominative detail in audit_log for this patient
         db.execute(
             "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
@@ -536,6 +542,52 @@ def admin_list_patients():
     return jsonify(result)
 
 
+@bp.route('/api/admin/patients/<pid>/medecin', methods=['PUT'])
+def admin_assign_medecin(pid):
+    """Assign or reassign a médecin to a patient."""
+    admin, err = _require_admin()
+    if err: return err
+    data = request.json or {}
+    mid  = (data.get('medecin_id') or '').strip()
+    db   = get_db()
+    if mid:
+        target = db.execute(
+            "SELECT id FROM users WHERE id=? AND role='medecin'", (mid,)
+        ).fetchone()
+        if not target:
+            return jsonify({"error": "Médecin introuvable"}), 404
+    row = db.execute(
+        "SELECT id FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Patient introuvable"}), 404
+    db.execute("UPDATE patients SET medecin_id=? WHERE id=?", (mid, pid))
+    log_audit(db, 'admin_patient_medecin_changed', 'patients', pid,
+              user_id=admin['id'], detail=f"new_medecin={mid or 'détaché'}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/admin/patients/<pid>/medecin', methods=['DELETE'])
+def admin_detach_medecin(pid):
+    """Remove the primary médecin from a patient (set medecin_id to empty)."""
+    admin, err = _require_admin()
+    if err: return err
+    db  = get_db()
+    row = db.execute(
+        "SELECT id FROM patients WHERE id=? AND (deleted IS NULL OR deleted=0)", (pid,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Patient introuvable"}), 404
+    db.execute("UPDATE patients SET medecin_id='' WHERE id=?", (pid,))
+    log_audit(db, 'admin_patient_medecin_changed', 'patients', pid,
+              user_id=admin['id'], detail="médecin détaché",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route('/api/admin/patients/deleted', methods=['GET'])
 def admin_list_deleted_patients():
     """Trash view — soft-deleted patients that admins can restore or hard-purge."""
@@ -569,7 +621,13 @@ def admin_restore_patient(pid):
     row = db.execute("SELECT id FROM patients WHERE id=? AND deleted=1", (pid,)).fetchone()
     if not row:
         return jsonify({"error": "Patient non supprimé ou introuvable"}), 404
+    import datetime as _dt
     db.execute("UPDATE patients SET deleted=0, deleted_at=NULL WHERE id=?", (pid,))
+    today = _dt.date.today().isoformat()
+    db.execute(
+        "UPDATE rdv SET deleted=0, deleted_at=NULL WHERE patient_id=? AND date >= ? AND deleted=1",
+        (pid, today)
+    )
     log_audit(db, 'admin_patient_restored', 'patients', pid,
               user_id=admin['id'], detail=f"patient_id={pid}",
               ip_address=get_client_ip(), user_agent=get_user_agent())
@@ -590,6 +648,13 @@ def admin_delete_patient(pid):
     db.execute("UPDATE patients SET deleted=1, deleted_at=? WHERE id=?", (now, pid))
     # Also delete the linked user account if any
     db.execute("DELETE FROM users WHERE patient_id=?", (pid,))
+    # Soft-delete future RDVs from the agenda
+    import datetime as _dt2
+    today = _dt2.date.today().isoformat()
+    db.execute(
+        "UPDATE rdv SET deleted=1, deleted_at=? WHERE patient_id=? AND date >= ? AND (deleted IS NULL OR deleted=0)",
+        (now, pid, today)
+    )
     # GDPR: scrub any nominative detail previously recorded in audit_log
     db.execute(
         "UPDATE audit_log SET detail='[données supprimées - RGPD]' WHERE patient_id=?",
