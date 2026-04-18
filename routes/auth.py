@@ -11,6 +11,30 @@ from security_utils import validate_password, sanitize, get_client_ip, get_user_
 bp = Blueprint('auth', __name__)
 
 
+# ─── TRUSTED-DEVICE (remember-this-device) cookie for 2FA ────────────────────
+_TRUSTED_COOKIE    = 'totp_trusted'
+_TRUSTED_MAX_DAYS  = 30
+_TRUSTED_SALT      = 'ophtalmo-totp-trusted-v1'
+
+def _trusted_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    from flask import current_app as _app
+    return URLSafeTimedSerializer(_app.secret_key, salt=_TRUSTED_SALT)
+
+def _is_device_trusted(user_id: str) -> bool:
+    token = request.cookies.get(_TRUSTED_COOKIE)
+    if not token:
+        return False
+    try:
+        payload = _trusted_serializer().loads(token, max_age=_TRUSTED_MAX_DAYS * 86400)
+        return bool(payload) and payload.get('uid') == user_id
+    except Exception:
+        return False
+
+def _mint_trusted_token(user_id: str) -> str:
+    return _trusted_serializer().dumps({'uid': user_id})
+
+
 @bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute; 50 per hour")
 def login():
@@ -62,6 +86,13 @@ def login():
 
     # ── 2FA check (Step 3) ─────────────────────────────────────────────────────
     totp_enabled = row['totp_enabled'] if row['totp_enabled'] else 0
+    totp_skipped_by_trusted_device = False
+    if totp_enabled and _is_device_trusted(row['id']):
+        totp_enabled = 0
+        totp_skipped_by_trusted_device = True
+        log_audit(db, 'login_trusted_device', 'users', row['id'], user_id=row['id'],
+                  detail=f"ip={ip}", ip_address=ip, user_agent=ua)
+        db.commit()
     if totp_enabled:
         totp_token = data.get('totp_token', '').strip()
         if not totp_token:
@@ -102,7 +133,7 @@ def login():
 
     session.permanent = True
     session['username'] = username
-    return jsonify({
+    resp = jsonify({
         "ok":                   True,
         "id":                   row['id'],
         "role":                 row['role'],
@@ -110,6 +141,20 @@ def login():
         "prenom":               row['prenom'] or '',
         "force_password_change": bool(row['force_password_change']) if row['force_password_change'] else False,
     })
+    # If the user ticked "Remember this device" during a successful TOTP login,
+    # mint a 30-day signed cookie so we can skip TOTP on this device only.
+    remember_device = bool(data.get('remember_device'))
+    if remember_device and (totp_enabled or totp_skipped_by_trusted_device):
+        from flask import current_app as _app
+        token = _mint_trusted_token(row['id'])
+        resp.set_cookie(
+            _TRUSTED_COOKIE, token,
+            max_age=_TRUSTED_MAX_DAYS * 86400,
+            httponly=True,
+            secure=_app.config.get('SESSION_COOKIE_SECURE', False),
+            samesite='Lax',
+        )
+    return resp
 
 
 @bp.route('/logout', methods=['POST'])
@@ -133,6 +178,24 @@ def me():
     # Patient nom/prenom are stored encrypted in the users table — decrypt before returning
     nom    = decrypt_field(u['nom']    or '') if u['role'] == 'patient' else (u['nom']    or '')
     prenom = decrypt_field(u['prenom'] or '') if u['role'] == 'patient' else (u['prenom'] or '')
+    from flask import current_app as _app
+    # Previous login timestamp + IP — shown in the user menu so doctors can spot
+    # anomalous logins. Excludes the current session (picks the second-latest).
+    last_login_at = ''
+    last_login_ip = ''
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT created_at, ip_address FROM audit_log "
+            "WHERE user_id=? AND action='login' "
+            "ORDER BY created_at DESC LIMIT 2",
+            (u['id'],)
+        ).fetchall()
+        if rows and len(rows) >= 2:
+            last_login_at = rows[1]['created_at'] or ''
+            last_login_ip = rows[1]['ip_address'] or ''
+    except Exception:
+        pass
     info = {
         "authenticated":         True,
         "id":                    u['id'],
@@ -141,6 +204,9 @@ def me():
         "prenom":                prenom,
         "totp_enabled":          bool(u['totp_enabled']) if u['totp_enabled'] else False,
         "force_password_change": bool(u['force_password_change']) if u['force_password_change'] else False,
+        "session_idle_timeout":  int(_app.config.get('SESSION_IDLE_TIMEOUT', 60)),
+        "last_login_at":         last_login_at,
+        "last_login_ip":         last_login_ip,
     }
     if u['role'] == 'patient':
         info['patient_id'] = u.get('patient_id')

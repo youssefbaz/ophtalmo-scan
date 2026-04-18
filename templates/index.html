@@ -15,6 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script>if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
+<link rel="manifest" href="/static/manifest.json">
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
@@ -76,6 +77,10 @@
                onkeydown="if(event.key==='Enter')doLoginTotp()">
       </div>
       <div id="totpError" class="auth-msg auth-msg-error"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-bottom:14px;cursor:pointer">
+        <input type="checkbox" id="totpRememberDevice" style="width:15px;height:15px;accent-color:var(--teal)">
+        <span>Se souvenir de cet appareil pendant 30 jours</span>
+      </label>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="doLoginTotp()">
         Vérifier →
       </button>
@@ -416,7 +421,7 @@
   </div>
 </div>
 <!-- Toast container -->
-<div id="toastContainer"></div>
+<div id="toastContainer" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- JS modules — loaded in dependency order; all functions remain global (onclick= compatible) -->
 <script src="/static/js/state.js"></script>

@@ -703,11 +703,21 @@ async function deleteChirurgie(pid) {
 }
 
 async function deletePatient(pid, name) {
-  if (!confirm(`Supprimer définitivement le patient ${name} ?\n\nToutes ses consultations, rendez-vous, documents et ordonnances seront supprimés. Cette action est irréversible.`)) return;
+  if (!confirm(`Supprimer le patient ${name} ?\n\nLe patient sera masqué. Vous disposez de 8 secondes pour annuler via le bandeau qui apparaîtra.`)) return;
   const res = await api(`/api/patients/${pid}`, 'DELETE');
   if (res.ok) {
     loadPatientsSidebar();
-    document.getElementById('main-content').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)">Sélectionnez un patient</div>';
+    const mc = document.getElementById('main-content');
+    if (mc) mc.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)">Sélectionnez un patient</div>';
+    showUndoToast(`Patient supprimé : ${name}`, async () => {
+      const r = await api(`/api/patients/${pid}/restore`, 'POST');
+      if (r.ok) {
+        loadPatientsSidebar();
+        showToast('Patient restauré', 'success');
+      } else {
+        showToast(r.error || 'Restauration impossible', 'error');
+      }
+    });
   } else {
     alert('Erreur : ' + (res.error || 'Impossible de supprimer'));
   }

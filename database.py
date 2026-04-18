@@ -318,6 +318,20 @@ def record_login_attempt(db, user_id: str, ip: str, success: bool):
             db.execute(
                 "UPDATE users SET locked_until=? WHERE id=?", (locked_until, user_id)
             )
+            # Notify admins (in-app + best-effort email) that an account was locked
+            try:
+                u_row = db.execute(
+                    "SELECT username, role FROM users WHERE id=?", (user_id,)
+                ).fetchone()
+                if u_row:
+                    add_notif(
+                        db, "compte_verrouille",
+                        f"🔒 Compte verrouillé après {MAX_ATTEMPTS} échecs : "
+                        f"{u_row['username']} ({u_row['role']}) — IP {ip}",
+                        "admin"
+                    )
+            except Exception:
+                pass
     db.commit()
 
 
