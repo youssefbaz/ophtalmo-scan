@@ -542,6 +542,37 @@ def admin_list_patients():
     return jsonify(result)
 
 
+@bp.route('/api/admin/patients/<pid>', methods=['GET'])
+def admin_get_patient(pid):
+    """Return a single patient record for the admin edit modal."""
+    _, err = _require_admin()
+    if err: return err
+    from security_utils import decrypt_patient
+    db  = get_db()
+    row = db.execute(
+        "SELECT p.id, p.nom, p.prenom, p.ddn, p.sexe, p.medecin_id, p.telephone, p.email, "
+        "       u.username AS medecin_username, u.nom AS medecin_nom, u.prenom AS medecin_prenom "
+        "FROM patients p "
+        "LEFT JOIN users u ON u.id = p.medecin_id "
+        "WHERE p.id=?", (pid,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Patient introuvable"}), 404
+    d   = dict(row)
+    dec = decrypt_patient(d)
+    med_label = ''
+    if d.get('medecin_nom') or d.get('medecin_prenom'):
+        med_label = f"Dr. {decrypt_field(d.get('medecin_prenom') or '')} {decrypt_field(d.get('medecin_nom') or '')}".strip()
+    return jsonify({
+        'id':          d['id'],
+        'nom':         dec.get('nom', '') or '',
+        'prenom':      dec.get('prenom', '') or '',
+        'ddn':         dec.get('ddn', '') or '',
+        'medecin_id':  d.get('medecin_id') or '',
+        'medecin_label': med_label,
+    })
+
+
 @bp.route('/api/admin/patients/<pid>/medecin', methods=['PUT'])
 def admin_assign_medecin(pid):
     """Assign or reassign a médecin to a patient."""
