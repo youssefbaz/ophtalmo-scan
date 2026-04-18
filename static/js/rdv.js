@@ -292,46 +292,72 @@ async function uploadPatientDoc(input) {
 
 function _prepareUpload(file) {
   _pendingUploadFile = file;
-  const status = document.getElementById('docUploadStatus');
-  const zone   = document.getElementById('docUploadZone');
-  const wrap   = document.getElementById('docTypePickerWrap');
-  const fname  = document.getElementById('docUploadFilename');
-  const custom = document.getElementById('docTypeCustom');
-  if (status) status.textContent = 'Fichier selectionne — choisissez le type ci-dessous';
+  const status   = document.getElementById('docUploadStatus');
+  const zone     = document.getElementById('docUploadZone');
+  const wrap     = document.getElementById('docTypePickerWrap');
+  const fname    = document.getElementById('docUploadFilename');
+  const custom   = document.getElementById('docTypeCustom');
+  const prevWrap = document.getElementById('docPreviewWrap');
+  const prevImg  = document.getElementById('docPreviewImg');
+  if (status) status.textContent = 'Fichier sélectionné — choisissez le type ci-dessous';
   if (zone)   zone.style.opacity = '0.6';
   if (fname)  fname.textContent  = 'Fichier : ' + file.name;
   if (custom) custom.value = '';
   if (wrap)   wrap.style.display = 'block';
+  // Image preview
+  if (prevWrap && prevImg && file.type.startsWith('image/')) {
+    const fr = new FileReader();
+    fr.onload = (e) => { prevImg.src = e.target.result; prevWrap.style.display = ''; };
+    fr.readAsDataURL(file);
+  } else if (prevWrap) {
+    prevWrap.style.display = 'none';
+  }
 }
 
 async function _doUploadFile(file, type, medecinId) {
   const status = document.getElementById('docUploadStatus');
   const zone   = document.getElementById('docUploadZone');
-  if (status) { status.textContent = '⏳ Envoi en cours…'; zone.style.opacity = '0.5'; }
+  const progWrap = document.getElementById('docUploadProgress');
+  const progBar  = document.getElementById('docUploadProgressBar');
+  if (status) { status.textContent = '⏳ Envoi en cours…'; }
+  if (zone)   zone.style.opacity = '0.5';
+  if (progWrap) progWrap.style.display = '';
 
   return new Promise(resolve => {
     const reader = new FileReader();
-    reader.onload = async (ev) => {
+    reader.onload = (ev) => {
       const b64 = ev.target.result.split(',')[1];
       const pid = USER.patient_id;
-      try {
-        const res = await api(`/api/patients/${pid}/upload`, 'POST',
-          { image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' });
-        if (res.ok) {
-          showView('mes-documents');
-        } else {
-          alert(res.error || "Erreur lors de l'envoi du document.");
-          if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
-          const wrap = document.getElementById('docTypePickerWrap');
-          if (wrap) wrap.style.display = 'none';
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/patients/${pid}/upload`);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (ev2) => {
+        if (ev2.lengthComputable && progBar) {
+          progBar.style.width = Math.round(ev2.loaded / ev2.total * 100) + '%';
         }
-      } catch(err) {
-        alert('Erreur reseau lors de l\'envoi.');
-        if (status) { status.textContent = 'Cliquez ou glissez votre document ici'; zone.style.opacity = '1'; }
-      }
-      resolve();
+      };
+      xhr.onload = () => {
+        if (progWrap) progWrap.style.display = 'none';
+        if (zone) zone.style.opacity = '1';
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.ok) {
+            showView('mes-documents');
+          } else {
+            showToast(res.error || "Erreur lors de l'envoi du document.", 'error');
+            if (status) status.textContent = 'Cliquez ou glissez votre document ici';
+            const wrap = document.getElementById('docTypePickerWrap');
+            if (wrap) wrap.style.display = 'none';
+          }
+        } catch(ex) { showToast('Erreur réseau', 'error'); }
+        resolve();
+      };
+      xhr.onerror = () => { showToast('Erreur réseau lors de l\'envoi.', 'error'); if(zone)zone.style.opacity='1'; resolve(); };
+      xhr.send(JSON.stringify({ image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' }));
     };
-    reader.onerror = () => { alert('Impossible de lire le fichier.'); resolve(); };
+    reader.onerror = () => { showToast('Impossible de lire le fichier.', 'error'); resolve(); };
     reader.readAsDataURL(file);
   });
 }
@@ -690,6 +716,16 @@ async function submitChirurgie(pid) {
   const res = await api(`/api/patients/${pid}/chirurgie`, 'POST', {date_chirurgie: date, type_chirurgie: type});
   if (res.ok) { closeModal('modalChirurgie'); loadPatient(pid); }
   else msgEl.innerHTML = `<div class="auth-msg auth-msg-error">${res.error || 'Erreur inconnue'}</div>`;
+}
+
+function copyPatientPortalLink(username, patientName) {
+  const base = window.location.origin;
+  const text = username
+    ? `Portail patient OphtalmoScan\nURL : ${base}\nIdentifiant : ${username}\n\n(Utilisez votre mot de passe habituel pour vous connecter.)`
+    : `Portail patient OphtalmoScan\nURL : ${base}\n\n(Créez votre compte avec le lien d'invitation envoyé par email.)`;
+  navigator.clipboard.writeText(text)
+    .then(() => showToast(`Lien portail copié pour ${patientName}`, 'success'))
+    .catch(() => showToast('Impossible de copier dans le presse-papier', 'error'));
 }
 
 function setDateChirurgie(pid) { _openChirurgieModal(pid, '', ''); }

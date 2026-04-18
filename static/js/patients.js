@@ -175,12 +175,14 @@ async function renderPatientProfile(c, pid) {
         <div class="ph-actions-row" style="margin-top:2px">
           <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${pid}')" title="Modifier">✏ Modifier</button>
           <button class="btn btn-ghost btn-sm" onclick="openAssignerMedecin('${pid}')" title="Médecin">👨‍⚕️</button>
-          <button class="btn btn-export btn-sm" onclick="exportPatientAnon('${pid}')" title="Exporter">⬇</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadPatientPDF('${pid}')" title="Télécharger fiche PDF">📄 PDF</button>
+          <button class="btn btn-export btn-sm" onclick="exportPatientAnon('${pid}')" title="Exporter JSON">⬇</button>
           <button class="btn btn-sm" style="background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);color:var(--red)" onclick="deletePatient('${pid}','${patient.prenom} ${patient.nom}')" title="Supprimer">🗑</button>
         </div>
         ${!patient.date_chirurgie ? `<button class="btn btn-ghost btn-sm" onclick="setDateChirurgie('${pid}')">✂ Déf. chirurgie</button>` : `<button class="btn btn-ghost btn-sm" onclick="editChirurgie('${pid}','${patient.date_chirurgie}','${escJ(patient.type_chirurgie||'')}')">✂ Modifier chirurgie</button>`}
         <div class="ph-actions-row" style="margin-top:2px">
           <button class="btn btn-ghost btn-sm" onclick="printPatientSummary('${pid}')">🖨 Résumé</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyPatientPortalLink('${escJ(accountInfo.username||'')}','${escJ(patient.prenom)} ${escJ(patient.nom)}')" title="Copier lien portail patient">🔗 Lien portail</button>
           ${accountInfo.has_account
             ? `<button class="btn btn-ghost btn-sm" style="opacity:.6;cursor:default" disabled title="Compte: ${accountInfo.username}">👤 ${accountInfo.username}</button>`
             : `<button class="btn btn-ghost btn-sm" onclick="openCreateAccount('${pid}','${escJ(patient.prenom)} ${escJ(patient.nom)}','${escJ(patient.email||'')}')">👤 Créer compte</button>
@@ -401,20 +403,76 @@ function switchSubtab(targetId, btn) {
 function openUploadImagerie(pid) {
   const input = document.createElement('input');
   input.type = 'file'; input.accept = 'image/*';
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files[0]; if (!file) return;
-    const type = prompt('Type d\'imagerie ?', 'OCT Macula');
-    if (!type) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const b64 = e.target.result.split(',')[1];
-      const res = await api(`/api/patients/${pid}/upload`, 'POST', {image: b64, type, description: file.name, source: 'imagerie'});
-      if (res.ok) loadPatient(pid);
-      else alert(res.error || 'Erreur upload');
-    };
-    reader.readAsDataURL(file);
+    _showUploadPreviewModal(pid, file);
   };
   input.click();
+}
+
+function _showUploadPreviewModal(pid, file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const imgSrc  = dataUrl;
+    showModal('📎 Téléverser une imagerie', `
+      <div style="text-align:center;margin-bottom:16px">
+        <img src="${imgSrc}" alt="Aperçu" style="max-width:100%;max-height:280px;border-radius:8px;border:2px solid var(--teal);object-fit:contain">
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">${escH(file.name)} — ${(file.size/1024).toFixed(0)} Ko</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type d'imagerie</label>
+        <select class="form-input" id="uploadTypeSelect">
+          ${['OCT Macula','OCT RNFL','Fond d\'œil','Champ visuel','Topographie cornéenne','Biométrie','Rétinographie','Angiographie','Autre']
+            .map(t=>`<option>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type personnalisé (facultatif)</label>
+        <input class="form-input" id="uploadTypeCustom" placeholder="Saisir un type…">
+      </div>
+      <div id="uploadProgress" style="display:none;margin-top:10px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px" id="uploadProgressLabel">Envoi en cours…</div>
+        <div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">
+          <div id="uploadProgressBar" style="height:100%;background:var(--teal);width:0%;transition:width .2s"></div>
+        </div>
+      </div>
+    `, async () => {
+      const custom = document.getElementById('uploadTypeCustom')?.value.trim();
+      const type   = custom || document.getElementById('uploadTypeSelect')?.value || 'Imagerie';
+      const b64    = dataUrl.split(',')[1];
+      const prog   = document.getElementById('uploadProgress');
+      const bar    = document.getElementById('uploadProgressBar');
+      const lbl    = document.getElementById('uploadProgressLabel');
+      if (prog) prog.style.display = '';
+
+      // XHR for progress tracking
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/patients/${pid}/upload`);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable && bar && lbl) {
+            const pct = Math.round(ev.loaded / ev.total * 100);
+            bar.style.width = pct + '%';
+            lbl.textContent = `Envoi… ${pct}%`;
+          }
+        };
+        xhr.onload = () => {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            if (res.ok) { closeModal(); loadPatient(pid); resolve(); }
+            else { showToast(res.error || 'Erreur upload', 'error'); reject(); }
+          } catch(ex) { showToast('Erreur upload', 'error'); reject(); }
+        };
+        xhr.onerror = () => { showToast('Erreur réseau', 'error'); reject(); };
+        xhr.send(JSON.stringify({image: b64, type, description: file.name, source: 'imagerie'}));
+      });
+    });
+  };
+  reader.readAsDataURL(file);
 }
 
 function _imgCard(img, pid, patient, isPatientDoc = false) {

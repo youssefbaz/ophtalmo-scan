@@ -44,9 +44,13 @@ function _renderCalendar(c) {
       const col = r.urgent ? 'var(--red)' : r.statut==='confirmé' ? 'var(--teal)' : 'var(--amber)';
       return `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col}"></span>`;
     }).join('');
+    const dnd = USER?.role === 'medecin'
+      ? `ondragover="event.preventDefault();this.classList.add('cal-drop-target')"
+         ondragleave="this.classList.remove('cal-drop-target')"
+         ondrop="calDropRdv(event,'${dateStr}')"` : '';
     cells += `
       <div class="cal-cell ${isToday?'cal-today':''} ${dayRdvs.length?'cal-has-rdv':''} ${hasUrgent?'cal-urgent':''}"
-           onclick="calSelectDay('${dateStr}')">
+           onclick="calSelectDay('${dateStr}')" ${dnd}>
         <div class="cal-day-num">${d}</div>
         ${dayRdvs.length ? `<div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:2px">${dots}</div>` : ''}
         ${dayRdvs.length ? `<div style="margin-top:3px"><span style="background:${dayRdvs.some(r=>r.urgent)?'var(--red)':'var(--teal)'};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px">${dayRdvs.length}</span></div>` : ''}
@@ -80,6 +84,7 @@ function _renderCalendar(c) {
       .cal-picker-month { padding:6px 4px;border-radius:6px;border:1px solid transparent;cursor:pointer;font-size:12px;text-align:center;color:var(--text2);transition:all .15s; }
       .cal-picker-month:hover { border-color:var(--teal);color:var(--teal2); }
       .cal-picker-month.active { background:var(--teal);color:#fff;border-color:var(--teal); }
+      .cal-cell.cal-drop-target { border-color:var(--teal);background:var(--teal-dim);box-shadow:0 0 0 2px rgba(14,165,160,.4); }
     </style>
 
     <!-- Header stats -->
@@ -144,9 +149,14 @@ function _renderCalendar(c) {
 
 function _rdvMiniCard(r) {
   const col = r.urgent ? 'var(--red)' : r.statut==='confirmé' ? 'var(--teal)' : 'var(--amber)';
+  const canSelect = USER.role === 'medecin' && r.statut === 'en_attente';
   return `
-    <div style="padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;">
+    <div style="padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;"
+         draggable="${USER.role === 'medecin' ? 'true' : 'false'}"
+         ondragstart="event.dataTransfer.setData('rdvId','${r.id}')">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        ${canSelect ? `<input type="checkbox" id="rdvChk_${r.id}" style="accent-color:var(--teal);flex-shrink:0"
+                             onclick="event.stopPropagation();toggleRdvSelection('${r.id}',this.checked)">` : ''}
         <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
         <span style="font-size:12px;font-weight:600;color:var(--text);flex:1;cursor:${USER.role==='medecin'?'pointer':'default'}"
               ${USER.role==='medecin'?`onclick="loadPatient('${r.patient_id}')"`:''}>${r.heure} · ${_normRdvType(r.type)}</span>
@@ -216,6 +226,24 @@ async function submitEditRdvAgenda(rid) {
   }
 }
 
+async function calDropRdv(event, newDate) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('cal-drop-target');
+  const rdvId = event.dataTransfer.getData('rdvId');
+  if (!rdvId) return;
+  const rdv = _allRdvs.find(r => r.id === rdvId);
+  if (!rdv || rdv.date === newDate) return;
+  if (!confirm(`Déplacer ce RDV au ${fmtDate(newDate)} ?`)) return;
+  const res = await api(`/api/rdv/${rdvId}`, 'PUT', { date: newDate });
+  if (res.ok) {
+    _allRdvs = await api('/api/rdv');
+    _renderCalendar(document.getElementById('mainContent'));
+    showToast(`RDV déplacé au ${fmtDate(newDate)}`, 'success');
+  } else {
+    showToast(res.error || 'Erreur lors du déplacement', 'error');
+  }
+}
+
 function calNav(dir) {
   _calMonth += dir;
   if (_calMonth > 11) { _calMonth = 0; _calYear++; }
@@ -255,17 +283,67 @@ function calPickerSelect(monthIdx) {
   _renderCalendar(document.getElementById('mainContent'));
 }
 
+let _selectedRdvs = new Set();
+
 function calSelectDay(dateStr) {
   // Highlight selected cell
   document.querySelectorAll('.cal-cell').forEach(el => el.classList.remove('cal-selected'));
   event.currentTarget.classList.add('cal-selected');
+  _selectedRdvs.clear();
 
-  const panel = document.getElementById('calDayPanel');
+  const panel   = document.getElementById('calDayPanel');
   const dayRdvs = _allRdvs.filter(r => r.date === dateStr).sort((a,b) => a.heure.localeCompare(b.heure));
+  const pending  = dayRdvs.filter(r => r.statut === 'en_attente');
+
   panel.innerHTML = `
     <div style="font-size:12px;font-weight:600;color:var(--teal2);margin-bottom:12px">${fmtDateLong(dateStr).toUpperCase()}</div>
+    ${USER.role === 'medecin' && pending.length > 1 ? `
+    <div id="rdvBulkBar" style="display:none;background:var(--teal-dim);border:1px solid var(--teal);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span id="rdvBulkLabel" style="font-size:12px;flex:1;color:var(--teal2)">0 sélectionné(s)</span>
+      <button class="btn btn-primary btn-sm" onclick="bulkValiderRdv('confirmé')">✓ Confirmer sélection</button>
+      <button class="btn btn-ghost btn-sm" onclick="bulkValiderRdv('annulé')">✗ Annuler sélection</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="rdvSelectAll" onchange="toggleAllRdv(this.checked,'${dateStr}')"
+             style="accent-color:var(--teal)"> Sélectionner tout (en attente)
+    </label>` : ''}
     ${dayRdvs.length ? dayRdvs.map(r => _rdvMiniCard(r)).join('') :
       '<div style="color:var(--text3);font-size:13px">Aucun rendez-vous ce jour</div>'}`;
+  if (pending.length <= 1) {
+    const bar = document.getElementById('rdvBulkBar');
+    if (bar) bar.style.display = 'none';
+  }
+}
+
+function toggleRdvSelection(rid, checked) {
+  if (checked) _selectedRdvs.add(rid);
+  else _selectedRdvs.delete(rid);
+  const lbl = document.getElementById('rdvBulkLabel');
+  if (lbl) lbl.textContent = `${_selectedRdvs.size} sélectionné(s)`;
+  const bar = document.getElementById('rdvBulkBar');
+  if (bar) bar.style.display = _selectedRdvs.size > 0 ? 'flex' : 'none';
+}
+
+function toggleAllRdv(checked, dateStr) {
+  const dayRdvs = _allRdvs.filter(r => r.date === dateStr && r.statut === 'en_attente');
+  dayRdvs.forEach(r => {
+    const cb = document.getElementById(`rdvChk_${r.id}`);
+    if (cb) { cb.checked = checked; toggleRdvSelection(r.id, checked); }
+  });
+}
+
+async function bulkValiderRdv(statut) {
+  if (_selectedRdvs.size === 0) return;
+  const label = statut === 'confirmé' ? 'Confirmer' : 'Annuler';
+  if (!confirm(`${label} ${_selectedRdvs.size} rendez-vous ?`)) return;
+  const ids = [..._selectedRdvs];
+  for (const rid of ids) {
+    await api(`/api/rdv/${rid}/valider`, 'POST', {statut});
+  }
+  _selectedRdvs.clear();
+  _allRdvs = await api('/api/rdv');
+  _renderCalendar(document.getElementById('mainContent'));
+  showToast(`${ids.length} RDV ${statut === 'confirmé' ? 'confirmé(s)' : 'annulé(s)'}`, 'success');
 }
 
 // ─── QUESTIONS MÉDECIN ────────────────────────────────────────────────────────

@@ -698,6 +698,80 @@ function _renderTrashCard(p) {
     </div>`;
 }
 
+// ─── ADMIN: SECURITY EVENTS DASHBOARD ────────────────────────────────────────
+const _SEC_LABELS = {
+  login_failed:                  { icon:'🔴', label:'Échec connexion' },
+  login_totp_failed:             { icon:'🔴', label:'Échec 2FA' },
+  login_backup_code_used:        { icon:'🟠', label:'Code de secours utilisé' },
+  login_trusted_device:          { icon:'🟡', label:'Appareil de confiance' },
+  totp_regen_failed:             { icon:'🟠', label:'Regen 2FA échoué' },
+  totp_backup_codes_regenerated: { icon:'🟡', label:'Codes 2FA régénérés' },
+  admin_password_reset:          { icon:'🟠', label:'Reset mdp par admin' },
+  admin_user_deleted:            { icon:'🔴', label:'Utilisateur supprimé' },
+  admin_account_deactivated:     { icon:'🟠', label:'Compte désactivé' },
+  patient_deleted_gdpr:          { icon:'🟡', label:'Patient supprimé (RGPD)' },
+  GDPR_PURGE:                    { icon:'🔴', label:'Purge RGPD définitive' },
+  compte_verrouille:             { icon:'🔴', label:'Compte verrouillé' },
+};
+
+async function renderAdminSecurityEvents(c) {
+  c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
+  const events = await api('/api/admin/security-events?limit=200');
+  if (!Array.isArray(events)) {
+    c.innerHTML = '<div style="color:var(--red);padding:20px">Erreur de chargement.</div>';
+    return;
+  }
+
+  const actionCounts = {};
+  events.forEach(e => { actionCounts[e.action] = (actionCounts[e.action] || 0) + 1; });
+
+  const summaryItems = Object.entries(actionCounts)
+    .sort((a,b) => b[1] - a[1])
+    .map(([action, count]) => {
+      const {icon, label} = _SEC_LABELS[action] || {icon:'ℹ️', label: action};
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:140px;text-align:center">
+        <div style="font-size:20px">${icon}</div>
+        <div style="font-weight:700;font-size:18px;color:var(--text)">${count}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${label}</div>
+      </div>`;
+    }).join('');
+
+  const rows = events.map(e => {
+    const {icon, label} = _SEC_LABELS[e.action] || {icon:'ℹ️', label: e.action};
+    const when = new Date(e.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const ip = e.ip_address || '—';
+    const severity = e.action.startsWith('login_failed') || e.action.includes('verrouill') || e.action.includes('PURGE')
+      ? 'var(--red-dim)' : 'transparent';
+    return `<tr style="background:${severity}">
+      <td style="padding:8px 12px;font-size:12px;color:var(--text3)">${when}</td>
+      <td style="padding:8px 12px;font-size:13px">${icon} ${label}</td>
+      <td style="padding:8px 12px;font-size:12px;color:var(--text2)">${escH(e.actor||'—')}</td>
+      <td style="padding:8px 12px;font-size:11px;font-family:monospace;color:var(--text3)">${escH(ip)}</td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(e.detail||'')}">${escH(e.detail||'')}</td>
+    </tr>`;
+  }).join('');
+
+  c.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">🔐 Événements de sécurité (${events.length} derniers)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">${summaryItems}</div>
+    </div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--bg2);border-bottom:2px solid var(--border)">
+            <th style="padding:8px 12px;font-size:11px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Date</th>
+            <th style="padding:8px 12px;font-size:11px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Événement</th>
+            <th style="padding:8px 12px;font-size:11px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Acteur</th>
+            <th style="padding:8px 12px;font-size:11px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">IP</th>
+            <th style="padding:8px 12px;font-size:11px;text-align:left;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Détail</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">Aucun événement.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
 async function adminRestorePatient(pid, name) {
   const res = await api(`/api/admin/patients/${pid}/restore`, 'POST');
   if (res.ok) {

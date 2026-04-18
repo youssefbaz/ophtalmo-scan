@@ -89,7 +89,7 @@ function t(key) {
   return TRANSLATIONS[_currentLang][key] || key;
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, saveToServer = false) {
   document.body.classList.remove('theme-dark','theme-light','theme-clinical','theme-contrast','theme-minuit');
   if (theme !== 'light') document.body.classList.add('theme-' + theme);
   localStorage.setItem('ophtalmo_theme', theme);
@@ -97,6 +97,10 @@ function applyTheme(theme) {
   const bgColors = { dark:'#060F1A', light:'#F4F7FA', clinical:'#F5F7FA', contrast:'#000000' };
   const metaTag = document.querySelector('meta[name="theme-color"]');
   if (metaTag) metaTag.content = bgColors[theme] || '#f8fafc';
+  // Persist across devices — fire-and-forget when user explicitly changes theme
+  if (saveToServer && typeof api !== 'undefined' && typeof USER !== 'undefined' && USER?.authenticated) {
+    api('/api/settings/profile', 'PUT', { theme }).catch(() => {});
+  }
 }
 
 // ─── PAGE LOAD: check for password reset token in URL ─────────────────────────

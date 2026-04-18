@@ -35,7 +35,22 @@ function initApp() {
     showView('dashboard-patient');
   }
 
-  setInterval(loadNotifications, 30000);
+  // Prefer SSE for real-time notifications; fall back to polling if unavailable.
+  if (typeof EventSource !== 'undefined') {
+    let _sseSource = null;
+    function _connectSSE() {
+      _sseSource = new EventSource('/api/stream/notifications');
+      _sseSource.addEventListener('notifications', () => loadNotifications());
+      _sseSource.onerror = () => {
+        _sseSource.close();
+        // Reconnect after 30 s if SSE drops (network hiccup, server restart)
+        setTimeout(_connectSSE, 30000);
+      };
+    }
+    _connectSSE();
+  } else {
+    setInterval(loadNotifications, 30000);
+  }
 }
 
 function buildSidebar() {
@@ -105,6 +120,7 @@ function buildSidebar() {
         <button class="nav-btn" onclick="showView('admin-create-patient')">🧑 ${t('Créer un patient')}</button>
         <button class="nav-btn" onclick="showView('admin-patients')">🗂 ${t('Gestion patients')}</button>
         <button class="nav-btn" onclick="showView('admin-trash')">🗑️ ${t('Corbeille')}</button>
+        <button class="nav-btn" onclick="showView('admin-security')">🔐 ${t('Sécurité')}</button>
       </div>`;
   } else {
     html = `
@@ -192,6 +208,7 @@ function showView(viewId, title, _fromBack) {
     'admin-pending':'Comptes en attente de validation',
     'admin-users':'Gestion des utilisateurs',
     'admin-trash':'Corbeille — Dossiers supprimés',
+    'admin-security':'Événements de sécurité',
     'admin-create-medecin':'Créer un compte médecin',
     'admin-create-patient':'Créer un dossier patient',
     'settings':'Paramètres',
@@ -228,6 +245,7 @@ function showView(viewId, title, _fromBack) {
   else if (viewId === 'admin-create-patient') renderAdminCreatePatient(c);
   else if (viewId === 'admin-patients') renderAdminPatients(c);
   else if (viewId === 'admin-trash') renderAdminTrash(c);
+  else if (viewId === 'admin-security') renderAdminSecurityEvents(c);
   else if (viewId === 'settings') renderSettings(c);
   else if (viewId === 'statistiques') renderStatistiques(c);
   else if (viewId === 'unassigned-patients') renderUnassignedPatients(c);
