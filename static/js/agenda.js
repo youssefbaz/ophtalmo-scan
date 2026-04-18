@@ -218,6 +218,7 @@ async function submitEditRdvAgenda(rid) {
   const res = await api(`/api/rdv/${rid}`, 'PUT', body);
   if (res.ok) {
     closeModal();
+    if (res.date_changed) _showRdvChangedDialog(rid, res);
     // Refresh
     _allRdvs = await api('/api/rdv');
     _renderCalendar(document.getElementById('mainContent'));
@@ -239,6 +240,7 @@ async function calDropRdv(event, newDate) {
     _allRdvs = await api('/api/rdv');
     _renderCalendar(document.getElementById('mainContent'));
     showToast(`RDV déplacé au ${fmtDate(newDate)}`, 'success');
+    if (res.date_changed) _showRdvChangedDialog(rdvId, res);
   } else {
     showToast(res.error || 'Erreur lors du déplacement', 'error');
   }

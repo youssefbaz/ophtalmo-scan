@@ -217,8 +217,52 @@ async function submitEditRdv(rdvId) {
     notes:  document.getElementById('editRdvNotes').value,
   };
   const res = await api(`/api/rdv/${rdvId}`, 'PUT', payload);
-  if (res.ok) { closeModal('modalRdv'); showView(currentView); loadNotifications(); }
-  else alert(res.error || 'Erreur');
+  if (res.ok) {
+    closeModal('modalRdv');
+    showView(currentView);
+    loadNotifications();
+    if (res.date_changed) _showRdvChangedDialog(rdvId, res);
+  } else {
+    alert(res.error || 'Erreur');
+  }
+}
+
+function _showRdvChangedDialog(rdvId, res) {
+  const oldStr = res.old_date
+    ? new Date(res.old_date).toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'})
+      + (res.old_heure ? ` à ${res.old_heure}` : '')
+    : '';
+  const newStr = new Date(res.new_date).toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'})
+    + (res.new_heure ? ` à ${res.new_heure}` : '');
+
+  showModal('📅 RDV modifié', `
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:36px;margin-bottom:8px">📅</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Le rendez-vous a été modifié</div>
+      ${oldStr ? `<div style="font-size:12px;color:var(--text3);text-decoration:line-through;margin-bottom:4px">${escH(oldStr)}</div>` : ''}
+      <div style="font-size:14px;font-weight:700;color:var(--teal2)">${escH(newStr)}</div>
+    </div>
+    <p style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:0">
+      Souhaitez-vous informer le patient par email ?
+    </p>
+  `, async () => {
+    const btn = document.getElementById('modalDynConfirmBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
+    const r = await api(`/api/rdv/${rdvId}/notify-change`, 'POST', {
+      old_date: res.old_date, old_heure: res.old_heure
+    });
+    closeModal();
+    if (r.ok) showToast(r.message || 'Email envoyé au patient', 'success');
+    else showToast(r.error || 'Erreur lors de l\'envoi', 'error');
+  });
+
+  // Relabel the confirm button
+  setTimeout(() => {
+    const btn = document.getElementById('modalDynConfirmBtn');
+    if (btn) btn.textContent = '✉ Envoyer un email';
+    const cancel = document.querySelector('#modalDynFooter .btn-ghost');
+    if (cancel) cancel.textContent = 'Ne pas notifier';
+  }, 0);
 }
 
 async function validerRdv(rdvId, statut) {
