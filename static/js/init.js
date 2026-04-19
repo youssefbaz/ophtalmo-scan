@@ -39,11 +39,16 @@ function initApp() {
   if (typeof EventSource !== 'undefined') {
     let _sseSource = null;
     function _connectSSE() {
+      if (_sseSource) { _sseSource.close(); _sseSource = null; }
       _sseSource = new EventSource('/api/stream/notifications');
       _sseSource.addEventListener('notifications', () => loadNotifications());
+      // Server closes after 5 min and sends a 'reconnect' event — reconnect immediately
+      _sseSource.addEventListener('reconnect', () => {
+        _sseSource.close(); _sseSource = null;
+        _connectSSE();
+      });
       _sseSource.onerror = () => {
-        _sseSource.close();
-        // Reconnect after 30 s if SSE drops (network hiccup, server restart)
+        _sseSource.close(); _sseSource = null;
         setTimeout(_connectSSE, 30000);
       };
     }

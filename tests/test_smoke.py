@@ -1552,3 +1552,166 @@ class TestDateValidation:
             "acuite_od": "", "acuite_og": "", "notes": ""
         })
         assert r.status_code == 201
+
+
+# ─── New-feature coverage ──────────────────────────────────────────────────────
+
+class TestClinicalFieldLengthCaps:
+    """Free-text clinical fields must be rejected when they exceed their cap."""
+
+    def test_motif_too_long_rejected(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "2025-01-01",
+            "motif": "x" * 1001,   # over the 1000-char cap
+            "diagnostic": "", "traitement": "", "notes": ""
+        })
+        assert r.status_code == 400
+        assert "motif" in r.get_json().get("error", "").lower()
+
+    def test_notes_too_long_rejected(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "2025-01-02",
+            "motif": "ok",
+            "diagnostic": "", "traitement": "",
+            "notes": "n" * 3001,   # over the 3000-char cap
+        })
+        assert r.status_code == 400
+        assert "notes" in r.get_json().get("error", "").lower()
+
+    def test_within_cap_accepted(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/historique", json={
+            "date": "2025-01-03",
+            "motif": "x" * 999,
+            "diagnostic": "", "traitement": "", "notes": ""
+        })
+        assert r.status_code == 201
+
+
+class TestPatientPdfExport:
+    def test_pdf_returns_pdf_content_type(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.get("/api/patients/P_A001/pdf")
+        assert r.status_code in (200, 501)  # 501 if reportlab not installed
+        if r.status_code == 200:
+            assert "pdf" in r.content_type.lower()
+
+    def test_pdf_blocked_for_wrong_medecin(self, app):
+        c = _authed(app, "medecin_b")
+        r = c.get("/api/patients/P_A001/pdf")
+        assert r.status_code == 403
+
+
+class TestAdminAssignDetachMedecin:
+    def test_assign_medecin_updates_patient(self, app, db_path):
+        c = _authed(app, "admin_test", "AdminPass@2025!")
+        users = c.get("/api/admin/users").get_json()
+        med_b = next((u for u in users if u["username"] == "medecin_b"), None)
+        assert med_b, "medecin_b must exist in test DB"
+        r = c.put("/api/admin/patients/P_A001/medecin", json={"medecin_id": med_b["id"]})
+        assert r.get_json().get("ok")
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT medecin_id FROM patients WHERE id='P_A001'").fetchone()
+        con.close()
+        assert row[0] == med_b["id"]
+
+    def test_detach_medecin_clears_field(self, app, db_path):
+        c = _authed(app, "admin_test", "AdminPass@2025!")
+        r = c.delete("/api/admin/patients/P_A001/medecin", json={})
+        assert r.get_json().get("ok"), r.get_json()
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT medecin_id FROM patients WHERE id='P_A001'").fetchone()
+        con.close()
+        assert row[0] in (None, '')
+        # Restore medecin_a ownership for downstream tests
+        users = c.get("/api/admin/users").get_json()
+        med_a = next((u for u in users if u["username"] == "medecin_a"), None)
+        if med_a:
+            c.put("/api/admin/patients/P_A001/medecin", json={"medecin_id": med_a["id"]})
+
+    def test_assign_nonexistent_medecin_returns_404(self, app):
+        c = _authed(app, "admin_test", "AdminPass@2025!")
+        r = c.put("/api/admin/patients/P_A001/medecin", json={"medecin_id": "NONEXISTENT"})
+        assert r.status_code == 404
+
+    def test_detach_blocked_for_medecin(self, app):
+        c = _authed(app, "medecin_a")
+        r = c.delete("/api/admin/patients/P_A001/medecin", json={})
+        assert r.status_code in (401, 403)
+
+
+class TestPatientRestoreRestoresRdv:
+    def test_delete_patient_soft_deletes_future_rdv(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        future = "2099-12-31"
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001", "date": future, "heure": "09:00",
+            "type": "Contrôle", "statut": "programmé", "medecin": "Dr. A", "urgent": False
+        })
+        assert r.get_json().get("ok"), r.get_json()
+        rdv_id = r.get_json().get("rdv", {}).get("id")
+        assert rdv_id, "add_rdv must return rdv.id"
+
+        c.delete("/api/patients/P_A001", json={})
+
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+        con.close()
+        assert row and row[0] == 1
+
+        c.post("/api/patients/P_A001/restore", json={})
+
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT deleted FROM rdv WHERE id=?", (rdv_id,)).fetchone()
+        con.close()
+        assert row and row[0] == 0
+
+
+class TestGenerateSuiviMedecinName:
+    def test_suivi_rdv_medecin_field_is_not_ciphertext(self, app, db_path):
+        """RDVs created by _generate_suivi must have a readable name, not a Fernet token."""
+        import re as _re
+        c = _authed(app, "medecin_a")
+        r = c.post("/api/patients/P_A001/chirurgie", json={
+            "date_chirurgie": "2099-06-01",
+            "type_chirurgie": "Cataracte OD",
+            "add_to_agenda": True,
+        })
+        assert r.get_json().get("ok")
+
+        con = sqlite3.connect(db_path)
+        rows = con.execute(
+            "SELECT medecin FROM rdv WHERE type LIKE 'Suivi post-op%' AND patient_id='P_A001' LIMIT 5"
+        ).fetchall()
+        con.close()
+
+        fernet_re = _re.compile(r'^gAAAAA[A-Za-z0-9_\-]{40,}={0,2}$')
+        for (med_name,) in rows:
+            assert med_name is not None
+            assert not fernet_re.match(med_name or ''), \
+                f"rdv.medecin looks like a Fernet token: {med_name!r}"
+
+
+class TestRdvHiddenForDeletedPatients:
+    def test_rdv_list_excludes_deleted_patient_rdvs(self, app, db_path):
+        c = _authed(app, "medecin_a")
+        future = "2099-11-15"
+        r = c.post("/api/rdv", json={
+            "patient_id": "P_A001", "date": future, "heure": "10:00",
+            "type": "Test exclusion", "statut": "programmé",
+            "medecin": "Dr. A", "urgent": False
+        })
+        rdv_id = r.get_json().get("rdv", {}).get("id")
+        assert rdv_id, "add_rdv must return rdv.id"
+
+        rdvs_before = c.get("/api/rdv").get_json()
+        assert any(rv["id"] == rdv_id for rv in rdvs_before)
+
+        c.delete("/api/patients/P_A001", json={})
+
+        rdvs_after = c.get("/api/rdv").get_json()
+        assert not any(rv["id"] == rdv_id for rv in rdvs_after)
+
+        c.post("/api/patients/P_A001/restore", json={})
