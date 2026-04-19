@@ -137,12 +137,30 @@ async function deleteSelectedPatients() {
   if (!sel.length) return;
   const names = sel.map(p => p.label).join(', ');
   if (!confirm(`Supprimer ${sel.length} patient(s) ?\n${names}`)) return;
+  let errors = 0;
+  const deletedIds = new Set();
   for (const p of sel) {
-    await api(`/api/patients/${p.id}`, 'DELETE');
+    const res = await api(`/api/patients/${p.id}`, 'DELETE');
+    if (res && res.ok) {
+      deletedIds.add(p.id);
+    } else {
+      errors++;
+    }
   }
   window._selPats = [];
   _updatePatientActionBar();
-  loadPatientsSidebar();
+  // Clear main content if the currently viewed patient was deleted
+  if (deletedIds.has(currentPatientId)) {
+    currentPatientId = null;
+    const mc = document.getElementById('main-content');
+    if (mc) mc.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3)">Sélectionnez un patient</div>';
+  }
+  await loadPatientsSidebar();
+  if (errors > 0) {
+    showToast(`${errors} patient(s) n'ont pas pu être supprimés`, 'error');
+  } else if (deletedIds.size > 0) {
+    showToast(`${deletedIds.size} patient(s) supprimé(s)`, 'success');
+  }
 }
 
 async function _sidebarEditPatient() {
