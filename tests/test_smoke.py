@@ -1,123 +1,14 @@
 """
 tests/test_smoke.py — Smoke tests for critical OphtalmoScan paths.
 
+Shared fixtures live in conftest.py so they are accessible from every
+test module in the session.
+
 Run: pytest tests/ -v
 """
-import json, os, sys, sqlite3, tempfile, pytest
+import json, os, sys, sqlite3, pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-
-# ─── App fixture (session-scoped — one DB for all tests) ──────────────────────
-
-@pytest.fixture(scope="session")
-def app_and_db():
-    # Load .env first so FIELD_ENCRYPTION_KEY is available
-    from dotenv import load_dotenv as _ldenv
-    _ldenv(override=False)  # don't override if already set
-
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-do-not-use-in-prod")
-    os.environ.setdefault("SESSION_COOKIE_SECURE", "0")
-    os.environ["RATELIMIT_ENABLED"] = "0"
-    # Use a stable test-only encryption key so test patient PII round-trips correctly
-    # Keep FIELD_ENCRYPTION_KEY from .env if set, else use a fixed test key
-    if not os.environ.get("FIELD_ENCRYPTION_KEY"):
-        os.environ["FIELD_ENCRYPTION_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-
-    db_fd, db_path = tempfile.mkstemp(suffix=".db")
-    os.environ["OPHTALMO_DB_PATH"] = db_path
-    os.environ["DATABASE_URL"]     = ""
-
-    import database as _db
-    _db.DB_PATH  = db_path
-    _db.DATABASE = db_path
-    _db._USE_PG  = False
-
-    from app import create_app
-    application = create_app()
-    application.config["TESTING"]              = True
-    application.config["RATELIMIT_ENABLED"]    = False   # disable rate limiter in tests
-    application.config["WTF_CSRF_ENABLED"]     = False
-
-    with application.app_context():
-        _db.init_db(application)
-        _seed_test_users(db_path)
-
-    yield application, db_path
-
-    os.close(db_fd)
-    os.unlink(db_path)
-
-
-def _seed_test_users(db_path):
-    from werkzeug.security import generate_password_hash
-    from security_utils import encrypt_patient_fields
-
-    con = sqlite3.connect(db_path)
-    cur = con.cursor()
-
-    # Medecins
-    for uid, username, role in [
-        ("MED_A", "medecin_a", "medecin"),
-        ("MED_B", "medecin_b", "medecin"),
-    ]:
-        cur.execute(
-            "INSERT OR IGNORE INTO users "
-            "(id,username,password_hash,role,nom,prenom,status,totp_enabled,locked_until) "
-            "VALUES (?,?,?,?,?,?,?,0,'')",
-            (uid, username, generate_password_hash("SecurePass@2025!"),
-             role, "Test", "Dr", "active")
-        )
-
-    # Admin user
-    cur.execute(
-        "INSERT OR IGNORE INTO users "
-        "(id,username,password_hash,role,nom,prenom,status,totp_enabled,locked_until) "
-        "VALUES (?,?,?,?,?,?,?,0,'')",
-        ("ADMIN_T", "admin_test", generate_password_hash("AdminPass@2025!"),
-         "admin", "Admin", "Test", "active")
-    )
-
-    # Test patient record
-    pii = encrypt_patient_fields({
-        "nom":"Dupont","prenom":"Alice","ddn":"1980-01-01","telephone":"","email":""
-    })
-    cur.execute(
-        "INSERT OR IGNORE INTO patients "
-        "(id,nom,prenom,ddn,sexe,telephone,email,antecedents,allergies,medecin_id,birth_year) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("P_A001", pii["nom"], pii["prenom"], pii["ddn"],
-         "F", pii["telephone"], pii["email"], "[]", "[]", "MED_A", 1980)
-    )
-
-    # Patient user linked to P_A001
-    cur.execute(
-        "INSERT OR IGNORE INTO users "
-        "(id,username,password_hash,role,nom,prenom,patient_id,status,totp_enabled,locked_until) "
-        "VALUES (?,?,?,?,?,?,?,?,0,'')",
-        ("PAT_A", "patient_a", generate_password_hash("SecurePass@2025!"),
-         "patient", "Dupont", "Alice", "P_A001", "active")
-    )
-    con.commit()
-    con.close()
-
-
-@pytest.fixture
-def app(app_and_db):
-    application, _ = app_and_db
-    return application
-
-
-@pytest.fixture
-def db_path(app_and_db):
-    _, path = app_and_db
-    return path
-
-
-@pytest.fixture
-def client(app):
-    """Fresh client per test — no shared session state."""
-    return app.test_client()
 
 
 def _login(client, username, password, totp_token=None):
