@@ -94,36 +94,77 @@ def _compress_image(image_b64: str, max_dim: int = 1600, quality: int = 78) -> s
         return image_b64
 
 
+# Retry config for background LLM analysis — exponential backoff for transient errors.
+# Total worst case: 0 + 2 + 6 = 8s of sleep before giving up on a temporary failure.
+_ANALYSIS_MAX_ATTEMPTS = 3
+_ANALYSIS_BACKOFF_BASE = 2.0
+
+
 def _analyze_in_background(app, doc_id: str, prompt: str, image_b64):
-    """Run the LLM analysis in a background thread and persist the result."""
+    """Run the LLM analysis in a background thread and persist the result.
+
+    Retries up to _ANALYSIS_MAX_ATTEMPTS on temporary errors with exponential
+    backoff. Permanent errors (invalid API key, etc.) fail fast. This replaces
+    the previous 'doctor has to click retry by hand' flow for transient glitches.
+    """
+    import time as _time
     with app.app_context():
         from database import get_db as _get_db
         db = _get_db()
-        try:
-            analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
+
+        last_err: Exception | None = None
+        for attempt in range(1, _ANALYSIS_MAX_ATTEMPTS + 1):
+            try:
+                analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
+                db.execute(
+                    "UPDATE documents SET analyse_ia=?, valide=1, analysis_status='done' WHERE id=?",
+                    (analysis, doc_id)
+                )
+                db.commit()
+                logger.info("Background analysis done for document %s (attempt %d)", doc_id, attempt)
+                return
+            except LLMUnavailableError as e:
+                last_err = e
+                if not e.temporary:
+                    # Permanent failure — no point retrying.
+                    logger.error("Background LLM analysis permanent failure for doc %s: %s", doc_id, e)
+                    db.execute(
+                        "UPDATE documents SET analysis_status=?, analyse_ia=? WHERE id=?",
+                        ('failed_perm',
+                         "⚠️ Analyse échouée (vérifiez vos clés API).",
+                         doc_id)
+                    )
+                    db.commit()
+                    return
+                logger.warning(
+                    "Background LLM analysis temporary failure for doc %s (attempt %d/%d): %s",
+                    doc_id, attempt, _ANALYSIS_MAX_ATTEMPTS, e
+                )
+                if attempt < _ANALYSIS_MAX_ATTEMPTS:
+                    _time.sleep(_ANALYSIS_BACKOFF_BASE * (3 ** (attempt - 1)))
+                    continue
+            except Exception as e:
+                last_err = e
+                logger.warning(
+                    "Background LLM analysis error for doc %s (attempt %d/%d): %s",
+                    doc_id, attempt, _ANALYSIS_MAX_ATTEMPTS, e
+                )
+                if attempt < _ANALYSIS_MAX_ATTEMPTS:
+                    _time.sleep(_ANALYSIS_BACKOFF_BASE * (3 ** (attempt - 1)))
+                    continue
+
+        # All attempts exhausted — persist a final failure state.
+        logger.error("Background LLM analysis exhausted retries for doc %s: %s", doc_id, last_err)
+        if isinstance(last_err, LLMUnavailableError):
             db.execute(
-                "UPDATE documents SET analyse_ia=?, valide=1, analysis_status='done' WHERE id=?",
-                (analysis, doc_id)
+                "UPDATE documents SET analysis_status='failed_temp', analyse_ia=? WHERE id=?",
+                ("⚠️ Analyse échouée après plusieurs tentatives — réessayez plus tard.", doc_id)
             )
-            db.commit()
-            logger.info(f"Background analysis done for document {doc_id}")
-        except LLMUnavailableError as e:
-            temporary = "temporaire" if e.temporary else "permanente"
-            logger.error(f"Background LLM analysis failed ({temporary}) for doc {doc_id}: {e}")
-            # Store failure reason so the UI can show 'Retry' vs 'Check API keys'
-            db.execute(
-                "UPDATE documents SET analysis_status=?, analyse_ia=? WHERE id=?",
-                ('failed_temp' if e.temporary else 'failed_perm',
-                 f"⚠️ Analyse échouée ({'temporaire — réessayez' if e.temporary else 'vérifiez vos clés API'}).",
-                 doc_id)
-            )
-            db.commit()
-        except Exception as e:
-            logger.error(f"Background LLM analysis failed for doc {doc_id}: {e}")
+        else:
             db.execute(
                 "UPDATE documents SET analysis_status='failed' WHERE id=?", (doc_id,)
             )
-            db.commit()
+        db.commit()
 
 
 @bp.route('/api/patients/<pid>/upload', methods=['POST'])
