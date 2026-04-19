@@ -340,7 +340,7 @@ def notify_rdv_change(rdv_id):
             h_type    = _html.escape(rdv_type)
             h_old     = _html.escape(f"{old_date} à {old_heure}") if old_date else ''
             h_new     = _html.escape(f"{new_date} à {new_heure}")
-            h_medecin = _html.escape(row.get('medecin') or '')
+            h_medecin = _html.escape((row['medecin'] if 'medecin' in row.keys() else '') or '')
             old_block = (f'<tr><td style="padding:10px 14px;color:#9ca3af;border-bottom:1px solid #e5e7eb">📅 Ancienne date</td>'
                          f'<td style="padding:10px 14px;color:#9ca3af;text-decoration:line-through;border-bottom:1px solid #e5e7eb">{h_old}</td></tr>'
                          if h_old else '')
