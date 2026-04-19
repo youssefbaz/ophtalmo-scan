@@ -89,6 +89,8 @@ function t(key) {
   return TRANSLATIONS[_currentLang][key] || key;
 }
 
+// saveToServer must be true ONLY when the user explicitly picks a theme in settings.
+// All other callers (page-load, login, programmatic) must omit it or pass false.
 function applyTheme(theme, saveToServer = false) {
   document.body.classList.remove('theme-dark','theme-light','theme-clinical','theme-contrast','theme-minuit');
   if (theme !== 'light') document.body.classList.add('theme-' + theme);

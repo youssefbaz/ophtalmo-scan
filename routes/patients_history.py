@@ -28,6 +28,16 @@ def add_historique(pid):
     if not valid_date(entry_date):
         return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
 
+    # Length caps on free-text clinical fields to prevent oversized payloads
+    _CAP = {
+        'motif': 1000, 'diagnostic': 2000, 'traitement': 2000,
+        'segment_ant': 2000, 'notes': 3000,
+    }
+    for field, maxlen in _CAP.items():
+        val = data.get(field, '')
+        if isinstance(val, str) and len(val) > maxlen:
+            return jsonify({"error": f"Le champ '{field}' dépasse la limite de {maxlen} caractères."}), 400
+
     hid = "H" + str(uuid.uuid4())[:6].upper()
     enc = encrypt_clinical(data)
     try:
@@ -72,6 +82,15 @@ def update_historique(pid, hid):
     upd_date = data.get('date', '')
     if upd_date and not valid_date(upd_date):
         return jsonify({"error": "Format de date invalide (YYYY-MM-DD attendu)."}), 400
+
+    _CAP = {
+        'motif': 1000, 'diagnostic': 2000, 'traitement': 2000,
+        'segment_ant': 2000, 'notes': 3000,
+    }
+    for field, maxlen in _CAP.items():
+        val = data.get(field, '')
+        if isinstance(val, str) and len(val) > maxlen:
+            return jsonify({"error": f"Le champ '{field}' dépasse la limite de {maxlen} caractères."}), 400
 
     enc = encrypt_clinical(data)
     try:

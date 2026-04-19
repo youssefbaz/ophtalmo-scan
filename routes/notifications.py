@@ -2,6 +2,7 @@ import re, json, time
 from flask import Blueprint, jsonify, Response, stream_with_context, request
 from database import get_db, current_user
 from security_utils import decrypt_field
+from extensions import limiter
 
 bp = Blueprint('notifications', __name__)
 
@@ -66,26 +67,39 @@ def get_notifications():
     return jsonify(result)
 
 
+_SSE_POLL_INTERVAL = 15   # seconds between DB checks
+_SSE_MAX_DURATION  = 300  # seconds before closing (client auto-reconnects via EventSource)
+
+
 @bp.route('/api/stream/notifications', methods=['GET'])
+@limiter.limit("10 per minute")
 def stream_notifications():
     """Server-Sent Events stream — pushes new notifications every 15 s.
 
-    Clients open an EventSource to this endpoint and receive a 'notifications'
-    event whenever there are unread items. This replaces the JS polling loop.
+    Each connection lives at most _SSE_MAX_DURATION seconds then closes cleanly;
+    the browser EventSource reconnects automatically. This bounds resource usage
+    even when running under a threading worker. With the gevent worker class
+    (see Procfile) time.sleep is non-blocking, so thousands of connections are
+    handled concurrently without starving threads.
     """
     u = current_user()
     if not u:
         return Response('data: {"error":"unauthenticated"}\n\n',
                         mimetype='text/event-stream', status=401)
 
+    uid      = u['id']
+    role     = u['role']
+    pat_id   = u.get('patient_id')
+    deadline = time.monotonic() + _SSE_MAX_DURATION
+
     def _generate():
         last_seen_id = None
-        while True:
+        while time.monotonic() < deadline:
             try:
                 db = get_db()
-                if u['role'] == 'medecin':
-                    rows = db.execute("""
-                        SELECT id, lu FROM notifications n
+                if role == 'medecin':
+                    row = db.execute("""
+                        SELECT id FROM notifications n
                         WHERE n.medecin_id = ?
                            OR n.patient_id IN (SELECT id FROM patients WHERE medecin_id = ?)
                            OR (
@@ -94,29 +108,36 @@ def stream_notifications():
                                AND n.from_role != 'admin'
                            )
                         ORDER BY n.date DESC LIMIT 1
-                    """, (u['id'], u['id'])).fetchall()
+                    """, (uid, uid)).fetchone()
+                    unread = db.execute(
+                        "SELECT COUNT(*) FROM notifications n "
+                        "WHERE n.lu=0 AND (n.medecin_id=? OR n.patient_id IN "
+                        "(SELECT id FROM patients WHERE medecin_id=?))",
+                        (uid, uid)
+                    ).fetchone()[0]
                 else:
-                    rows = db.execute(
-                        "SELECT id, lu FROM notifications WHERE patient_id=? AND from_role='medecin' "
+                    row = db.execute(
+                        "SELECT id FROM notifications WHERE patient_id=? AND from_role='medecin' "
                         "ORDER BY date DESC LIMIT 1",
-                        (u.get('patient_id'),)
-                    ).fetchall()
+                        (pat_id,)
+                    ).fetchone()
+                    unread = db.execute(
+                        "SELECT COUNT(*) FROM notifications WHERE patient_id=? AND lu=0",
+                        (pat_id,)
+                    ).fetchone()[0]
 
-                latest_id = rows[0]['id'] if rows else None
-                unread    = sum(1 for r in db.execute(
-                    "SELECT COUNT(*) FROM notifications WHERE lu=0"
-                ).fetchall())
-
+                latest_id = row['id'] if row else None
                 if latest_id != last_seen_id:
                     last_seen_id = latest_id
                     payload = json.dumps({"unread": unread, "latest": latest_id})
                     yield f"event: notifications\ndata: {payload}\n\n"
                 else:
-                    # Heartbeat to keep connection alive
                     yield ": heartbeat\n\n"
             except Exception:
                 yield ": error\n\n"
-            time.sleep(15)
+            time.sleep(_SSE_POLL_INTERVAL)
+        # Signal client to reconnect after max duration
+        yield "event: reconnect\ndata: {}\n\n"
 
     return Response(stream_with_context(_generate()),
                     mimetype='text/event-stream',

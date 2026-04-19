@@ -10,7 +10,7 @@ extracted into separate modules:
 """
 import os, json, datetime, logging
 from flask import Blueprint, request, jsonify
-from database import get_db, current_user, add_notif, require_role, log_audit, audit_read
+from database import get_db, current_user, add_notif, require_role, log_audit, audit_read, medecin_can_access_patient
 from security_utils import decrypt_patient, encrypt_patient_fields, sanitize
 from routes.patients_helpers import _assert_owns_patient, _build_patient, _auto_create_account, _next_patient_id
 from extensions import limiter
