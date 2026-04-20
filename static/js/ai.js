@@ -13,7 +13,7 @@ function renderAiAssistant(c) {
       <div class="ai-messages" id="aiMessages">
         <div class="msg msg-ai">
           <div class="msg-sender">🤖 IA OPHTHALMO</div>
-          <div class="msg-bubble">Bonjour Docteur. Je suis votre assistant spécialisé ophtalmologie.\n\nJe peux vous aider à:\n• Analyser des images OCT, fond d'œil, topographies\n• Répondre aux questions cliniques ophtalmologiques\n• Proposer des diagnostics différentiels\n• Donner des recommandations thérapeutiques\n\nPosez votre question ou chargez le contexte d'un patient.</div>
+          <div class="msg-bubble">Bonjour Docteur. Je suis votre assistant spécialisé ophtalmologie.\n\nJe peux vous aider à:\n• Répondre aux questions cliniques ophtalmologiques\n• Proposer des diagnostics différentiels\n• Donner des recommandations thérapeutiques\n\nPosez votre question ou chargez le contexte d'un patient.</div>
         </div>
       </div>
       <div class="quick-qs">
