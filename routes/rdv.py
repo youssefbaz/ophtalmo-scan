@@ -79,6 +79,13 @@ def add_rdv():
     if rdv_heure and not valid_heure(rdv_heure):
         return jsonify({"error": "Format d'heure invalide (HH:MM attendu)."}), 400
 
+    # Patients can only book in the future. Doctors keep the freedom to record
+    # past appointments (back-dating a visit, etc.).
+    if u['role'] == 'patient' and rdv_date:
+        import datetime as _dt
+        if rdv_date < _dt.date.today().isoformat():
+            return jsonify({"error": "Vous ne pouvez pas demander un rendez-vous à une date passée."}), 400
+
     urgent = bool(data.get('urgent', False))
     statut = 'en_attente' if urgent or u['role'] == 'patient' else data.get('statut', 'programmé')
 
