@@ -314,19 +314,74 @@ function _prepareUpload(file) {
   }
 }
 
+// Downscale large images in the browser before base64-encoding so we stay
+// under the server's 25 MB cap (and any reverse-proxy limits like nginx 10 MB).
+// PDFs and already-small images pass through unchanged.
+async function _prepareUploadPayload(file) {
+  const MAX_DIM = 1800;           // max width/height in px
+  const JPEG_QUALITY = 0.82;
+  const SKIP_BELOW_BYTES = 1024 * 1024;  // <1 MB — don't bother re-encoding
+
+  if (!file.type.startsWith('image/') || file.size < SKIP_BELOW_BYTES) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload  = () => res(fr.result.split(',')[1]);
+      fr.onerror = () => rej(new Error('read_failed'));
+      fr.readAsDataURL(file);
+    });
+  }
+
+  const dataUrl = await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload  = () => res(fr.result);
+    fr.onerror = () => rej(new Error('read_failed'));
+    fr.readAsDataURL(file);
+  });
+
+  const img = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload  = () => res(im);
+    im.onerror = () => rej(new Error('decode_failed'));
+    im.src = dataUrl;
+  });
+
+  let { width: w, height: h } = img;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';   // flatten transparency for JPEG
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const outUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  return outUrl.split(',')[1];
+}
+
 async function _doUploadFile(file, type, medecinId) {
   const status = document.getElementById('docUploadStatus');
   const zone   = document.getElementById('docUploadZone');
   const progWrap = document.getElementById('docUploadProgress');
   const progBar  = document.getElementById('docUploadProgressBar');
-  if (status) { status.textContent = '⏳ Envoi en cours…'; }
+  if (status) { status.textContent = '⚙️ Préparation du fichier…'; }
   if (zone)   zone.style.opacity = '0.5';
   if (progWrap) progWrap.style.display = '';
 
+  let b64;
+  try {
+    b64 = await _prepareUploadPayload(file);
+  } catch (err) {
+    if (progWrap) progWrap.style.display = 'none';
+    if (zone) zone.style.opacity = '1';
+    showToast("Impossible de lire le fichier. Format non supporté ou fichier corrompu.", 'error');
+    return;
+  }
+  if (status) status.textContent = '⏳ Envoi en cours…';
+
   return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const b64 = ev.target.result.split(',')[1];
       const pid = USER.patient_id;
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/patients/${pid}/upload`);
@@ -368,9 +423,6 @@ async function _doUploadFile(file, type, medecinId) {
       xhr.ontimeout = () => { _resetUI(); showToast("L'envoi a pris trop de temps — réessayez avec un fichier plus petit.", 'error'); resolve(); };
       xhr.onabort   = () => { _resetUI(); resolve(); };
       xhr.send(JSON.stringify({ image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' }));
-    };
-    reader.onerror = () => { showToast('Impossible de lire le fichier.', 'error'); resolve(); };
-    reader.readAsDataURL(file);
   });
 }
 

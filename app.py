@@ -63,6 +63,11 @@ def _init_session_config(app: Flask) -> None:
     app.config['SESSION_COOKIE_HTTPONLY']    = True
     app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
 
+    # Upload ceiling — 25 MB is enough for a scanner JPEG or a short PDF after
+    # client-side downscaling. Anything bigger is almost certainly a phone photo
+    # that should have been resized in the browser.
+    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH_MB', '25')) * 1024 * 1024
+
     # Fail-closed: SESSION_COOKIE_SECURE must be explicitly set to 0 or 1.
     secure_raw = os.environ.get('SESSION_COOKIE_SECURE')
     if secure_raw is None:
@@ -169,6 +174,14 @@ def _register_error_handlers(app: Flask) -> None:
     @app.errorhandler(404)
     def not_found(e):
         return jsonify({"error": "Ressource non trouvée"}), 404
+
+    @app.errorhandler(413)
+    def payload_too_large(e):
+        limit_mb = app.config.get('MAX_CONTENT_LENGTH', 0) // (1024 * 1024)
+        return jsonify({
+            "error": f"Fichier trop volumineux (limite {limit_mb} Mo). "
+                     f"Réduisez la taille ou la résolution avant d'envoyer."
+        }), 413
 
     @app.errorhandler(429)
     def rate_limited(e):
