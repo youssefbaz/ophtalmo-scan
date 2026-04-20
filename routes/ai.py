@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database import get_db, current_user, medecin_can_access_patient
-from llm import call_llm, SYSTEM_OPHTHALMO
+from llm import call_llm, SYSTEM_OPHTHALMO, SYSTEM_IMAGE_ANALYSIS
 from extensions import limiter
 
 bp = Blueprint('ai', __name__)
@@ -106,10 +106,14 @@ def ai_analyze():
             image_b64 = row['image_b64']
 
     prompt = (
-        f"Analysez cette image d'ophtalmologie de type '{img_type}'. "
-        f"Contexte patient : {context}. "
-        f"Décrivez les éléments cliniques observables, les anomalies éventuelles, "
-        f"et formulez vos recommandations diagnostiques et thérapeutiques."
+        f"[EXAMEN À ANALYSER]\n"
+        f"Type déclaré : {img_type}\n\n"
+        f"[CONTEXTE PATIENT]\n{context or 'non fourni'}\n\n"
+        f"[CONSIGNE]\n"
+        f"Analyse l'image en suivant strictement le format imposé par le système "
+        f"(6 sections markdown). Précise la latéralité (OD/OG) si identifiable et "
+        f"localise les anomalies. Relie les signes au contexte clinique quand pertinent."
     )
-    analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
+    system = SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO
+    analysis = call_llm(prompt, system, image_b64=image_b64, max_tokens=1200)
     return jsonify({"analysis": analysis})

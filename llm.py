@@ -11,19 +11,25 @@ GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL    = "gemini-2.0-flash"
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
-# Gemini fallback chain (same key, different model quotas)
+# Gemini fallback chain — only models that accept image input.
+# 2.0-flash-lite was removed: it does NOT support vision despite the name.
 GEMINI_FALLBACK_MODELS = [
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash-8b",
 ]
 
-# OpenRouter free models — text and vision
+# OpenRouter free models — text and vision.
+# Vision chain refreshed April 2026 — the previous qwen2.5-vl-7b and
+# llama-3.2-11b-vision free endpoints were retired by OpenRouter.
 OPENROUTER_TEXT_MODEL   = "meta-llama/llama-3.3-70b-instruct:free"
-# Vision fallback chain: Qwen2.5-VL (best free vision) → Llama vision
 OPENROUTER_VISION_MODELS = [
-    "qwen/qwen2.5-vl-7b-instruct:free",       # best free vision model for medical images
-    "meta-llama/llama-3.2-11b-vision-instruct:free",
+    "google/gemma-4-31b-it:free",                 # newest Gemma, strong vision
+    "google/gemma-3-27b-it:free",                 # proven free VL
+    "nvidia/nemotron-nano-12b-v2-vl:free",        # dedicated VL model
+    "google/gemma-4-26b-a4b-it:free",
+    "google/gemma-3-12b-it:free",
 ]
 
 # ─── SYSTEM PROMPTS ───────────────────────────────────────────────────────────
@@ -38,6 +44,34 @@ SYSTEM_IMPORT = """Tu es un assistant d'extraction de données médicales.
 Format attendu (tableau de patients):
 [{"nom":"...","prenom":"...","ddn":"YYYY-MM-DD","sexe":"M/F","telephone":"...","email":"...","antecedents":["..."],"allergies":["..."]}]
 Si une info est manquante, utilise une chaîne vide "". Ne retourne rien d'autre que le JSON."""
+
+SYSTEM_IMAGE_ANALYSIS = """Tu es un ophtalmologiste expert en interprétation d'imagerie oculaire (rétinographie, OCT maculaire/RNFL, angiographie à la fluorescéine, topographie cornéenne, échographie B, champ visuel, photographie du segment antérieur).
+
+Ton rôle : fournir au médecin une lecture structurée, précise et cliniquement utile de l'image — PAS un diagnostic définitif. Tu es un outil d'aide à la décision.
+
+Méthode d'analyse obligatoire :
+1. Identifie le type d'examen et la qualité/lisibilité de l'image (nette, floue, artéfacts, cadrage).
+2. Décris les structures anatomiques visibles de façon systématique selon le type d'examen :
+   - Fond d'œil / rétinographie : papille (excavation C/D, coloration, bords), macula (reflet fovéolaire, pigmentation), vaisseaux (rapport A/V, tortuosité, croisements), périphérie rétinienne, hémorragies/exsudats/drusen.
+   - OCT maculaire : épaisseur fovéolaire, intégrité des couches (EPR, ellipsoïde, MLE), logettes, DSR, DEP, membrane épirétinienne, trou maculaire.
+   - OCT RNFL/papille : épaisseur des fibres par quadrant, asymétrie inter-œil, rim, C/D.
+   - Topographie cornéenne : kératométrie, asymétrie, pattern (régulier, asymétrique, en pince, keratocône suspect), pachymétrie.
+   - Segment antérieur : cornée (transparence, dépôts), chambre antérieure, iris, cristallin.
+   - Angiographie : temps circulatoires, diffusions, zones d'hypo/hyperfluorescence.
+3. Liste les ANOMALIES détectées, localisées précisément (quadrant, œil, distance à la fovéa).
+4. Propose des HYPOTHÈSES DIAGNOSTIQUES hiérarchisées (principale + différentiels) avec le raisonnement.
+5. Recommande les EXAMENS COMPLÉMENTAIRES pertinents et la CONDUITE À TENIR (urgence, suivi, traitement à discuter).
+6. Termine par les LIMITES de ton analyse (ce que l'image ne permet pas de conclure).
+
+Format de sortie strict en markdown :
+### 🔍 Type et qualité de l'image
+### 🧿 Description anatomique
+### ⚠️ Anomalies détectées
+### 🩺 Hypothèses diagnostiques
+### 📋 Examens complémentaires / Conduite à tenir
+### ⚡ Limites de l'analyse
+
+Règles : français médical rigoureux, terminologie AAO/SFO, concis mais complet, jamais alarmiste, toujours rappeler que la validation par le médecin est indispensable. Si l'image n'est pas interprétable, dis-le clairement."""
 
 SYSTEM_RESPONSE_DRAFT = """Tu es un assistant médical en ophtalmologie. Un patient a posé une question à son médecin.
 Génère une réponse professionnelle, rassurante et claire que le médecin pourra valider ou modifier.
@@ -158,10 +192,11 @@ def _call_openrouter(prompt, system, max_tokens, image_b64=None):
             return result
         except http_requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
+            body = e.response.text[:300] if e.response is not None else ''
             if status == 429:
-                logger.warning(f"[LLM] OpenRouter {model} rate-limited, modèle suivant…")
+                logger.warning(f"[LLM] OpenRouter {model} rate-limited, modèle suivant… {body}")
             else:
-                logger.error(f"[LLM] OpenRouter {model} erreur {status}, modèle suivant…")
+                logger.error(f"[LLM] OpenRouter {model} erreur {status}: {body}")
             last_error = e
         except Exception as e:
             logger.error(f"[LLM] OpenRouter {model} échoué ({e}), modèle suivant…")
@@ -198,22 +233,30 @@ def call_llm(prompt, system, image_b64=None, max_tokens=800):
             logger.warning(f"[LLM] Groq échoué ({e}), bascule…")
             last_exc = e
 
-    # 2. Gemini (handles both text and vision)
-    if GEMINI_API_KEY:
-        try:
-            return _call_gemini(prompt, system, max_tokens, image_b64)
-        except Exception as e:
-            logger.warning(f"[LLM] Gemini indisponible ({e}), bascule sur OpenRouter…")
-            last_exc = e
+    # For image requests, try OpenRouter first — its free vision chain is
+    # deeper and less rate-limited than Gemini's free tier.
+    providers_for_images = []
+    if image_b64:
+        if OPENROUTER_API_KEY:
+            providers_for_images.append('openrouter')
+        if GEMINI_API_KEY:
+            providers_for_images.append('gemini')
+    else:
+        if GEMINI_API_KEY:
+            providers_for_images.append('gemini')
+        if OPENROUTER_API_KEY:
+            providers_for_images.append('openrouter')
 
-    # 3. OpenRouter free models (text + vision)
-    if OPENROUTER_API_KEY:
+    for provider in providers_for_images:
         try:
-            result = _call_openrouter(prompt, system, max_tokens, image_b64)
-            logger.info(f"[LLM] Réponse via OpenRouter ({'vision' if image_b64 else 'text'})")
-            return result
+            if provider == 'gemini':
+                return _call_gemini(prompt, system, max_tokens, image_b64)
+            else:
+                result = _call_openrouter(prompt, system, max_tokens, image_b64)
+                logger.info(f"[LLM] Réponse via OpenRouter ({'vision' if image_b64 else 'text'})")
+                return result
         except Exception as e:
-            logger.error(f"[LLM] OpenRouter échoué ({e})")
+            logger.warning(f"[LLM] {provider} indisponible ({e}), bascule…")
             last_exc = e
 
     # 4. Last resort: Groq text-only even for image requests

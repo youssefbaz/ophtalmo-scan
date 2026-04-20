@@ -1,7 +1,7 @@
 import uuid, datetime, json, logging, threading, base64, io, os
 from flask import Blueprint, request, jsonify, current_app
 from database import get_db, current_user, add_notif, require_role, audit_read, medecin_can_access_patient
-from llm import call_llm, LLMUnavailableError, SYSTEM_OPHTHALMO
+from llm import call_llm, LLMUnavailableError, SYSTEM_OPHTHALMO, SYSTEM_IMAGE_ANALYSIS
 from security_utils import decrypt_patient, encrypt_field, decrypt_field, decrypt_clinical
 from extensions import limiter
 
@@ -115,7 +115,8 @@ def _analyze_in_background(app, doc_id: str, prompt: str, image_b64):
         last_err: Exception | None = None
         for attempt in range(1, _ANALYSIS_MAX_ATTEMPTS + 1):
             try:
-                analysis = call_llm(prompt, SYSTEM_OPHTHALMO, image_b64=image_b64, max_tokens=800)
+                analysis = call_llm(prompt, SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO,
+                                    image_b64=image_b64, max_tokens=1200)
                 db.execute(
                     "UPDATE documents SET analyse_ia=?, valide=1, analysis_status='done' WHERE id=?",
                     (analysis, doc_id)
@@ -358,15 +359,31 @@ def analyze_document(pid, doc_id):
     safe_type = _safe_llm(doc['type'])
 
     image_b64 = _load_image_b64(dict(doc)) or None
+    system_prompt = SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO
+    doc_description = _safe_llm(doc.get('description') if hasattr(doc, 'get') else '', max_len=300) \
+        or _safe_llm(dict(doc).get('description', ''), max_len=300)
     if image_b64:
-        prompt = (f"Analysez cette image ophtalmologique de type '{safe_type}' uploadée par {uploader}. "
-                  f"Contexte : {context}. "
-                  f"Décrivez précisément les éléments cliniques visibles (structure, anomalies, lésions), "
-                  f"formulez une impression diagnostique et des recommandations thérapeutiques.")
+        prompt = (
+            f"[EXAMEN À ANALYSER]\n"
+            f"Type déclaré : {safe_type}\n"
+            f"Uploadé par : {uploader}\n"
+            f"Description fournie : {doc_description or 'aucune'}\n\n"
+            f"[CONTEXTE PATIENT]\n{context}\n\n"
+            f"[CONSIGNE]\n"
+            f"Analyse cette image en suivant strictement le format de sortie imposé par le système "
+            f"(6 sections markdown). Sois précis sur la latéralité (OD/OG) quand elle est identifiable "
+            f"et sur la localisation des anomalies. Rattache les signes observés au contexte clinique "
+            f"du patient (âge, antécédents) lorsque c'est pertinent."
+        )
     else:
-        prompt = (f"{uploader.capitalize()} a uploadé un document de type '{safe_type}'. "
-                  f"Contexte : {context}. "
-                  f"Donnez les points de vigilance clinique et les recommandations générales.")
+        prompt = (
+            f"{uploader.capitalize()} a uploadé un document de type '{safe_type}' (non-image).\n"
+            f"Description : {doc_description or 'aucune'}\n\n"
+            f"[CONTEXTE PATIENT]\n{context}\n\n"
+            f"Donne au médecin : (1) les points de vigilance clinique pour ce type de document, "
+            f"(2) les questions à poser au patient, (3) les examens complémentaires à prévoir, "
+            f"(4) les signes d'alerte nécessitant une prise en charge urgente."
+        )
 
     # Mark as pending and fire background thread — return immediately
     db.execute("UPDATE documents SET analysis_status='pending' WHERE id=?", (doc_id,))
