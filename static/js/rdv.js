@@ -414,6 +414,10 @@ async function _doUploadFile(file, type, medecinId) {
         try { res = JSON.parse(xhr.responseText); } catch(_) {}
         if (xhr.status >= 200 && xhr.status < 300 && res && res.ok) {
           showView('mes-documents');
+        } else if (xhr.status === 413) {
+          const sizeMo = (file.size / (1024 * 1024)).toFixed(1);
+          showToast((res && res.error)
+            || `Fichier trop volumineux (${sizeMo} Mo). Réduisez la taille avant d'envoyer.`, 'error');
         } else {
           const msg = (res && res.error)
             || `Erreur serveur (${xhr.status || 'réseau'}) lors de l'envoi du document.`;
