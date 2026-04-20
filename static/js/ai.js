@@ -67,15 +67,6 @@ async function startAiContext(pid) {
   setTimeout(()=>addMsg('ai',`Contexte chargé pour ${p.prenom} ${p.nom}.\nAntécédents: ${p.antecedents.join(', ')}\nDernier traitement: ${p.historique[0]?.traitement||'NC'}\n\nQuelle est votre question ?`),100);
 }
 
-async function analyzeImageAI(imgId, pid, type, patientName, antecedents) {
-  const el = event.target;
-  el.textContent = '⏳ Analyse...'; el.disabled=true;
-  const context = `Patient: ${patientName}. Antécédents: ${antecedents}`;
-  const res = await api('/api/ai/analyze-image','POST',{doc_id:imgId,patient_id:pid,type,context});
-  alert('Analyse IA:\n\n'+(res.analysis||res.error));
-  el.textContent='🤖 Analyser IA'; el.disabled=false;
-}
-
 async function softDeleteDoc(pid, docId, type) {
   if (!confirm(`Supprimer "${type}" de la vue active ?\nL'image reste conservée dans l'historique.`)) return;
   const res = await api(`/api/patients/${pid}/documents/${docId}`, 'DELETE');
@@ -166,17 +157,7 @@ async function openImageViewer(imgId, pid, type, notes, patientName, antecedents
     </div>
     ${existingAnalysis}
     <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary" id="analyzeImgBtn" onclick="runImageAnalysis('${escJ(imgId)}','${escJ(pid)}','${escJ(type)}','${escJ(patientName)}','${escJ(antecedents)}')">🤖 ${doc.analyse_ia ? 'Ré-analyser' : 'Analyser avec IA'}</button>
       <button class="btn btn-ghost" onclick="closeModal('modalImage')">Fermer</button>
     </div>`;
-}
-
-async function runImageAnalysis(imgId, pid, type, patientName, antecedents) {
-  const btn=document.getElementById('analyzeImgBtn');
-  btn.disabled=true; btn.innerHTML='<span class="loading-dots"><span></span><span></span><span></span></span>';
-  const res = await api('/api/ai/analyze-image','POST',{doc_id:imgId,patient_id:pid,type,context:`Patient: ${patientName}. Antécédents: ${antecedents}`});
-  document.getElementById('aiAnalysisBox').style.display='block';
-  document.getElementById('aiAnalysisText').textContent = res.analysis||res.error;
-  btn.disabled=false; btn.innerHTML='🔄 Ré-analyser';
 }
 
