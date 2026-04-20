@@ -136,8 +136,12 @@ def decrypt_field(value: str) -> str:
         return value
     try:
         return _get_fernet().decrypt(value.encode("ascii")).decode("utf-8")
-    except InvalidToken:
-        return value  # legacy plaintext written before encryption was enabled
+    except (InvalidToken, UnicodeEncodeError):
+        # InvalidToken: legacy ASCII plaintext written before encryption rolled out.
+        # UnicodeEncodeError: legacy non-ASCII plaintext (e.g. accented French names
+        # in the users table for patient accounts) — Fernet tokens are pure ASCII,
+        # so anything that can't even be ASCII-encoded is definitely not ciphertext.
+        return value
 
 
 def decrypt_patient(row: dict) -> dict:
