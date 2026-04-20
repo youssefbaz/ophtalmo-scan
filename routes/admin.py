@@ -51,7 +51,7 @@ def admin_get_users():
     db   = get_db()
     role = request.args.get('role')          # optional filter
     status = request.args.get('status')
-    sql  = "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at FROM users WHERE role != 'admin'"
+    sql  = "SELECT id,username,role,nom,prenom,email,organisation,date_naissance,status,medecin_code,created_at,locked_until FROM users WHERE role != 'admin'"
     params = []
     if role:
         sql += " AND role=?";   params.append(role)
@@ -155,6 +155,33 @@ def admin_activate(uid):
     db.commit()
     add_notif(db, "compte_active",
               f"🔓 Compte activé : {u_prenom} {u_nom} ({row['username']})",
+              "admin")
+    return jsonify({"ok": True})
+
+
+# ─── UNLOCK ACCOUNT ──────────────────────────────────────────────────────────
+
+@bp.route('/api/admin/users/<uid>/unlock', methods=['POST'])
+def admin_unlock(uid):
+    """Clear a lockout immediately and wipe the recent failed-attempt history
+    so the user can log in again on the next try."""
+    admin, err = _require_admin()
+    if err: return err
+    db  = get_db()
+    row = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not row:
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+    u_nom    = decrypt_field(row['nom']    or '') if row['role'] == 'patient' else (row['nom']    or '')
+    u_prenom = decrypt_field(row['prenom'] or '') if row['role'] == 'patient' else (row['prenom'] or '')
+    db.execute("UPDATE users SET locked_until=NULL WHERE id=?", (uid,))
+    # Drop the recent failed attempts so the threshold counter resets.
+    db.execute("DELETE FROM login_attempts WHERE user_id=? AND success=0", (uid,))
+    log_audit(db, 'admin_account_unlocked', 'users', uid,
+              user_id=admin['id'], detail=f"target={uid} username={row['username']}",
+              ip_address=get_client_ip(), user_agent=get_user_agent())
+    db.commit()
+    add_notif(db, "compte_deverrouille",
+              f"🔓 Compte déverrouillé : {u_prenom} {u_nom} ({row['username']})",
               "admin")
     return jsonify({"ok": True})
 

@@ -126,6 +126,8 @@ async function renderAdminPending(c) {
 function _renderAdminUserCard(u, withActions) {
   const statusColor = {active:'badge-teal',pending:'badge-amber',inactive:'badge-red'}[u.status] || 'badge-amber';
   const isChecked = (window._selAdminUsers || []).some(s => s.id === u.id) ? 'checked' : '';
+  const nowSql    = new Date().toISOString().slice(0,19).replace('T',' ');
+  const isLocked  = !!u.locked_until && u.locked_until > nowSql;
   return `
     <div class="card" style="margin-bottom:14px;padding:18px 20px;transition:border-color .15s${isChecked?';border-color:var(--teal)':''}" id="userCard_${u.id}">
       <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
@@ -142,6 +144,7 @@ function _renderAdminUserCard(u, withActions) {
             <strong style="font-size:15px">${u.prenom || ''} ${u.nom || ''}</strong>
             <span class="badge ${statusColor}">${u.status}</span>
             <span class="badge badge-teal" style="background:var(--teal-dim);color:var(--teal2)">${u.role}</span>
+            ${isLocked ? `<span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)" title="Verrouillé jusqu'à ${u.locked_until}">🔒 Verrouillé</span>` : ''}
           </div>
           <div style="font-size:13px;color:var(--text2);display:flex;flex-wrap:wrap;gap:12px">
             <span>👤 ${u.username}</span>
@@ -158,6 +161,7 @@ function _renderAdminUserCard(u, withActions) {
             <button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="adminDeactivate('${u.id}','${u.prenom} ${u.nom}')">🔒 Désactiver</button>
           ` : `
             ${u.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="adminValidate('${u.id}')">✅ Valider</button>` : ''}
+            ${isLocked ? `<button class="btn btn-primary btn-sm" onclick="adminUnlock('${u.id}','${(u.prenom||'').replace(/'/g,"\\'")} ${(u.nom||'').replace(/'/g,"\\'")}')">🔓 Déverrouiller</button>` : ''}
             ${u.status === 'active' ? `<button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="adminDeactivate('${u.id}','${u.prenom} ${u.nom}')">🔒 Désactiver</button>` : ''}
             ${u.status !== 'active' ? `<button class="btn btn-ghost btn-sm" onclick="adminActivate('${u.id}')">🔓 Activer</button>` : ''}
           `}
@@ -177,6 +181,13 @@ async function adminDeactivate(uid, name) {
   if (!confirm(`Désactiver le compte de ${name} ?`)) return;
   const res = await api(`/api/admin/users/${uid}/deactivate`, 'POST');
   if (res.ok) { _updatePendingBadge(); showView(currentView); }
+  else alert(res.error || 'Erreur');
+}
+
+async function adminUnlock(uid, name) {
+  if (!confirm(`Déverrouiller le compte de ${name} maintenant ?`)) return;
+  const res = await api(`/api/admin/users/${uid}/unlock`, 'POST');
+  if (res.ok) { showView(currentView); }
   else alert(res.error || 'Erreur');
 }
 
