@@ -35,6 +35,23 @@ def _mint_trusted_token(user_id: str) -> str:
     return _trusted_serializer().dumps({'uid': user_id})
 
 
+def _attempts_remaining(db, user_id: str) -> int:
+    """How many failed attempts the user has left in the current rolling
+    LOCKOUT_MINUTES window before their account locks. Mirrors the same query
+    record_login_attempt uses to decide on a lockout, so the user-facing hint
+    stays honest as the threshold/window evolve."""
+    from database import MAX_ATTEMPTS, LOCKOUT_MINUTES
+    cutoff = (datetime.datetime.now() - datetime.timedelta(minutes=LOCKOUT_MINUTES)
+              ).strftime("%Y-%m-%d %H:%M:%S")
+    row = db.execute(
+        "SELECT COUNT(*) FROM login_attempts "
+        "WHERE user_id=? AND success=0 AND created_at >= ?",
+        (user_id, cutoff)
+    ).fetchone()
+    used = row[0] if row else 0
+    return max(MAX_ATTEMPTS - used, 0)
+
+
 @bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute; 50 per hour")
 def login():
