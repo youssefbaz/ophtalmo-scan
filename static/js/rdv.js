@@ -333,28 +333,40 @@ async function _doUploadFile(file, type, medecinId) {
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
       xhr.withCredentials = true;
+      // 60 s cap — never let the UI sit on "Envoi en cours" forever.
+      xhr.timeout = 60000;
+      const _resetUI = () => {
+        if (progWrap) progWrap.style.display = 'none';
+        if (zone)     zone.style.opacity = '1';
+        if (status)   status.textContent = 'Cliquez ou glissez votre document ici';
+        const wrap = document.getElementById('docTypePickerWrap');
+        if (wrap) wrap.style.display = 'none';
+      };
       xhr.upload.onprogress = (ev2) => {
         if (ev2.lengthComputable && progBar) {
           progBar.style.width = Math.round(ev2.loaded / ev2.total * 100) + '%';
         }
       };
+      xhr.upload.onload = () => {
+        // Upload fully sent — switch status so the user knows we're now waiting on the server.
+        if (status) status.textContent = '⏳ Traitement par le serveur…';
+      };
       xhr.onload = () => {
-        if (progWrap) progWrap.style.display = 'none';
-        if (zone) zone.style.opacity = '1';
-        try {
-          const res = JSON.parse(xhr.responseText);
-          if (res.ok) {
-            showView('mes-documents');
-          } else {
-            showToast(res.error || "Erreur lors de l'envoi du document.", 'error');
-            if (status) status.textContent = 'Cliquez ou glissez votre document ici';
-            const wrap = document.getElementById('docTypePickerWrap');
-            if (wrap) wrap.style.display = 'none';
-          }
-        } catch(ex) { showToast('Erreur réseau', 'error'); }
+        _resetUI();
+        let res = null;
+        try { res = JSON.parse(xhr.responseText); } catch(_) {}
+        if (xhr.status >= 200 && xhr.status < 300 && res && res.ok) {
+          showView('mes-documents');
+        } else {
+          const msg = (res && res.error)
+            || `Erreur serveur (${xhr.status || 'réseau'}) lors de l'envoi du document.`;
+          showToast(msg, 'error');
+        }
         resolve();
       };
-      xhr.onerror = () => { showToast('Erreur réseau lors de l\'envoi.', 'error'); if(zone)zone.style.opacity='1'; resolve(); };
+      xhr.onerror   = () => { _resetUI(); showToast("Erreur réseau lors de l'envoi.", 'error'); resolve(); };
+      xhr.ontimeout = () => { _resetUI(); showToast("L'envoi a pris trop de temps — réessayez avec un fichier plus petit.", 'error'); resolve(); };
+      xhr.onabort   = () => { _resetUI(); resolve(); };
       xhr.send(JSON.stringify({ image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' }));
     };
     reader.onerror = () => { showToast('Impossible de lire le fichier.', 'error'); resolve(); };
