@@ -63,10 +63,9 @@ def _init_session_config(app: Flask) -> None:
     app.config['SESSION_COOKIE_HTTPONLY']    = True
     app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
 
-    # Upload ceiling — 25 MB is enough for a scanner JPEG or a short PDF after
-    # client-side downscaling. Anything bigger is almost certainly a phone photo
-    # that should have been resized in the browser.
-    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH_MB', '25')) * 1024 * 1024
+    # Upload ceiling — 100 MB covers full DICOM/OCT exports. Multipart uploads
+    # stream to disk, so this no longer balloons memory the way base64-in-JSON did.
+    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH_MB', '100')) * 1024 * 1024
 
     # Fail-closed: SESSION_COOKIE_SECURE must be explicitly set to 0 or 1.
     secure_raw = os.environ.get('SESSION_COOKIE_SECURE')

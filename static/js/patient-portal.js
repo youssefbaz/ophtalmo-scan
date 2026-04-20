@@ -85,9 +85,9 @@ async function renderMesDocuments(c) {
         ondrop="handleDocDrop(event)">
         <div class="import-icon">&#128206;</div>
         <div id="docUploadStatus" class="import-text">Cliquez ou glissez votre document ici</div>
-        <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF</div>
+        <div class="import-sub">Radio, Scanner, OCT, Ordonnance — JPG, PNG, PDF, DICOM</div>
       </div>
-      <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="uploadPatientDoc(this)">
+      <input type="file" id="docFileInput" accept="image/*,application/pdf,.pdf,.dcm,application/dicom" style="display:none" onchange="uploadPatientDoc(this)">
       <div id="docPreviewWrap" style="display:none;margin-top:10px;text-align:center">
         <img id="docPreviewImg" src="" alt="" style="max-width:100%;max-height:200px;border-radius:8px;border:2px solid var(--teal);object-fit:contain">
       </div>

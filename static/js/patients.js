@@ -402,7 +402,8 @@ function switchSubtab(targetId, btn) {
 
 function openUploadImagerie(pid) {
   const input = document.createElement('input');
-  input.type = 'file'; input.accept = 'image/*';
+  input.type = 'file';
+  input.accept = 'image/*,application/pdf,.pdf,.dcm,application/dicom';
   input.onchange = () => {
     const file = input.files[0]; if (!file) return;
     _showUploadPreviewModal(pid, file);
@@ -440,19 +441,19 @@ function _showUploadPreviewModal(pid, file) {
     `, async () => {
       const custom = document.getElementById('uploadTypeCustom')?.value.trim();
       const type   = custom || document.getElementById('uploadTypeSelect')?.value || 'Imagerie';
-      const b64    = dataUrl.split(',')[1];
       const prog   = document.getElementById('uploadProgress');
       const bar    = document.getElementById('uploadProgressBar');
       const lbl    = document.getElementById('uploadProgressLabel');
       if (prog) prog.style.display = '';
 
-      // XHR for progress tracking
+      // XHR for progress tracking — multipart so DICOM/large OCT files don't
+      // pay the ~33 % base64 inflation tax.
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `/api/patients/${pid}/upload`);
-        xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.withCredentials = true;
+        xhr.timeout = 300000;
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable && bar && lbl) {
             const pct = Math.round(ev.loaded / ev.total * 100);
@@ -467,8 +468,14 @@ function _showUploadPreviewModal(pid, file) {
             else { showToast(res.error || 'Erreur upload', 'error'); reject(); }
           } catch(ex) { showToast('Erreur upload', 'error'); reject(); }
         };
-        xhr.onerror = () => { showToast('Erreur réseau', 'error'); reject(); };
-        xhr.send(JSON.stringify({image: b64, type, description: file.name, source: 'imagerie'}));
+        xhr.onerror   = () => { showToast('Erreur réseau', 'error'); reject(); };
+        xhr.ontimeout = () => { showToast("Envoi trop long — réessayez.", 'error'); reject(); };
+        const fd = new FormData();
+        fd.append('file', file, file.name);
+        fd.append('type', type);
+        fd.append('description', file.name);
+        fd.append('source', 'imagerie');
+        xhr.send(fd);
       });
     });
   };
