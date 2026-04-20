@@ -257,6 +257,14 @@ def upload_document(pid):
             "error": "Aucun médecin associé à votre compte. Prenez d'abord un rendez-vous pour pouvoir envoyer un document."
         }), 400
 
+    # Block the patient from sending a document — and a notification — to a
+    # doctor who isn't actually linked to them. Without this check, a crafted
+    # request body could push a notification into any doctor's inbox.
+    if u['role'] == 'patient' and not medecin_can_access_patient(db, target_mid, pid):
+        return jsonify({
+            "error": "Ce médecin ne fait pas partie de vos médecins traitants."
+        }), 403
+
     # Save file to encrypted storage on disk. Storage format is base64 (legacy
     # — _load_image_b64 expects it) so multipart payloads get re-encoded here.
     # Compression only runs for raster images; PDFs and DICOMs are stored as-is.
@@ -429,36 +437,28 @@ def analyze_document(pid, doc_id):
 
     safe_type = _safe_llm(doc['type'])
 
-    image_b64 = _load_image_b64(dict(doc)) or None
-    # PDFs are stored like images but vision LLMs can't read them — fall back
-    # to contextual text analysis rather than feeding PDF bytes to the model.
-    if image_b64 and _detect_upload_mime(image_b64) == 'application/pdf':
-        image_b64 = None
-    system_prompt = SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO
+    # Only documents (PDFs and non-image attachments) are analyzed. Clinical
+    # images (fundus, OCT, DICOM, etc.) are intentionally excluded — the doctor
+    # interprets those directly. Vision LLMs also can't read PDF bytes, so the
+    # analysis is always contextual/text-only.
+    raw_b64 = _load_image_b64(dict(doc)) or ''
+    if raw_b64 and _detect_upload_mime(raw_b64) != 'application/pdf':
+        return jsonify({
+            "error": "L'analyse IA est réservée aux documents. Les images cliniques doivent être interprétées par le médecin."
+        }), 400
+
+    system_prompt = SYSTEM_OPHTHALMO
+    image_b64 = None  # never feed images to the LLM
     doc_description = _safe_llm(doc.get('description') if hasattr(doc, 'get') else '', max_len=300) \
         or _safe_llm(dict(doc).get('description', ''), max_len=300)
-    if image_b64:
-        prompt = (
-            f"[EXAMEN À ANALYSER]\n"
-            f"Type déclaré : {safe_type}\n"
-            f"Uploadé par : {uploader}\n"
-            f"Description fournie : {doc_description or 'aucune'}\n\n"
-            f"[CONTEXTE PATIENT]\n{context}\n\n"
-            f"[CONSIGNE]\n"
-            f"Analyse cette image en suivant strictement le format de sortie imposé par le système "
-            f"(6 sections markdown). Sois précis sur la latéralité (OD/OG) quand elle est identifiable "
-            f"et sur la localisation des anomalies. Rattache les signes observés au contexte clinique "
-            f"du patient (âge, antécédents) lorsque c'est pertinent."
-        )
-    else:
-        prompt = (
-            f"{uploader.capitalize()} a uploadé un document de type '{safe_type}' (non-image).\n"
-            f"Description : {doc_description or 'aucune'}\n\n"
-            f"[CONTEXTE PATIENT]\n{context}\n\n"
-            f"Donne au médecin : (1) les points de vigilance clinique pour ce type de document, "
-            f"(2) les questions à poser au patient, (3) les examens complémentaires à prévoir, "
-            f"(4) les signes d'alerte nécessitant une prise en charge urgente."
-        )
+    prompt = (
+        f"{uploader.capitalize()} a uploadé un document de type '{safe_type}'.\n"
+        f"Description : {doc_description or 'aucune'}\n\n"
+        f"[CONTEXTE PATIENT]\n{context}\n\n"
+        f"Donne au médecin : (1) les points de vigilance clinique pour ce type de document, "
+        f"(2) les questions à poser au patient, (3) les examens complémentaires à prévoir, "
+        f"(4) les signes d'alerte nécessitant une prise en charge urgente."
+    )
 
     # Mark as pending and fire background thread — return immediately
     db.execute("UPDATE documents SET analysis_status='pending' WHERE id=?", (doc_id,))

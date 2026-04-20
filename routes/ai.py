@@ -75,45 +75,8 @@ def ai_question():
 @bp.route('/api/ai/analyze-image', methods=['POST'])
 @limiter.limit("20 per hour; 3 per minute")
 def ai_analyze():
-    u = current_user()
-    if not u or u['role'] != 'medecin':
-        return jsonify({"error": "Accès refusé"}), 403
-    data = request.json or {}
-    img_type   = _sanitize_llm(data.get('type', 'imagerie ophtalmologique'), max_len=100)
-    context    = _sanitize_llm(data.get('context', ''), max_len=500)
-    doc_id     = data.get('doc_id', '')
-    patient_id = data.get('patient_id', '')
-
-    image_b64 = None
-    if doc_id and patient_id:
-        db  = get_db()
-        # Check ai_analysis consent before proceeding
-        consent_row = db.execute(
-            "SELECT granted FROM patient_consents "
-            "WHERE patient_id=? AND consent_type='ai_analysis' "
-            "ORDER BY created_at DESC LIMIT 1",
-            (patient_id,)
-        ).fetchone()
-        if not consent_row or not consent_row['granted']:
-            return jsonify({
-                "error": "Consentement IA requis pour ce patient.",
-                "consent_required": True
-            }), 403
-        row = db.execute(
-            "SELECT image_b64 FROM documents WHERE id=? AND patient_id=?", (doc_id, patient_id)
-        ).fetchone()
-        if row:
-            image_b64 = row['image_b64']
-
-    prompt = (
-        f"[EXAMEN À ANALYSER]\n"
-        f"Type déclaré : {img_type}\n\n"
-        f"[CONTEXTE PATIENT]\n{context or 'non fourni'}\n\n"
-        f"[CONSIGNE]\n"
-        f"Analyse l'image en suivant strictement le format imposé par le système "
-        f"(6 sections markdown). Précise la latéralité (OD/OG) si identifiable et "
-        f"localise les anomalies. Relie les signes au contexte clinique quand pertinent."
-    )
-    system = SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO
-    analysis = call_llm(prompt, system, image_b64=image_b64, max_tokens=1200)
-    return jsonify({"analysis": analysis})
+    """Disabled — clinical images are not sent to the LLM. Only documents
+    (PDFs, reports) can be analyzed, via /api/patients/<pid>/documents/<doc_id>/analyze."""
+    return jsonify({
+        "error": "L'analyse IA des images cliniques est désactivée. Seuls les documents (PDF) peuvent être analysés."
+    }), 400

@@ -505,13 +505,9 @@ function _imgCard(img, pid, patient, isPatientDoc = false) {
         <div class="doc-date">${fmtDate(img.date)}</div>
         ${img.notes ? `<div class="doc-uploader">${img.notes}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px">
-          <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center"
-            onclick="event.stopPropagation();analyzeDocAI('${pid}','${img.id}','${imgType}')">
-            🤖 ${analyzed ? 'Ré-analyser' : 'Analyser IA'}
-          </button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:0 8px"
+          <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center;color:var(--red)"
             onclick="event.stopPropagation();softDeleteDoc('${pid}','${img.id}','${imgType}')"
-            title="Supprimer (conservé en historique)">🗑</button>
+            title="Supprimer (conservé en historique)">🗑 Supprimer</button>
         </div>
       </div>
     </div>`;
