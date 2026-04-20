@@ -239,16 +239,24 @@ def upload_document(pid):
             logger.error("Upload file save failed for %s: %s", doc_id, _ie)
             return jsonify({"error": "Erreur lors de l'enregistrement du fichier"}), 500
 
-    db.execute(
-        "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,image_path,source,medecin_id) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (doc_id, pid, doc_type,
-         datetime.datetime.now().strftime("%Y-%m-%d"),
-         data.get('description',''), u['role'],
-         1 if u['role'] == 'medecin' else 0,
-         '', stored_image_path, source, target_mid)
-    )
-    db.commit()
+    try:
+        db.execute(
+            "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,image_path,source,medecin_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (doc_id, pid, doc_type,
+             datetime.datetime.now().strftime("%Y-%m-%d"),
+             data.get('description',''), u['role'],
+             1 if u['role'] == 'medecin' else 0,
+             '', stored_image_path, source, target_mid)
+        )
+        db.commit()
+    except Exception as _db_err:
+        logger.exception("Document INSERT failed for patient=%s doc=%s: %s", pid, doc_id, _db_err)
+        # Roll back the on-disk file so we don't leave orphans
+        if stored_image_path and os.path.exists(stored_image_path):
+            try: os.remove(stored_image_path)
+            except Exception: pass
+        return jsonify({"error": "Erreur base de données lors de l'enregistrement du document."}), 500
 
     if u['role'] == 'patient':
         add_notif(db, "document_uploaded",

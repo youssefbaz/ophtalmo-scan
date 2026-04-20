@@ -360,9 +360,12 @@ def _migrate(db):
 
     # image_path column: stores path to encrypted image file (replaces image_b64 for new uploads)
     try:
-        db.execute("ALTER TABLE documents ADD COLUMN image_path TEXT DEFAULT ''")
-    except Exception:
-        pass
+        cols = [r[1] for r in db.execute("PRAGMA table_info(documents)")]
+        if 'image_path' not in cols:
+            db.execute("ALTER TABLE documents ADD COLUMN image_path TEXT DEFAULT ''")
+            logger.info("Migrated documents table: added image_path column")
+    except Exception as e:
+        logger.error("Failed to add image_path column to documents: %s", e)
 
     # Soft-delete columns on various tables
     soft_delete = [
