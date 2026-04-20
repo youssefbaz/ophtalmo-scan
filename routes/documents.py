@@ -39,26 +39,38 @@ def _load_image_b64(doc: dict) -> str:
     return doc.get('image_b64') or ''
 
 
-_ALLOWED_IMAGE_MAGIC: list[tuple[bytes, str]] = [
+_ALLOWED_UPLOAD_MAGIC: list[tuple[bytes, str]] = [
     (b'\xff\xd8\xff',      'image/jpeg'),
     (b'\x89PNG\r\n\x1a\n', 'image/png'),
     (b'GIF87a',            'image/gif'),
     (b'GIF89a',            'image/gif'),
+    (b'%PDF-',             'application/pdf'),
+    (b'RIFF',              'image/webp'),   # WebP starts with RIFF....WEBP
 ]
 
 
-def _validate_image_mime(image_b64: str) -> bool:
-    """Return True if the base64-encoded bytes start with a known image magic header."""
+def _detect_upload_mime(image_b64: str) -> str | None:
+    """Return the detected MIME type, or None if the payload isn't an allowed type."""
     if not image_b64:
-        return True  # no image supplied — nothing to reject
+        return None
     try:
-        raw = base64.b64decode(image_b64[:64])  # only need the first bytes
-        for magic, _ in _ALLOWED_IMAGE_MAGIC:
+        raw = base64.b64decode(image_b64[:64])
+        for magic, mime in _ALLOWED_UPLOAD_MAGIC:
             if raw.startswith(magic):
-                return True
-        return False
+                # WebP needs an extra check for the WEBP tag at offset 8
+                if mime == 'image/webp' and raw[8:12] != b'WEBP':
+                    continue
+                return mime
+        return None
     except Exception:
-        return False
+        return None
+
+
+def _validate_image_mime(image_b64: str) -> bool:
+    """Backward-compat wrapper — True when the payload is an accepted upload."""
+    if not image_b64:
+        return True
+    return _detect_upload_mime(image_b64) is not None
 
 
 def _compress_image(image_b64: str, max_dim: int = 1600, quality: int = 78) -> str:
@@ -196,18 +208,36 @@ def upload_document(pid):
 
     # Validate and compress image before storing
     raw_image = data.get('image', '') or ''
-    if raw_image and not _validate_image_mime(raw_image):
-        return jsonify({"error": "Type de fichier non autorisé. Seules les images JPEG, PNG et GIF sont acceptées."}), 400
+    mime = _detect_upload_mime(raw_image) if raw_image else None
+    if raw_image and mime is None:
+        return jsonify({"error": "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP, PDF."}), 400
 
-    # Save image to encrypted file on disk (not in SQLite column)
+    # Patients must direct the upload to one of their doctors, otherwise the
+    # document would be orphaned and no médecin would ever see it.
+    if u['role'] == 'patient' and not target_mid:
+        fallback = db.execute(
+            "SELECT medecin_id FROM patients WHERE id=?", (pid,)
+        ).fetchone()
+        target_mid = (fallback['medecin_id'] if fallback else '') or ''
+        if not target_mid:
+            linked = db.execute(
+                "SELECT medecin_id FROM patient_doctors WHERE patient_id=? LIMIT 1", (pid,)
+            ).fetchone()
+            target_mid = linked['medecin_id'] if linked else ''
+    if u['role'] == 'patient' and not target_mid:
+        return jsonify({
+            "error": "Aucun médecin associé à votre compte. Prenez d'abord un rendez-vous pour pouvoir envoyer un document."
+        }), 400
+
+    # Save file to encrypted storage on disk (images compressed, PDFs stored as-is)
     stored_image_path = ''
     if raw_image:
-        compressed = _compress_image(raw_image)
+        payload = raw_image if mime == 'application/pdf' else _compress_image(raw_image)
         try:
-            stored_image_path = _save_image_file(doc_id, compressed)
+            stored_image_path = _save_image_file(doc_id, payload)
         except Exception as _ie:
-            logger.error("Image file save failed for %s: %s", doc_id, _ie)
-            return jsonify({"error": "Erreur lors de l'enregistrement de l'image"}), 500
+            logger.error("Upload file save failed for %s: %s", doc_id, _ie)
+            return jsonify({"error": "Erreur lors de l'enregistrement du fichier"}), 500
 
     db.execute(
         "INSERT INTO documents (id,patient_id,type,date,description,uploaded_by,valide,image_b64,image_path,source,medecin_id) "
@@ -359,6 +389,10 @@ def analyze_document(pid, doc_id):
     safe_type = _safe_llm(doc['type'])
 
     image_b64 = _load_image_b64(dict(doc)) or None
+    # PDFs are stored like images but vision LLMs can't read them — fall back
+    # to contextual text analysis rather than feeding PDF bytes to the model.
+    if image_b64 and _detect_upload_mime(image_b64) == 'application/pdf':
+        image_b64 = None
     system_prompt = SYSTEM_IMAGE_ANALYSIS if image_b64 else SYSTEM_OPHTHALMO
     doc_description = _safe_llm(doc.get('description') if hasattr(doc, 'get') else '', max_len=300) \
         or _safe_llm(dict(doc).get('description', ''), max_len=300)
