@@ -103,7 +103,12 @@ async function adminTestSmtp() {
 async function renderAdminPending(c) {
   c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
   const users = await api('/api/admin/users/pending');
-  if (!users || users.length === 0) {
+  if (!Array.isArray(users)) {
+    const msg = (users && users.error) || 'Impossible de charger les comptes en attente.';
+    c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">⚠ ${escH(msg)}</div>`;
+    return;
+  }
+  if (users.length === 0) {
     c.innerHTML = `
       <div style="text-align:center;padding:60px 20px">
         <div style="font-size:48px;margin-bottom:12px">✅</div>
@@ -346,7 +351,12 @@ async function adminDeleteSelected() {
 async function renderAdminUsers(c) {
   c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Chargement…</div>';
   const users = await api('/api/admin/users');
-  if (!users || users.length === 0) {
+  if (!Array.isArray(users)) {
+    const msg = (users && users.error) || 'Impossible de charger la liste des utilisateurs.';
+    c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">⚠ ${escH(msg)}</div>`;
+    return;
+  }
+  if (users.length === 0) {
     c.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">Aucun utilisateur.</div>';
     return;
   }

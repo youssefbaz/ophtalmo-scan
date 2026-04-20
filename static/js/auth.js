@@ -34,7 +34,7 @@ function _showConsentScreen() {
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:22px;max-height:52vh;overflow-y:auto;padding-right:4px">
         ${_CONSENT_ITEMS.map(c => `
           <label style="display:flex;gap:12px;align-items:flex-start;cursor:${c.required ? 'default' : 'pointer'};background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-            <input type="checkbox" id="consent_${c.key}" ${c.required ? 'checked disabled' : ''} style="margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--teal)">
+            <input type="checkbox" id="consent_${c.key}" checked ${c.required ? 'disabled' : ''} style="margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--teal)">
             <div style="flex:1">
               <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 ${c.label}
@@ -44,9 +44,14 @@ function _showConsentScreen() {
             </div>
           </label>`).join('')}
       </div>
-      <button class="btn btn-primary" style="width:100%;font-size:14px;padding:12px" onclick="submitConsent()">
-        J'accepte et j'accède à mon espace →
-      </button>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" style="width:100%;font-size:14px;padding:12px" onclick="acceptAllConsents()">
+          ✓ Accepter tout et accéder à mon espace
+        </button>
+        <button class="btn btn-ghost" style="width:100%;font-size:13px;padding:10px" onclick="submitConsent()">
+          Valider ma sélection
+        </button>
+      </div>
     </div>`;
   document.getElementById('loginScreen').style.display = 'flex';
 }
@@ -60,6 +65,15 @@ async function submitConsent() {
     if (el && el.checked) await api('/api/consent/grant', 'POST', { patient_id: pid, consent_type: c.key });
   }
   _launchApp();
+}
+
+function acceptAllConsents() {
+  // Force-tick every optional checkbox the patient may have unchecked, then submit.
+  for (const c of _CONSENT_ITEMS) {
+    const el = document.getElementById(`consent_${c.key}`);
+    if (el) el.checked = true;
+  }
+  return submitConsent();
 }
 
 const DEMO = {
