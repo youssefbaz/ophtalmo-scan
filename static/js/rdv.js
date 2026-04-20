@@ -79,6 +79,7 @@ function clearRdvDoctorSelection() {
 }
 
 function openAddRdvPatient() {
+  const todayIso = new Date().toISOString().slice(0,10);
   document.getElementById('modalRdvTitle').textContent = 'Demander un rendez-vous';
   document.getElementById('modalRdvContent').innerHTML = `
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Votre demande sera envoyée au médecin pour validation.</div>
@@ -87,7 +88,7 @@ function openAddRdvPatient() {
       <input class="input" id="rdvType" placeholder="Ex: Baisse de vision, contrôle, irritation...">
     </div>
     <div class="form-row">
-      <div><label class="lbl">Date souhaitée</label><input type="date" class="input" id="rdvDate"></div>
+      <div><label class="lbl">Date souhaitée</label><input type="date" class="input" id="rdvDate" min="${todayIso}" value="${todayIso}"></div>
       <div><label class="lbl">Heure souhaitée</label><input type="time" class="input" id="rdvHeure" value="09:00"></div>
     </div>
     <div class="form-full"><label class="lbl">Message (optionnel)</label><textarea class="input" id="rdvNotes" rows="2" placeholder="Décrivez brièvement votre problème..."></textarea></div>
@@ -99,6 +100,7 @@ function openAddRdvPatient() {
 }
 
 function openRdvUrgent() {
+  const todayIso = new Date().toISOString().slice(0,10);
   document.getElementById('modalRdvTitle').textContent = '🚨 Demande de RDV Urgent';
   document.getElementById('modalRdvContent').innerHTML = `
     <div style="background:var(--color-red-bg);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--color-red)">
@@ -109,7 +111,7 @@ function openRdvUrgent() {
       <input class="input" id="rdvType" placeholder="Ex: Douleur oculaire intense, baisse vision soudaine...">
     </div>
     <div class="form-row">
-      <div><label class="lbl">Date</label><input type="date" class="input" id="rdvDate"></div>
+      <div><label class="lbl">Date</label><input type="date" class="input" id="rdvDate" min="${todayIso}" value="${todayIso}"></div>
       <div><label class="lbl">Heure</label><input type="time" class="input" id="rdvHeure" value="08:00"></div>
     </div>
     <div class="form-full"><label class="lbl">Description</label><textarea class="input" id="rdvNotes" rows="3" placeholder="Décrivez vos symptômes en détail..."></textarea></div>
@@ -126,6 +128,11 @@ async function submitRdv(urgent) {
   const medecinNom = document.getElementById('rdvMedecin')?.value || '';
   if (USER.role === 'patient' && !medecinId) {
     alert('Veuillez sélectionner un médecin.');
+    return;
+  }
+  const rdvDateVal = document.getElementById('rdvDate').value;
+  if (USER.role === 'patient' && rdvDateVal && rdvDateVal < new Date().toISOString().slice(0,10)) {
+    alert('La date doit être aujourd\'hui ou ultérieure.');
     return;
   }
   const payload = {

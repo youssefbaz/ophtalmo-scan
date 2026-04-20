@@ -240,30 +240,26 @@ def upload_document(pid):
         if raw_image and mime is None:
             return jsonify({"error": "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP, PDF, DICOM."}), 400
 
-    # Patients must direct the upload to one of their doctors, otherwise the
-    # document would be orphaned and no médecin would ever see it.
-    if u['role'] == 'patient' and not target_mid:
-        fallback = db.execute(
-            "SELECT medecin_id FROM patients WHERE id=?", (pid,)
-        ).fetchone()
-        target_mid = (fallback['medecin_id'] if fallback else '') or ''
-        if not target_mid:
-            linked = db.execute(
-                "SELECT medecin_id FROM patient_doctors WHERE patient_id=? LIMIT 1", (pid,)
+    # Patients can always send a document, but only to a doctor actually linked
+    # to them. If the supplied medecin_id is missing or doesn't belong to one of
+    # the patient's doctors, silently fall back to the primary medecin or the
+    # first linked doctor. This keeps the upload working while preventing a
+    # crafted request from delivering a notification to an unrelated doctor.
+    if u['role'] == 'patient':
+        if not target_mid or not medecin_can_access_patient(db, target_mid, pid):
+            fallback = db.execute(
+                "SELECT medecin_id FROM patients WHERE id=?", (pid,)
             ).fetchone()
-            target_mid = linked['medecin_id'] if linked else ''
-    if u['role'] == 'patient' and not target_mid:
-        return jsonify({
-            "error": "Aucun médecin associé à votre compte. Prenez d'abord un rendez-vous pour pouvoir envoyer un document."
-        }), 400
-
-    # Block the patient from sending a document — and a notification — to a
-    # doctor who isn't actually linked to them. Without this check, a crafted
-    # request body could push a notification into any doctor's inbox.
-    if u['role'] == 'patient' and not medecin_can_access_patient(db, target_mid, pid):
-        return jsonify({
-            "error": "Ce médecin ne fait pas partie de vos médecins traitants."
-        }), 403
+            target_mid = (fallback['medecin_id'] if fallback else '') or ''
+            if not target_mid:
+                linked = db.execute(
+                    "SELECT medecin_id FROM patient_doctors WHERE patient_id=? LIMIT 1", (pid,)
+                ).fetchone()
+                target_mid = linked['medecin_id'] if linked else ''
+        if not target_mid:
+            return jsonify({
+                "error": "Aucun médecin associé à votre compte. Prenez d'abord un rendez-vous pour pouvoir envoyer un document."
+            }), 400
 
     # Save file to encrypted storage on disk. Storage format is base64 (legacy
     # — _load_image_b64 expects it) so multipart payloads get re-encoded here.
