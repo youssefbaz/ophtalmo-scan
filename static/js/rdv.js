@@ -314,21 +314,17 @@ function _prepareUpload(file) {
   }
 }
 
-// Downscale large images in the browser before base64-encoding so we stay
-// under the server's 25 MB cap (and any reverse-proxy limits like nginx 10 MB).
-// PDFs and already-small images pass through unchanged.
-async function _prepareUploadPayload(file) {
+// Downscale large raster images in the browser to keep uploads snappy. The
+// server still accepts the full file via multipart, so DICOM/PDF/large scans
+// are passed through unchanged as Blobs.
+async function _prepareUploadBlob(file) {
   const MAX_DIM = 1800;           // max width/height in px
   const JPEG_QUALITY = 0.82;
   const SKIP_BELOW_BYTES = 1024 * 1024;  // <1 MB — don't bother re-encoding
 
+  // Non-images (PDF, DICOM) and already-small images: send the original bytes.
   if (!file.type.startsWith('image/') || file.size < SKIP_BELOW_BYTES) {
-    return new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload  = () => res(fr.result.split(',')[1]);
-      fr.onerror = () => rej(new Error('read_failed'));
-      fr.readAsDataURL(file);
-    });
+    return file;
   }
 
   const dataUrl = await new Promise((res, rej) => {
@@ -357,8 +353,7 @@ async function _prepareUploadPayload(file) {
   ctx.fillStyle = '#fff';   // flatten transparency for JPEG
   ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0, w, h);
-  const outUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-  return outUrl.split(',')[1];
+  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
 }
 
 async function _doUploadFile(file, type, medecinId) {
@@ -370,9 +365,9 @@ async function _doUploadFile(file, type, medecinId) {
   if (zone)   zone.style.opacity = '0.5';
   if (progWrap) progWrap.style.display = '';
 
-  let b64;
+  let blob;
   try {
-    b64 = await _prepareUploadPayload(file);
+    blob = await _prepareUploadBlob(file);
   } catch (err) {
     if (progWrap) progWrap.style.display = 'none';
     if (zone) zone.style.opacity = '1';
@@ -385,11 +380,11 @@ async function _doUploadFile(file, type, medecinId) {
       const pid = USER.patient_id;
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/patients/${pid}/upload`);
-      xhr.setRequestHeader('Content-Type', 'application/json');
+      // No Content-Type — XHR sets the multipart boundary itself.
       xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
       xhr.withCredentials = true;
-      // 60 s cap — never let the UI sit on "Envoi en cours" forever.
-      xhr.timeout = 60000;
+      // 5 min cap — large DICOM/OCT exports on slow connections need more than 60 s.
+      xhr.timeout = 300000;
       const _resetUI = () => {
         if (progWrap) progWrap.style.display = 'none';
         if (zone)     zone.style.opacity = '1';
@@ -422,7 +417,13 @@ async function _doUploadFile(file, type, medecinId) {
       xhr.onerror   = () => { _resetUI(); showToast("Erreur réseau lors de l'envoi.", 'error'); resolve(); };
       xhr.ontimeout = () => { _resetUI(); showToast("L'envoi a pris trop de temps — réessayez avec un fichier plus petit.", 'error'); resolve(); };
       xhr.onabort   = () => { _resetUI(); resolve(); };
-      xhr.send(JSON.stringify({ image: b64, type, description: file.name, source: 'document', medecin_id: medecinId || '' }));
+      const fd = new FormData();
+      fd.append('file', blob, file.name);
+      fd.append('type', type);
+      fd.append('description', file.name);
+      fd.append('source', 'document');
+      fd.append('medecin_id', medecinId || '');
+      xhr.send(fd);
   });
 }
 

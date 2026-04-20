@@ -39,14 +39,26 @@ def _load_image_b64(doc: dict) -> str:
     return doc.get('image_b64') or ''
 
 
-_ALLOWED_UPLOAD_MAGIC: list[tuple[bytes, str]] = [
-    (b'\xff\xd8\xff',      'image/jpeg'),
-    (b'\x89PNG\r\n\x1a\n', 'image/png'),
-    (b'GIF87a',            'image/gif'),
-    (b'GIF89a',            'image/gif'),
-    (b'%PDF-',             'application/pdf'),
-    (b'RIFF',              'image/webp'),   # WebP starts with RIFF....WEBP
+# (magic_bytes, mime, offset). DICOM has a 128-byte preamble before its "DICM" tag.
+_ALLOWED_UPLOAD_MAGIC: list[tuple[bytes, str, int]] = [
+    (b'\xff\xd8\xff',      'image/jpeg',       0),
+    (b'\x89PNG\r\n\x1a\n', 'image/png',        0),
+    (b'GIF87a',            'image/gif',        0),
+    (b'GIF89a',            'image/gif',        0),
+    (b'%PDF-',             'application/pdf',  0),
+    (b'RIFF',              'image/webp',       0),   # WebP starts with RIFF....WEBP
+    (b'DICM',              'application/dicom', 128),
 ]
+
+
+def _detect_mime_bytes(raw: bytes) -> str | None:
+    """Return the detected MIME type from the leading bytes of a file."""
+    for magic, mime, off in _ALLOWED_UPLOAD_MAGIC:
+        if raw[off:off + len(magic)] == magic:
+            if mime == 'image/webp' and raw[8:12] != b'WEBP':
+                continue
+            return mime
+    return None
 
 
 def _detect_upload_mime(image_b64: str) -> str | None:
@@ -54,14 +66,9 @@ def _detect_upload_mime(image_b64: str) -> str | None:
     if not image_b64:
         return None
     try:
-        raw = base64.b64decode(image_b64[:64])
-        for magic, mime in _ALLOWED_UPLOAD_MAGIC:
-            if raw.startswith(magic):
-                # WebP needs an extra check for the WEBP tag at offset 8
-                if mime == 'image/webp' and raw[8:12] != b'WEBP':
-                    continue
-                return mime
-        return None
+        # 256 base64 chars ≈ 192 raw bytes — enough for the DICOM preamble + tag.
+        raw = base64.b64decode(image_b64[:256])
+        return _detect_mime_bytes(raw)
     except Exception:
         return None
 
@@ -196,7 +203,16 @@ def upload_document(pid):
         return jsonify({"error": "Patient non trouvé"}), 404
     p = decrypt_patient(dict(_p))
 
-    data       = request.json or {}
+    # Two upload paths: multipart (binary, no base64 inflation — used for big
+    # OCT/DICOM scans) and legacy JSON+base64. Pick whichever the client sent.
+    multipart = (request.content_type or '').startswith('multipart/')
+    if multipart:
+        data = request.form
+        upload_file = request.files.get('file')
+    else:
+        data = request.json or {}
+        upload_file = None
+
     doc_id     = "DOC" + str(uuid.uuid4())[:6].upper()
     doc_type   = data.get('type', 'Document')
     source     = 'imagerie' if u['role'] != 'patient' else 'document'
@@ -206,11 +222,23 @@ def upload_document(pid):
     if u['role'] == 'medecin':
         target_mid = u['id']
 
-    # Validate and compress image before storing
-    raw_image = data.get('image', '') or ''
-    mime = _detect_upload_mime(raw_image) if raw_image else None
-    if raw_image and mime is None:
-        return jsonify({"error": "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP, PDF."}), 400
+    # Validate before storing. For multipart we sniff raw bytes; for JSON we
+    # decode base64 and sniff. Either way, only whitelisted formats pass.
+    raw_image = ''  # base64 string we will hand to _save_image_file below
+    raw_bytes: bytes | None = None
+    mime: str | None = None
+    if multipart and upload_file and upload_file.filename:
+        head = upload_file.stream.read(256)
+        mime = _detect_mime_bytes(head)
+        if mime is None:
+            return jsonify({"error": "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP, PDF, DICOM."}), 400
+        rest = upload_file.stream.read()
+        raw_bytes = head + rest
+    elif not multipart:
+        raw_image = data.get('image', '') or ''
+        mime = _detect_upload_mime(raw_image) if raw_image else None
+        if raw_image and mime is None:
+            return jsonify({"error": "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP, PDF, DICOM."}), 400
 
     # Patients must direct the upload to one of their doctors, otherwise the
     # document would be orphaned and no médecin would ever see it.
@@ -229,10 +257,15 @@ def upload_document(pid):
             "error": "Aucun médecin associé à votre compte. Prenez d'abord un rendez-vous pour pouvoir envoyer un document."
         }), 400
 
-    # Save file to encrypted storage on disk (images compressed, PDFs stored as-is)
+    # Save file to encrypted storage on disk. Storage format is base64 (legacy
+    # — _load_image_b64 expects it) so multipart payloads get re-encoded here.
+    # Compression only runs for raster images; PDFs and DICOMs are stored as-is.
     stored_image_path = ''
+    if raw_bytes is not None:
+        raw_image = base64.b64encode(raw_bytes).decode('ascii')
     if raw_image:
-        payload = raw_image if mime == 'application/pdf' else _compress_image(raw_image)
+        compressible = mime in ('image/jpeg', 'image/png', 'image/gif', 'image/webp')
+        payload = _compress_image(raw_image) if compressible else raw_image
         try:
             stored_image_path = _save_image_file(doc_id, payload)
         except Exception as _ie:
