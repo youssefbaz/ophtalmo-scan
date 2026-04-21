@@ -85,9 +85,13 @@ class TestAnalysisRetry:
     """The background LLM analysis must retry transient failures and only
     give up after exhausting attempts (or immediately on permanent errors)."""
 
-    _PNG_B64 = (
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
-        "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    # Minimal PDF — analyze_document only accepts application/pdf uploads.
+    _PDF_B64 = (
+        "JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8"
+        "PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdl"
+        "L1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgMTAwIDEwMF0+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAw"
+        "MDAwIDY1NTM1IGYKMDAwMDAwMDAwOSAwMDAwMCBuCjAwMDAwMDAwNTIgMDAwMDAgbgowMDAwMDAwMDk4"
+        "IDAwMDAwIG4KdHJhaWxlcjw8L1NpemUgNC9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjE0OAolJUVPRgo="
     )
 
     def _setup_doc_with_consent(self, app, db_path):
@@ -105,7 +109,7 @@ class TestAnalysisRetry:
 
         c = _authed(app, "medecin_a")
         doc_id = c.post("/api/patients/P_A001/upload", json={
-            "type": "Retry test", "image": self._PNG_B64
+            "type": "Retry test", "image": self._PDF_B64
         }).get_json()["id"]
         return c, doc_id
 
