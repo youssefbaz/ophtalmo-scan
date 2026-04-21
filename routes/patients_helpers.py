@@ -48,8 +48,18 @@ def _build_patient(db, pid, strip_images=True):
     if not row:
         return None
     p = decrypt_patient(dict(row))
-    p['antecedents'] = json.loads(p['antecedents'] or '[]')
-    p['allergies']   = json.loads(p['allergies']   or '[]')
+    for _f in ('antecedents', 'allergies'):
+        v = p.get(_f)
+        if isinstance(v, list):
+            continue
+        if not v:
+            p[_f] = []
+            continue
+        try:
+            parsed = json.loads(v)
+            p[_f] = parsed if isinstance(parsed, list) else []
+        except (TypeError, ValueError):
+            p[_f] = []
 
     p['historique_total'] = db.execute(
         "SELECT COUNT(*) FROM historique WHERE patient_id=? AND (deleted IS NULL OR deleted=0)",

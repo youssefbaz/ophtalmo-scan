@@ -113,8 +113,8 @@ async function renderPatientProfile(c, pid) {
             <span class="ph-contact-item">✉ ${patient.email || '—'}</span>
           </div>
           <div class="badges" style="margin-top:10px">
-            ${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')}
-            ${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')}
+            ${(Array.isArray(patient.allergies) ? patient.allergies : []).map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')}
+            ${(Array.isArray(patient.antecedents) ? patient.antecedents : []).map(a=>`<span class="badge badge-teal">${a}</span>`).join('')}
           </div>
         </div>
       </div>
