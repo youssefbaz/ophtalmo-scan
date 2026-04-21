@@ -72,7 +72,16 @@ async function renderPatientProfile(c, pid) {
   window._currentPatient = patient;
   window._currentIVT = ivtData || [];
 
-  const age = new Date().getFullYear() - new Date(patient.ddn).getFullYear();
+  const age = (() => {
+    if (!patient.ddn) return null;
+    const d = new Date(patient.ddn);
+    if (isNaN(d)) return null;
+    const now = new Date();
+    let a = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+    return (a >= 0 && a < 150) ? a : null;
+  })();
   const lastConsult = patient.historique?.[0] || null;
   const today = new Date().toISOString().slice(0,10);
   const nextRdv = (patient.rdv || [])
@@ -100,7 +109,7 @@ async function renderPatientProfile(c, pid) {
         <div class="ph-id-info">
           <div class="patient-fullname">${patient.prenom} ${patient.nom}</div>
           <div class="ph-meta-row">
-            <span class="ph-meta-chip">🎂 ${age} ans · ${fmtDate(patient.ddn)}</span>
+            <span class="ph-meta-chip">🎂 ${age != null ? age + ' ans' : 'âge inconnu'}${patient.ddn ? ' · ' + fmtDate(patient.ddn) : ''}</span>
             <span class="ph-meta-chip">⚧ ${patient.sexe==='F'?'Féminin':'Masculin'}</span>
             ${medecinName ? `<span class="ph-meta-chip">🩺 ${medecinName}</span>` : ''}
             ${patient.date_chirurgie ? `
