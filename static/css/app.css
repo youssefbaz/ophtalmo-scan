@@ -1392,11 +1392,14 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
     z-index: 499;
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: none;
+    padding-top: env(safe-area-inset-top, 0px);
+    box-sizing: border-box;
   }
   .sidebar.mobile-open {
     left: 0;
     box-shadow: 8px 0 48px rgba(0,0,0,0.55);
   }
+  .sidebar-close-btn { top: calc(14px + env(safe-area-inset-top, 0px)); }
 
   .content { padding: 16px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
@@ -1427,7 +1430,6 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
   .topbar-user-name { font-size: 13px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #globalSearchWrap { display: none !important; }
 
-  .sidebar { padding-top: env(safe-area-inset-top, 0px); }
 
   .bottom-nav {
     display: flex;
