@@ -1417,13 +1417,13 @@ body.theme-dark .sidebar-close-btn { border-color: rgba(255,255,255,0.10); color
 /* ── MOBILE (≤600px) ── */
 @media (max-width: 600px) {
   .topbar {
-    padding: env(safe-area-inset-top, 0px) 10px 0;
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top, 0px);
     gap: 8px;
-    height: calc(54px + env(safe-area-inset-top, 0px));
-    min-height: calc(54px + env(safe-area-inset-top, 0px));
-    align-items: flex-end; padding-bottom: 0;
+    height: 54px; min-height: 54px;
+    box-sizing: content-box;
+    align-items: center;
   }
-  .topbar > * { margin-bottom: 0; align-self: center; }
   .topbar-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
   .topbar-user { padding: 6px 10px; gap: 6px; }
   .topbar-user-role { display: none; }
