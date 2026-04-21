@@ -423,6 +423,11 @@ async function doResetPassword() {
 async function doLogout() {
   await api('/logout','POST');
   USER = null; currentPatientId = null;
+  currentView = null; _viewHistory = [];
+  MEDECINS = []; aiContext = ''; aiContextPid = '';
+  const mc = document.getElementById('mainContent'); if (mc) mc.innerHTML = '';
+  const sn = document.getElementById('sidebarNav'); if (sn) sn.innerHTML = '';
+  const bn = document.getElementById('bottomNav'); if (bn) bn.innerHTML = '';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display = 'none';
   showAuthPanel('login');
