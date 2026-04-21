@@ -192,6 +192,22 @@ function goBack() {
 
 function showView(viewId, title, _fromBack) {
   closeMobileSidebar();
+  if (!USER) return;
+  const role = USER.role;
+  const adminViews = new Set(['admin-dashboard','admin-pending','admin-users','admin-create-medecin','admin-create-patient','admin-patients','admin-trash','admin-security']);
+  const patientViews = new Set(['dashboard-patient','mes-rdv','mes-documents','mes-questions','mes-messages']);
+  const medecinViews = new Set(['dashboard-medecin','today','agenda','questions-medecin','ai-assistant','statistiques','unassigned-patients','patient-profile','liste-patients-anon']);
+  const allowed = (role === 'admin') ? adminViews
+                : (role === 'patient') ? patientViews
+                : medecinViews;
+  const shared = new Set(['settings']);
+  if (!allowed.has(viewId) && !shared.has(viewId)) {
+    _viewHistory = [];
+    viewId = (role === 'admin') ? 'admin-dashboard'
+           : (role === 'patient') ? 'dashboard-patient'
+           : 'dashboard-medecin';
+    _fromBack = false;
+  }
   if (!_fromBack) {
     // Push to history (max 20 entries, avoid duplicate consecutive)
     const last = _viewHistory[_viewHistory.length - 1];
