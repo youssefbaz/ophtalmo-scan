@@ -404,7 +404,7 @@ async function renderListePatientsAnon(c) {
         <div class="anon-info">
           <div style="font-size:13px;color:var(--text)">${p.sexe==='F'?'♀':'♂'} ${p.age} ans</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
-            ${p.antecedents.map(a=>`<span class="badge badge-teal" style="font-size:10px">${a}</span>`).join('')}
+            ${(Array.isArray(p.antecedents) ? p.antecedents : []).map(a=>`<span class="badge badge-teal" style="font-size:10px">${a}</span>`).join('')}
           </div>
         </div>
         <div style="font-size:12px;color:var(--text3);text-align:right">

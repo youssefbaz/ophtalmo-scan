@@ -633,8 +633,8 @@ function printPatientSummary(pid) {
   </table>
 
   <h2>Antécédents & Allergies</h2>
-  <div>${patient.antecedents.map(a=>`<span class="badge badge-teal">${a}</span>`).join('')||'Aucun'}</div>
-  <div style="margin-top:6px">${patient.allergies.map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')||'Aucune allergie connue'}</div>
+  <div>${(Array.isArray(patient.antecedents) ? patient.antecedents : []).map(a=>`<span class="badge badge-teal">${a}</span>`).join('')||'Aucun'}</div>
+  <div style="margin-top:6px">${(Array.isArray(patient.allergies) ? patient.allergies : []).map(a=>`<span class="badge badge-red">⚠ ${a}</span>`).join('')||'Aucune allergie connue'}</div>
 
   <h2>Dernières consultations (${last3.length})</h2>
   ${last3.map(h => _consultRow(h)).join('') || '<p style="color:#888">Aucune consultation</p>'}
