@@ -492,6 +492,67 @@ def _migrate(db):
     except Exception:
         pass
 
+    # conversations table — groups messages between a patient and a doctor into threads
+    try:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id              TEXT PRIMARY KEY,
+                patient_id      TEXT NOT NULL,
+                medecin_id      TEXT NOT NULL,
+                subject         TEXT DEFAULT '',
+                status          TEXT DEFAULT 'open',
+                created_at      TEXT DEFAULT '',
+                last_message_at TEXT DEFAULT '',
+                closed_at       TEXT DEFAULT '',
+                closed_by       TEXT DEFAULT ''
+            )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_conv_patient ON conversations(patient_id, status)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_conv_medecin ON conversations(medecin_id, status)")
+    except Exception:
+        pass
+
+    # New columns on messages for conversations + audio
+    for col, typedef in [
+        ("conversation_id",    "TEXT DEFAULT ''"),
+        ("sender_role",        "TEXT DEFAULT 'medecin'"),
+        ("audio_path",         "TEXT DEFAULT ''"),
+        ("audio_duration_sec", "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE messages ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass
+    try:
+        db.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, date)")
+    except Exception:
+        pass
+
+    # Backfill: any legacy messages rows without a conversation_id get wrapped in a
+    # per (patient, medecin) synthetic conversation so nothing is orphaned.
+    try:
+        orphan_rows = db.execute(
+            "SELECT DISTINCT patient_id, medecin_id FROM messages "
+            "WHERE conversation_id IS NULL OR conversation_id=''"
+        ).fetchall()
+        for r in orphan_rows:
+            pid, mid = r['patient_id'], r['medecin_id']
+            cid = "CONV" + str(uuid.uuid4())[:6].upper()
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            db.execute(
+                "INSERT INTO conversations (id,patient_id,medecin_id,subject,status,created_at,last_message_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (cid, pid, mid, '', 'closed', now, now)
+            )
+            db.execute(
+                "UPDATE messages SET conversation_id=?, sender_role=COALESCE(NULLIF(sender_role,''),'medecin') "
+                "WHERE patient_id=? AND medecin_id=? AND (conversation_id IS NULL OR conversation_id='')",
+                (cid, pid, mid)
+            )
+        if orphan_rows:
+            logger.info("Backfilled %d legacy message group(s) into conversations", len(orphan_rows))
+    except Exception as _be:
+        logger.warning("Conversation backfill skipped: %s", _be)
+
     # Medecin codes
     medecins_without_code = db.execute(
         "SELECT id FROM users WHERE role='medecin' AND (medecin_code IS NULL OR medecin_code='')"

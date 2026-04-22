@@ -413,6 +413,9 @@ async function handleNotifClick(nid, type, pid) {
       }
     } else if (type === 'import') {
       // Nothing specific — stay on current view
+    } else if (type === 'message_patient' && pid) {
+      // Open the conversation modal directly
+      if (typeof openMessageModal === 'function') openMessageModal(pid, '', '');
     } else if (pid) {
       window._pendingTab = tab;
       await loadPatient(pid);
