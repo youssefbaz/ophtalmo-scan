@@ -30,13 +30,14 @@ def init_talisman(app) -> None:
             'font-src':    ["'self'", 'fonts.gstatic.com', 'data:'],
             'img-src':     ["'self'", 'data:', 'blob:'],
             'connect-src': ["'self'"],
+            'media-src':   ["'self'", 'blob:'],
             'frame-ancestors': ["'none'"],
         },
         referrer_policy='strict-origin-when-cross-origin',
         feature_policy={
             'geolocation': "'none'",
             'camera':      "'none'",
-            'microphone':  "'none'",
+            'microphone':  "'self'",
         },
         session_cookie_secure=force_https,
     )
