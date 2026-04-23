@@ -484,25 +484,68 @@ async function toggleDeletedQuestions(pid, btn) {
 }
 
 async function submitQuestion() {
-  const text = document.getElementById('newQuestion').value.trim();
-  if(!text) return;
+  const text = (document.getElementById('newQuestion')?.value || '').trim();
+  const hasAudio = typeof _recorder !== 'undefined' && _recorder.blob;
+  if (!text && !hasAudio) {
+    alert('Écrivez votre question ou enregistrez un audio.');
+    return;
+  }
   const pid = USER.patient_id;
-  const btn = document.querySelector('#newQuestion + button') || document.querySelector('[onclick="submitQuestion()"]');
-  if(btn) { btn.disabled = true; btn.textContent = '⏳ Envoi...'; }
-  const res = await api(`/api/patients/${pid}/questions`,'POST',{question:text});
-  if(res.ok) {
+  const btn = document.querySelector('[onclick="submitQuestion()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi...'; }
+
+  let res;
+  if (hasAudio) {
+    const fd = new FormData();
+    if (text) fd.append('question', text);
+    fd.append('audio', _recorder.blob, 'question.webm');
+    fd.append('audio_duration_sec', String(_recorder.durationSec || 0));
+    try {
+      const r = await fetch(`/api/patients/${pid}/questions`, {
+        method: 'POST', body: fd, credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      res = await r.json();
+    } catch (e) { res = { error: e.message }; }
+  } else {
+    res = await api(`/api/patients/${pid}/questions`, 'POST', { question: text });
+  }
+
+  if (res.ok) {
     document.getElementById('newQuestion').value = '';
+    if (typeof _resetRecorder === 'function') _resetRecorder();
     showView('mes-questions');
   } else {
     alert('Erreur: ' + (res.error || 'inconnue'));
   }
-  if(btn) { btn.disabled = false; btn.textContent = 'Envoyer ma question →'; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Envoyer ma question →'; }
 }
 
 async function sendReponse(pid, qid) {
-  const rep = document.getElementById('rep-'+qid)?.value;
-  const res = await api(`/api/patients/${pid}/questions/${qid}/repondre`,'POST',{reponse:rep});
-  if(res.ok) { showView(currentView); }
+  const rep = (document.getElementById('rep-'+qid)?.value || '').trim();
+  const hasAudio = typeof _recorder !== 'undefined' && _recorder.blob;
+  let res;
+  if (hasAudio) {
+    const fd = new FormData();
+    if (rep) fd.append('reponse', rep);
+    fd.append('audio', _recorder.blob, 'reponse.webm');
+    fd.append('audio_duration_sec', String(_recorder.durationSec || 0));
+    try {
+      const r = await fetch(`/api/patients/${pid}/questions/${qid}/repondre`, {
+        method: 'POST', body: fd, credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      res = await r.json();
+    } catch (e) { res = { error: e.message }; }
+  } else {
+    res = await api(`/api/patients/${pid}/questions/${qid}/repondre`, 'POST', { reponse: rep });
+  }
+  if (res.ok) {
+    if (typeof _resetRecorder === 'function') _resetRecorder();
+    showView(currentView);
+  } else {
+    alert('Erreur: ' + (res.error || 'inconnue'));
+  }
 }
 
 async function sendReponseIA(pid, qid) {

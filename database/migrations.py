@@ -492,6 +492,18 @@ def _migrate(db):
     except Exception:
         pass
 
+    # Audio columns on questions (patient question audio + doctor response audio)
+    for col, typedef in [
+        ("question_audio_path",     "TEXT DEFAULT ''"),
+        ("question_audio_duration", "INTEGER DEFAULT 0"),
+        ("reponse_audio_path",      "TEXT DEFAULT ''"),
+        ("reponse_audio_duration",  "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE questions ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass
+
     # conversations table — groups messages between a patient and a doctor into threads
     try:
         db.execute("""

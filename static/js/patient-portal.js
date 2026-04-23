@@ -193,32 +193,75 @@ async function deletePatientDoc(pid, docId, btn) {
 
 // ─── MES QUESTIONS (PATIENT) ──────────────────────────────────────────────────
 async function renderMesQuestions(c) {
+  _resetRecorder();
   const pid = USER.patient_id;
   const questions = await api(`/api/patients/${pid}/questions`);
-  
+
   c.innerHTML = `
     <div style="margin-bottom:18px">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Posez une question à votre médecin. Vous recevrez une réponse dès que possible.</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Posez une question à votre médecin. Vous pouvez écrire un message ou enregistrer un audio.</div>
       <div class="card">
         <label class="lbl">Votre question</label>
         <textarea class="input" id="newQuestion" placeholder="Ex: Est-ce que je dois continuer mes gouttes les jours suivants l'opération ?" rows="3"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" id="audioRecBtn" onclick="_toggleRecord()">🎤 Enregistrer</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="audioStopBtn" style="display:none;color:var(--red)" onclick="_stopRecording()">⏹ Arrêter</button>
+          <span id="audioStatus" style="font-size:12px;color:var(--text2)"></span>
+          <span id="audioTimer"  style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+        </div>
+        <div id="audioPreview" style="display:none;margin-top:8px"></div>
         <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="submitQuestion()">Envoyer ma question →</button>
       </div>
     </div>
     <div class="section-title">Mes questions</div>
     <div id="questionsListPatient">
-      ${questions.length?questions.map(q=>`
-        <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}">
-          <div class="q-text">❓ ${q.question}</div>
-          <div class="q-date">${q.date}</div>
-          ${q.statut==='répondu'?
-            `<div style="margin-top:10px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:12px;font-size:13px;color:var(--text)">
-              <div style="font-size:10px;color:var(--teal2);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px">✅ Réponse du médecin</div>
-              ${q.reponse}
-             </div>`:
-            `<div style="margin-top:8px"><span class="badge badge-amber">⏳ En attente de réponse</span></div>`}
-        </div>
-      `).join(''):'<div style="color:var(--text3);text-align:center;padding:20px">Aucune question pour le moment</div>'}
+      ${questions.length ? questions.map(q => _patientQuestionCard(pid, q)).join('')
+        : '<div style="color:var(--text3);text-align:center;padding:20px">Aucune question pour le moment</div>'}
     </div>`;
+}
+
+function _patientQuestionCard(pid, q) {
+  const qAudio = q.has_question_audio
+    ? `<audio controls preload="none" src="/api/questions/${q.id}/audio/question" style="display:block;margin-top:6px;max-width:320px;height:32px"></audio>`
+    : '';
+  const rAudio = q.has_reponse_audio
+    ? `<audio controls preload="none" src="/api/questions/${q.id}/audio/reponse" style="display:block;margin-top:6px;max-width:320px;height:32px"></audio>`
+    : '';
+  const pendingActions = q.statut === 'en_attente'
+    ? `<div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+         <span class="badge badge-amber">⏳ En attente de réponse</span>
+         <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto"
+           onclick="deletePatientQuestion('${pid}','${q.id}',this)" title="Supprimer">🗑</button>
+       </div>`
+    : '';
+  const answered = q.statut === 'répondu'
+    ? `<div style="margin-top:10px;background:var(--teal-dim);border:1px solid rgba(14,165,160,0.2);border-radius:10px;padding:12px;font-size:13px;color:var(--text)">
+         <div style="font-size:10px;color:var(--teal2);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px">✅ Réponse du médecin</div>
+         ${q.reponse ? escH(q.reponse) : (q.has_reponse_audio ? '🎤 Message vocal' : '')}
+         ${rAudio}
+       </div>`
+    : '';
+  return `
+    <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}" id="qcard-${q.id}">
+      <div class="q-text">❓ ${q.question ? escH(q.question) : (q.has_question_audio ? '🎤 Question vocale' : '')}</div>
+      ${qAudio}
+      <div class="q-date">${q.date}</div>
+      ${pendingActions}
+      ${answered}
+    </div>`;
+}
+
+async function deletePatientQuestion(pid, qid, btn) {
+  if (!confirm('Supprimer cette question ?')) return;
+  btn.disabled = true;
+  const res = await api(`/api/patients/${pid}/questions/${qid}`, 'DELETE');
+  if (res.ok) {
+    const card = document.getElementById(`qcard-${qid}`);
+    if (card) card.remove();
+    showToast('Question supprimée', 'info');
+  } else {
+    showToast(res.error || 'Erreur', 'error');
+    btn.disabled = false;
+  }
 }
 

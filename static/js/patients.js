@@ -592,12 +592,20 @@ async function viewDocImage(pid, docId, type) {
 
 function renderQuestionsPanel(questions, pid) {
   if (!questions.length) return '<div style="color:var(--text3);text-align:center;padding:30px">Aucune question</div>';
-  return questions.map(q=>`
+  return questions.map(q=>{
+    const qAudio = q.has_question_audio
+      ? `<audio controls preload="none" src="/api/questions/${q.id}/audio/question" style="display:block;margin-top:6px;max-width:320px;height:32px"></audio>`
+      : '';
+    const rAudio = q.has_reponse_audio
+      ? `<audio controls preload="none" src="/api/questions/${q.id}/audio/reponse" style="display:block;margin-top:6px;max-width:320px;height:32px"></audio>`
+      : '';
+    return `
     <div class="question-card ${q.statut==='en_attente'?'pending':'answered'}" id="qcard-${q.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div class="q-text">❓ ${q.question}</div>
+        <div class="q-text">❓ ${q.question ? q.question : (q.has_question_audio ? '🎤 Question vocale' : '')}</div>
         <span class="badge ${q.statut==='en_attente'?'badge-amber':'badge-green'}">${q.statut}</span>
       </div>
+      ${qAudio}
       <div class="q-date">${q.date}</div>
       ${q.reponse_ia?`
         <div class="ai-draft">
@@ -606,19 +614,29 @@ function renderQuestionsPanel(questions, pid) {
         </div>` : ''}
       ${q.statut==='en_attente'?`
         <div class="answer-area">
-          <label class="lbl">Votre réponse (modifiez si nécessaire)</label>
+          <label class="lbl">Votre réponse (texte et/ou audio)</label>
           <textarea class="input" id="rep-${q.id}" rows="3">${q.reponse_ia||''}</textarea>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-ghost btn-sm" id="audioRecBtn" onclick="_toggleRecord()">🎤 Enregistrer</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="audioStopBtn" style="display:none;color:var(--red)" onclick="_stopRecording()">⏹ Arrêter</button>
+            <span id="audioStatus" style="font-size:12px;color:var(--text2)"></span>
+            <span id="audioTimer"  style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+          </div>
+          <div id="audioPreview" style="display:none;margin-top:8px"></div>
           <div style="margin-top:8px;display:flex;gap:8px">
             <button class="btn btn-primary btn-sm" onclick="sendReponse('${pid}','${q.id}')">✓ Envoyer réponse</button>
             <button class="btn btn-ghost btn-sm" onclick="sendReponseIA('${pid}','${q.id}')">✓ Valider réponse IA</button>
           </div>
         </div>` :
         `<div style="margin-top:10px;display:flex;align-items:flex-start;gap:8px">
-          <div style="flex:1;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text2)">✅ ${q.reponse||'—'}</div>
+          <div style="flex:1;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text2)">
+            ✅ ${q.reponse || (q.has_reponse_audio ? '🎤 Message vocal' : '—')}
+            ${rAudio}
+          </div>
           <button class="btn btn-ghost btn-sm" style="color:var(--red);flex-shrink:0" title="Archiver (conservé en historique)" onclick="softDeleteQuestion('${pid}','${q.id}',this)">🗑</button>
         </div>`}
     </div>
-  `).join('')
+  `;}).join('')
   + `<div style="margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="toggleDeletedQuestions('${pid}',this)" style="opacity:.6">
         🗂 Voir l'historique des questions archivées
