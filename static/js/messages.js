@@ -9,10 +9,30 @@ const _recorder = {
 };
 
 async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
+  const secure = window.isSecureContext || ['localhost','127.0.0.1','[::1]'].includes(location.hostname);
+  if (!secure) {
+    showToast("Microphone bloqué : ouvrez l'application en HTTPS ou via http://localhost pour enregistrer.", 'error', 7000);
+    return false;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast("Votre navigateur ne permet pas l'enregistrement audio.", 'error');
+    return false;
+  }
   try {
     _recorder.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
-    showToast("Microphone indisponible : " + (e?.message || e), 'error');
+    const name = e && e.name;
+    let msg = "Microphone indisponible.";
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      msg = "Permission refusée. Cliquez sur l'icône 🔒 à gauche de l'URL puis autorisez le microphone, et rechargez la page.";
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      msg = "Aucun microphone détecté sur cet appareil.";
+    } else if (name === 'NotReadableError') {
+      msg = "Microphone déjà utilisé par une autre application.";
+    } else if (e?.message) {
+      msg = "Microphone indisponible : " + e.message;
+    }
+    showToast(msg, 'error', 7000);
     return false;
   }
   let mime = '';
