@@ -39,6 +39,11 @@ def init_talisman(app) -> None:
             'camera':      "'none'",
             'microphone':  "'self'",
         },
+        permissions_policy={
+            'geolocation': '()',
+            'camera':      '()',
+            'microphone':  '(self)',
+        },
         session_cookie_secure=force_https,
     )
     logger.info("Talisman initialised (force_https=%s)", force_https)

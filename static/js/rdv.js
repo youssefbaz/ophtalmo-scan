@@ -498,7 +498,9 @@ async function submitQuestion() {
   if (hasAudio) {
     const fd = new FormData();
     if (text) fd.append('question', text);
-    fd.append('audio', _recorder.blob, 'question.webm');
+    const qExt = (_recorder.blob.type || '').includes('mp4') ? 'm4a'
+               : (_recorder.blob.type || '').includes('ogg') ? 'ogg' : 'webm';
+    fd.append('audio', _recorder.blob, `question.${qExt}`);
     fd.append('audio_duration_sec', String(_recorder.durationSec || 0));
     try {
       const r = await fetch(`/api/patients/${pid}/questions`, {
@@ -528,7 +530,9 @@ async function sendReponse(pid, qid) {
   if (hasAudio) {
     const fd = new FormData();
     if (rep) fd.append('reponse', rep);
-    fd.append('audio', _recorder.blob, 'reponse.webm');
+    const rExt = (_recorder.blob.type || '').includes('mp4') ? 'm4a'
+               : (_recorder.blob.type || '').includes('ogg') ? 'ogg' : 'webm';
+    fd.append('audio', _recorder.blob, `reponse.${rExt}`);
     fd.append('audio_duration_sec', String(_recorder.durationSec || 0));
     try {
       const r = await fetch(`/api/patients/${pid}/questions/${qid}/repondre`, {
