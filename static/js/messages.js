@@ -141,7 +141,10 @@ async function _postMessageWithPayload(url, contenu, rdvId, extra = {}) {
     const fd = new FormData();
     if (contenu) fd.append('contenu', contenu);
     if (rdvId)   fd.append('rdv_id', rdvId);
-    fd.append('audio', _recorder.blob, 'message.webm');
+    const ext = (_recorder.blob.type || '').includes('mp4') ? 'm4a'
+              : (_recorder.blob.type || '').includes('ogg') ? 'ogg'
+              : 'webm';
+    fd.append('audio', _recorder.blob, `message.${ext}`);
     fd.append('audio_duration_sec', String(_recorder.durationSec || 0));
     for (const [k, v] of Object.entries(extra)) fd.append(k, String(v));
     try {

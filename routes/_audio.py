@@ -20,6 +20,8 @@ _ALLOWED_AUDIO_MAGIC = [
     (b'\xff\xfb',       'audio/mpeg', 0),
     (b'\xff\xf3',       'audio/mpeg', 0),
     (b'\xff\xf2',       'audio/mpeg', 0),
+    # iOS Safari MediaRecorder outputs audio/mp4 (ISO BMFF: "ftyp" at offset 4)
+    (b'ftyp',           'audio/mp4',  4),
 ]
 
 
