@@ -24,7 +24,7 @@ async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
     const name = e && e.name;
     let msg = "Microphone indisponible.";
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      msg = "Permission refusée. Cliquez sur l'icône 🔒 à gauche de l'URL puis autorisez le microphone, et rechargez la page.";
+      msg = "Microphone bloqué. Sur mobile : touchez la barre d'adresse → icône réglages → Microphone → Autoriser, puis rechargez. Sur ordinateur : cliquez l'icône 🔒 à gauche de l'URL.";
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
       msg = "Aucun microphone détecté sur cet appareil.";
     } else if (name === 'NotReadableError') {
