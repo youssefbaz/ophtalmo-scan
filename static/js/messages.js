@@ -8,7 +8,44 @@ const _recorder = {
   blob: null, url: null, timerId: null, durationSec: 0,
 };
 
+function _detectIosContext() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.navigator.standalone === true ||
+                       window.matchMedia('(display-mode: standalone)').matches;
+  const isInAppBrowser = /FBAN|FBAV|Instagram|Line|Twitter|LinkedInApp|MicroMessenger|TikTok/i.test(ua);
+  const isChromeIOS = /CriOS/.test(ua);
+  const isFirefoxIOS = /FxiOS/.test(ua);
+  const isEdgeIOS = /EdgiOS/.test(ua);
+  const isSafari = /Safari/.test(ua) && !isChromeIOS && !isFirefoxIOS && !isEdgeIOS;
+  let browserName = 'Safari';
+  if (isChromeIOS) browserName = 'Chrome';
+  else if (isFirefoxIOS) browserName = 'Firefox';
+  else if (isEdgeIOS) browserName = 'Edge';
+  // Best-effort private/incognito detection on iOS WKWebView: storage quota is
+  // dramatically lower in private mode. Returns a Promise<boolean>.
+  const isLikelyPrivate = async () => {
+    if (!isIOS || !navigator.storage || !navigator.storage.estimate) return false;
+    try {
+      const { quota } = await navigator.storage.estimate();
+      return typeof quota === 'number' && quota < 120 * 1024 * 1024;
+    } catch { return false; }
+  };
+  return { isIOS, isStandalone, isInAppBrowser, isSafari, isChromeIOS, isFirefoxIOS, isEdgeIOS, browserName, isLikelyPrivate };
+}
+
 async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
+  const ctx = _detectIosContext();
+
+  if (ctx.isIOS && ctx.isInAppBrowser) {
+    showToast("L'enregistrement audio n'est pas autorisé dans ce navigateur intégré. Ouvrez le lien dans Safari (menu ⋯ → Ouvrir dans Safari).", 'error', 9000);
+    return false;
+  }
+  if (ctx.isIOS && ctx.isStandalone) {
+    showToast("Sur iOS, l'enregistrement n'est disponible qu'en ouvrant le site dans Safari (pas en mode \"Sur l'écran d'accueil\").", 'error', 9000);
+    return false;
+  }
+
   const secure = window.isSecureContext || ['localhost','127.0.0.1','[::1]'].includes(location.hostname);
   if (!secure) {
     showToast("Microphone bloqué : ouvrez l'application en HTTPS ou via http://localhost pour enregistrer.", 'error', 7000);
@@ -24,7 +61,14 @@ async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
     const name = e && e.name;
     let msg = "Microphone indisponible.";
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      msg = "Microphone bloqué. Sur mobile : touchez la barre d'adresse → icône réglages → Microphone → Autoriser, puis rechargez. Sur ordinateur : cliquez l'icône 🔒 à gauche de l'URL.";
+      const likelyPrivate = await ctx.isLikelyPrivate();
+      if (ctx.isIOS && likelyPrivate) {
+        msg = "Sur iOS, l'enregistrement audio est désactivé en navigation privée. Ouvrez le site dans un onglet normal de " + ctx.browserName + ".";
+      } else if (ctx.isIOS) {
+        msg = "Microphone bloqué sur iOS. Allez dans Réglages iPhone → " + ctx.browserName + " → Microphone → Autoriser. Si la boîte de dialogue ne s'affiche pas, supprimez les données de ce site (Réglages → " + ctx.browserName + " → Effacer les données) puis rechargez. Vérifiez aussi que vous n'êtes pas en navigation privée.";
+      } else {
+        msg = "Microphone bloqué. Sur mobile : touchez la barre d'adresse → icône réglages → Microphone → Autoriser, puis rechargez. Sur ordinateur : cliquez l'icône 🔒 à gauche de l'URL.";
+      }
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
       msg = "Aucun microphone détecté sur cet appareil.";
     } else if (name === 'NotReadableError') {
@@ -32,7 +76,7 @@ async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
     } else if (e?.message) {
       msg = "Microphone indisponible : " + e.message;
     }
-    showToast(msg, 'error', 7000);
+    showToast(msg, 'error', 10000);
     return false;
   }
   let mime = '';
