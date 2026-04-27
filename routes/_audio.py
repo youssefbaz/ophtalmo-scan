@@ -1,9 +1,15 @@
 """Shared audio upload + storage helpers for message / question voice recordings."""
 import os
 import base64
+import datetime
+import logging
 from flask import request
 
 from security_utils import encrypt_field, decrypt_field
+
+logger = logging.getLogger(__name__)
+
+AUDIO_RETENTION_DAYS = 92
 
 
 AUDIO_ROOT = os.path.join(
@@ -69,3 +75,88 @@ def read_audio_from_request(field: str = 'audio', duration_field: str = 'audio_d
         duration = 0
     duration = max(0, min(duration, AUDIO_MAX_SECONDS))
     return raw, duration, None
+
+
+def _unlink_safe(path: str) -> bool:
+    if not path:
+        return False
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+        return True
+    except OSError as e:
+        logger.warning("Audio prune: failed to remove %s: %s", path, e)
+        return False
+
+
+def prune_old_audio(app, retention_days: int = AUDIO_RETENTION_DAYS) -> dict:
+    """Delete encrypted audio files older than `retention_days` days and clear
+    their DB references. Text content of messages/questions is preserved.
+
+    Compares against the stored creation date of the parent record. The date
+    column is a TEXT timestamp formatted as "YYYY-MM-DD HH:MM:SS.ffffff" — text
+    comparison against the cutoff prefix is correct because the format sorts
+    lexicographically.
+
+    Returns a counters dict; safe to call from the daily scheduler.
+    """
+    from database import get_db
+
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=retention_days)) \
+        .strftime("%Y-%m-%d %H:%M:%S.%f")
+    counters = {"messages": 0, "questions_q": 0, "questions_r": 0, "errors": 0}
+
+    with app.app_context():
+        db = get_db()
+
+        # Messages: single audio_path per row
+        rows = db.execute(
+            "SELECT id, audio_path FROM messages "
+            "WHERE audio_path != '' AND date != '' AND date < ?",
+            (cutoff,)
+        ).fetchall()
+        for row in rows:
+            if _unlink_safe(row['audio_path']):
+                db.execute(
+                    "UPDATE messages SET audio_path='', audio_duration_sec=0 WHERE id=?",
+                    (row['id'],)
+                )
+                counters["messages"] += 1
+            else:
+                counters["errors"] += 1
+
+        # Questions: question audio (uses date) and reponse audio (uses date_reponse)
+        q_rows = db.execute(
+            "SELECT id, question_audio_path FROM questions "
+            "WHERE question_audio_path != '' AND date != '' AND date < ?",
+            (cutoff,)
+        ).fetchall()
+        for row in q_rows:
+            if _unlink_safe(row['question_audio_path']):
+                db.execute(
+                    "UPDATE questions SET question_audio_path='', question_audio_duration=0 WHERE id=?",
+                    (row['id'],)
+                )
+                counters["questions_q"] += 1
+            else:
+                counters["errors"] += 1
+
+        r_rows = db.execute(
+            "SELECT id, reponse_audio_path FROM questions "
+            "WHERE reponse_audio_path != '' AND date_reponse != '' AND date_reponse < ?",
+            (cutoff,)
+        ).fetchall()
+        for row in r_rows:
+            if _unlink_safe(row['reponse_audio_path']):
+                db.execute(
+                    "UPDATE questions SET reponse_audio_path='', reponse_audio_duration=0 WHERE id=?",
+                    (row['id'],)
+                )
+                counters["questions_r"] += 1
+            else:
+                counters["errors"] += 1
+
+        db.commit()
+
+    logger.info("Audio retention prune (>%dd): %s", retention_days, counters)
+    return counters

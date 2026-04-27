@@ -11,6 +11,7 @@ const _recorder = {
 function _detectIosContext() {
   const ua = navigator.userAgent || '';
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
   const isStandalone = window.navigator.standalone === true ||
                        window.matchMedia('(display-mode: standalone)').matches;
   const isInAppBrowser = /FBAN|FBAV|Instagram|Line|Twitter|LinkedInApp|MicroMessenger|TikTok/i.test(ua);
@@ -22,6 +23,9 @@ function _detectIosContext() {
   if (isChromeIOS) browserName = 'Chrome';
   else if (isFirefoxIOS) browserName = 'Firefox';
   else if (isEdgeIOS) browserName = 'Edge';
+  else if (isAndroid && /Chrome/.test(ua)) browserName = 'Chrome';
+  else if (isAndroid && /Firefox/.test(ua)) browserName = 'Firefox';
+  else if (isAndroid && /SamsungBrowser/.test(ua)) browserName = 'Samsung Internet';
   // Best-effort private/incognito detection on iOS WKWebView: storage quota is
   // dramatically lower in private mode. Returns a Promise<boolean>.
   const isLikelyPrivate = async () => {
@@ -31,52 +35,135 @@ function _detectIosContext() {
       return typeof quota === 'number' && quota < 120 * 1024 * 1024;
     } catch { return false; }
   };
-  return { isIOS, isStandalone, isInAppBrowser, isSafari, isChromeIOS, isFirefoxIOS, isEdgeIOS, browserName, isLikelyPrivate };
+  return { isIOS, isAndroid, isStandalone, isInAppBrowser, isSafari, isChromeIOS, isFirefoxIOS, isEdgeIOS, browserName, isLikelyPrivate };
+}
+
+function _showMicHelpModal(reason) {
+  // reason: 'denied' | 'private' | 'standalone' | 'inapp' | 'insecure' | 'unsupported' | 'notfound' | 'busy' | 'unknown'
+  const ctx = _detectIosContext();
+  const browser = ctx.browserName;
+
+  const iosSteps = `
+    <div style="font-weight:600;margin:12px 0 6px;color:var(--teal2)">📱 Sur iPhone / iPad</div>
+    <ol style="padding-left:20px;line-height:1.7;font-size:13px;color:var(--text2)">
+      <li>Ouvrez l'application <b>Réglages</b> de l'iPhone</li>
+      <li>Faites défiler jusqu'à <b>${browser}</b> et tapez dessus</li>
+      <li>Tapez sur <b>Microphone</b></li>
+      <li>Choisissez <b>Demander</b> ou <b>Autoriser</b> (pas Refuser)</li>
+      <li>Revenez sur la page et <b>rechargez</b> (tirez vers le bas)</li>
+    </ol>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">
+      Si la boîte de dialogue d'autorisation ne s'affiche toujours pas, supprimez les données du site dans
+      <b>Réglages → ${browser}</b>, puis rechargez.
+      L'enregistrement n'est pas disponible en navigation privée ni depuis "Sur l'écran d'accueil".
+    </div>`;
+
+  const androidSteps = `
+    <div style="font-weight:600;margin:12px 0 6px;color:var(--teal2)">🤖 Sur Android</div>
+    <ol style="padding-left:20px;line-height:1.7;font-size:13px;color:var(--text2)">
+      <li>Tapez sur l'icône <b>🔒</b> (ou ⓘ) à gauche de l'adresse du site</li>
+      <li>Tapez sur <b>Autorisations</b> ou <b>Paramètres du site</b></li>
+      <li>Activez <b>Microphone</b> → <b>Autoriser</b></li>
+      <li>Rechargez la page</li>
+    </ol>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">
+      Sinon : <b>Paramètres Android → Applications → ${browser} → Autorisations → Microphone → Autoriser</b>.
+    </div>`;
+
+  let headline = "Microphone bloqué";
+  let lead = "L'enregistrement audio n'est pas autorisé. Suivez les étapes ci-dessous pour activer le microphone, puis réessayez.";
+  if (reason === 'private') {
+    headline = "Navigation privée détectée";
+    lead = "L'enregistrement audio est désactivé en navigation privée. Ouvrez le site dans un onglet normal de " + browser + ".";
+  } else if (reason === 'standalone') {
+    headline = "Mode application détecté";
+    lead = "L'enregistrement audio n'est pas disponible quand le site est lancé depuis l'écran d'accueil. Ouvrez l'URL directement dans " + browser + ".";
+  } else if (reason === 'inapp') {
+    headline = "Navigateur intégré détecté";
+    lead = "Ce navigateur intégré (Instagram, Facebook, etc.) ne permet pas l'enregistrement audio. Ouvrez le lien dans " + (ctx.isIOS ? "Safari" : "Chrome") + " (menu ⋯ → Ouvrir dans le navigateur).";
+  } else if (reason === 'insecure') {
+    headline = "Connexion non sécurisée";
+    lead = "L'enregistrement audio nécessite une connexion HTTPS. Demandez à votre administrateur d'activer HTTPS sur le site.";
+  } else if (reason === 'unsupported') {
+    headline = "Navigateur incompatible";
+    lead = "Votre navigateur ne supporte pas l'enregistrement audio. Essayez avec Safari (iOS) ou Chrome (Android).";
+  } else if (reason === 'notfound') {
+    headline = "Aucun microphone";
+    lead = "Aucun microphone n'a été détecté sur votre appareil.";
+  } else if (reason === 'busy') {
+    headline = "Microphone occupé";
+    lead = "Une autre application utilise déjà le microphone. Fermez-la puis réessayez.";
+  }
+
+  const showSteps = ['denied', 'unknown'].includes(reason);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'micHelpModal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);`;
+  overlay.innerHTML = `
+    <div style="background:var(--bg);color:var(--text);max-width:480px;width:100%;
+                border-radius:16px;border:1px solid var(--border);
+                padding:22px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+                max-height:90dvh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:24px">🎤</div>
+        <div style="font-size:17px;font-weight:700;flex:1">${headline}</div>
+        <button type="button" id="micHelpClose" aria-label="Fermer"
+          style="background:none;border:none;font-size:22px;color:var(--text2);cursor:pointer;width:36px;height:36px">×</button>
+      </div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5">${lead}</div>
+      ${showSteps ? (ctx.isIOS ? iosSteps : ctx.isAndroid ? androidSteps : iosSteps + androidSteps) : ''}
+      <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="micHelpOk" class="btn btn-primary btn-sm">J'ai compris</button>
+      </div>
+    </div>`;
+  const close = () => { try { document.body.removeChild(overlay); } catch {} };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+  document.getElementById('micHelpClose').addEventListener('click', close);
+  document.getElementById('micHelpOk').addEventListener('click', close);
 }
 
 async function _startRecording(statusEl, timerEl, stopBtn, sendBtn) {
   const ctx = _detectIosContext();
 
-  if (ctx.isIOS && ctx.isInAppBrowser) {
-    showToast("L'enregistrement audio n'est pas autorisé dans ce navigateur intégré. Ouvrez le lien dans Safari (menu ⋯ → Ouvrir dans Safari).", 'error', 9000);
+  if (ctx.isInAppBrowser) {
+    _showMicHelpModal('inapp');
     return false;
   }
   if (ctx.isIOS && ctx.isStandalone) {
-    showToast("Sur iOS, l'enregistrement n'est disponible qu'en ouvrant le site dans Safari (pas en mode \"Sur l'écran d'accueil\").", 'error', 9000);
+    _showMicHelpModal('standalone');
     return false;
   }
 
   const secure = window.isSecureContext || ['localhost','127.0.0.1','[::1]'].includes(location.hostname);
   if (!secure) {
-    showToast("Microphone bloqué : ouvrez l'application en HTTPS ou via http://localhost pour enregistrer.", 'error', 7000);
+    _showMicHelpModal('insecure');
     return false;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast("Votre navigateur ne permet pas l'enregistrement audio.", 'error');
+    _showMicHelpModal('unsupported');
     return false;
   }
   try {
     _recorder.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
     const name = e && e.name;
-    let msg = "Microphone indisponible.";
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
       const likelyPrivate = await ctx.isLikelyPrivate();
-      if (ctx.isIOS && likelyPrivate) {
-        msg = "Sur iOS, l'enregistrement audio est désactivé en navigation privée. Ouvrez le site dans un onglet normal de " + ctx.browserName + ".";
-      } else if (ctx.isIOS) {
-        msg = "Microphone bloqué sur iOS. Allez dans Réglages iPhone → " + ctx.browserName + " → Microphone → Autoriser. Si la boîte de dialogue ne s'affiche pas, supprimez les données de ce site (Réglages → " + ctx.browserName + " → Effacer les données) puis rechargez. Vérifiez aussi que vous n'êtes pas en navigation privée.";
-      } else {
-        msg = "Microphone bloqué. Sur mobile : touchez la barre d'adresse → icône réglages → Microphone → Autoriser, puis rechargez. Sur ordinateur : cliquez l'icône 🔒 à gauche de l'URL.";
-      }
+      _showMicHelpModal(likelyPrivate ? 'private' : 'denied');
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      msg = "Aucun microphone détecté sur cet appareil.";
+      _showMicHelpModal('notfound');
     } else if (name === 'NotReadableError') {
-      msg = "Microphone déjà utilisé par une autre application.";
-    } else if (e?.message) {
-      msg = "Microphone indisponible : " + e.message;
+      _showMicHelpModal('busy');
+    } else {
+      _showMicHelpModal('unknown');
     }
-    showToast(msg, 'error', 10000);
     return false;
   }
   let mime = '';
