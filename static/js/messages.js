@@ -165,81 +165,8 @@ function _composerHTML() {
     <div id="audioPreview" style="display:none;margin-top:8px"></div>`;
 }
 
-function _iosNativeAudioPick() {
-  // iOS-only: bypass getUserMedia entirely by using the OS file picker with
-  // capture. This opens iOS's native audio recorder (or lets the user pick a
-  // saved Voice Memo) — no microphone permission prompt is needed because the
-  // recording happens in the OS, not the browser.
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'audio/*';
-    input.setAttribute('capture', 'user');
-    input.style.position = 'fixed';
-    input.style.left = '-9999px';
-    document.body.appendChild(input);
-    let settled = false;
-    const cleanup = () => { try { document.body.removeChild(input); } catch {} };
-    input.addEventListener('change', () => {
-      settled = true;
-      const f = input.files && input.files[0];
-      cleanup();
-      resolve(f || null);
-    });
-    // If user cancels the native sheet there is no reliable event; rely on
-    // window focus to detect dismissal.
-    window.addEventListener('focus', () => {
-      setTimeout(() => { if (!settled) { cleanup(); resolve(null); } }, 500);
-    }, { once: true });
-    input.click();
-  });
-}
-
-async function _readAudioDuration(blob) {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('audio');
-    a.preload = 'metadata';
-    a.onloadedmetadata = () => {
-      const d = isFinite(a.duration) ? Math.round(a.duration) : 0;
-      URL.revokeObjectURL(url);
-      resolve(d);
-    };
-    a.onerror = () => { URL.revokeObjectURL(url); resolve(0); };
-    a.src = url;
-  });
-}
-
 async function _toggleRecord() {
   const btn = document.getElementById('audioRecBtn');
-  const ctx = _detectIosContext();
-
-  // iOS path: use the native OS recorder via <input capture>. No mic permission
-  // prompt, works in Safari, Chrome iOS, Edge iOS, private mode — everywhere.
-  if (ctx.isIOS) {
-    _discardRecording();
-    const statusEl = document.getElementById('audioStatus');
-    if (statusEl) statusEl.textContent = '● Sélection du fichier audio…';
-    const file = await _iosNativeAudioPick();
-    if (statusEl) statusEl.textContent = '';
-    if (!file) { if (btn) btn.disabled = false; return; }
-    _recorder.blob = file;
-    _recorder.durationSec = await _readAudioDuration(file);
-    _recorder.url = URL.createObjectURL(file);
-    const preview = document.getElementById('audioPreview');
-    if (preview) {
-      preview.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--teal-dim);border:1px solid var(--teal-border);border-radius:8px">
-          <audio controls src="${_recorder.url}" style="flex:1;height:32px"></audio>
-          <span style="font-size:11px;color:var(--teal2)">${_recorder.durationSec}s</span>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="_discardRecording()" title="Supprimer">🗑</button>
-        </div>`;
-      preview.style.display = 'block';
-    }
-    return;
-  }
-
-  // Non-iOS: standard MediaRecorder flow.
   if (_recorder.media && _recorder.media.state === 'recording') {
     _stopRecording();
     return;
