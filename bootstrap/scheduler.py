@@ -38,6 +38,7 @@ def start_scheduler(app) -> object | None:
         return None
 
     from routes.agenda import check_postop_gaps
+    from routes._audio import prune_old_audio
 
     scheduler = BackgroundScheduler()
 
@@ -72,6 +73,14 @@ def start_scheduler(app) -> object | None:
         misfire_grace_time=3600,
     )
     logger.info("Scheduled job registered: daily_backup (daily 02:00)")
+
+    scheduler.add_job(
+        func=lambda: prune_old_audio(app),
+        trigger='cron', hour=3, minute=0,
+        id='audio_retention', replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    logger.info("Scheduled job registered: audio_retention (daily 03:00, 92-day window)")
 
     scheduler.start()
     logger.info(
